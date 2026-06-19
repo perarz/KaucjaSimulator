@@ -271,15 +271,29 @@ local function setupGablota(model: Instance)
 end
 
 local function setupGabloty()
-	local folder = workspace:FindFirstChild("Gabloty")
-	if not folder then
-		warn("[DeskaService] Brak workspace.Gabloty — gabloty zakupu nie działają")
+	-- Najpierw folder "Gabloty" bezpośrednio, potem rekurencyjnie (gdy zagnieżdżony w mapie)
+	local folder = workspace:FindFirstChild("Gabloty") or workspace:FindFirstChild("Gabloty", true)
+	if folder then
+		for _, child in folder:GetChildren() do
+			setupGablota(child)
+		end
+		folder.ChildAdded:Connect(setupGablota)
+		print("[DeskaService] Folder Gabloty znaleziony →", folder:GetFullName())
 		return
 	end
-	for _, child in folder:GetChildren() do
-		setupGablota(child)
+
+	-- Fallback: brak folderu — przeskanuj cały workspace po nazwach Gablota<N> (gdziekolwiek)
+	warn("[DeskaService] Brak folderu 'Gabloty' — skanuję workspace po nazwach Gablota<N>")
+	local found = 0
+	for _, d in workspace:GetDescendants() do
+		if (d:IsA("Model") or d:IsA("BasePart")) and string.match(string.lower(d.Name), "^gablota%s*%d+") then
+			setupGablota(d)
+			found += 1
+		end
 	end
-	folder.ChildAdded:Connect(setupGablota)
+	if found == 0 then
+		warn("[DeskaService] Nie znaleziono żadnych Gablot w workspace — gabloty zakupu nie działają")
+	end
 end
 
 -- ── BindableEvent grant (most z BoostShopService.ProcessReceipt dla VIP Robux) ──
