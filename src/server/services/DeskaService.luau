@@ -253,7 +253,14 @@ local function setupGablota(model: Instance)
 	if model:IsA("BasePart") then
 		anchor = model
 	elseif model:IsA("Model") then
-		anchor = model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
+		-- Preferuj Part nazwany "Proximity" (konwencja w gablotach) — tam ma być prompt
+		for _, d in model:GetDescendants() do
+			if d:IsA("BasePart") and string.find(string.lower(d.Name), "proximity") then
+				anchor = d :: BasePart
+				break
+			end
+		end
+		anchor = anchor or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
 	end
 	if not anchor then return end
 

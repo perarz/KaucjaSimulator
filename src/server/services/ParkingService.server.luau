@@ -20,34 +20,43 @@ local Events              = ReplicatedStorage:WaitForChild("Events")
 local BuyParkingTicket    = Events:WaitForChild("BuyParkingTicket")
 local ParkingTicketResult = Events:WaitForChild("ParkingTicketResult")
 
--- Per-sesja: czy gracz już kupił bilet (nie wymaga DataStore — po rejoinie płaci ponownie)
-local ticketOwners: { [number]: boolean } = {}
-
+-- Persystencja: data.ParkingTicket (bool) w PlayerData. Kto raz kupił — brama otwarta na zawsze.
 BuyParkingTicket.OnServerEvent:Connect(function(player: Player)
-	if ticketOwners[player.UserId] then
+	local data = PlayerDataService.GetData(player)
+
+	if data.ParkingTicket then
+		-- Już kupiony (trwale) — upewnij się że brama otwarta i nie pobieraj ponownie
+		gateEvent:Fire(player.UserId)
 		ParkingTicketResult:FireClient(player, { success = false, reason = "already" })
 		return
 	end
 
-	local data = PlayerDataService.GetData(player)
 	if data.Zlotowki < TICKET_COST then
 		ParkingTicketResult:FireClient(player, { success = false, reason = "broke" })
 		return
 	end
 
 	data.Zlotowki -= TICKET_COST
+	data.ParkingTicket = true
 	PlayerDataService.UpdateLeaderstats(player)
-	ticketOwners[player.UserId] = true
+	PlayerDataService.SaveData(player)
 
-	-- Poinformuj bramę — wrzuc_do_bramy doda userId do paidPlayers i otworzy
+	-- Poinformuj bramę — wrzuc_do_bramy otwiera ją
 	gateEvent:Fire(player.UserId)
 
 	ParkingTicketResult:FireClient(player, { success = true })
 	print("[ParkingService]", player.Name, "kupił bilet — pozostało", data.Zlotowki, "PLN")
 end)
 
-Players.PlayerRemoving:Connect(function(player)
-	ticketOwners[player.UserId] = nil
+-- Przy dołączeniu: jeśli gracz ma już bilet (trwale), otwórz dla niego bramę
+Players.PlayerAdded:Connect(function(player)
+	task.spawn(function()
+		local data = PlayerDataService.GetData(player)
+		task.wait(1)
+		if data.ParkingTicket then
+			gateEvent:Fire(player.UserId)
+		end
+	end)
 end)
 
 print("[ParkingService] Gotowy — bilet:", TICKET_COST, "PLN")
