@@ -72,7 +72,7 @@ src/
       DeathDropService.luau       -- drop butelek po śmierci na ziemię (raycast), instant respawn, 5s cooldown na własne dropy
       AdminService.luau           -- panel admina (Config.Admins, F2), broadcast/giveZl/giveBottles/kick
       BoostShopService.luau       -- Developer Products (Robux), x2 KASA z butelkomatu na 10 min, ProcessReceipt handler (+ grant deski VIP)
-      DeskaService.luau           -- deski: zakup przy gablotach, owned/equip, jazda po R (clone-per-mount), VIP w Robux
+      DeskaService.server.luau    -- deski: zakup przy gablotach, owned/equip, jazda po R (clone-per-mount), VIP w Robux (standalone Script)
       ParkingService.server.luau  -- bilet parkingowy 500 PLN, BindableEvent ParkingGateEvent → otwiera bramę przez wrzuc_do_bramy
     scripts/
       wrzuc_do_bramy.server.luau  -- script w workspace.Parking.bramy — tween brama (Gate_2A/2B przez MeshPart1..4) na ParkingGateEvent
@@ -1498,7 +1498,7 @@ DeckMenuIconId = "rbxassetid://123773463706470"  -- ikona przycisku hoverboard w
 - `DeckStatus` (server→client) — sync owned/equipped/riding
 
 ### Bootstrap
-- `DeskaService` (ModuleScript) wymagany w GameServer **przed BoostShopService** (jego ProcessReceipt grantuje deski VIP)
+- `DeskaService` to **standalone Script** (`.server.luau`) — uruchamia się sam, NIE jest wymagany w GameServer. VIP (Robux) grantowany przez `BoostShopService.ProcessReceipt` → BindableEvent `ServerScriptService.GrantDeckEvent`
 
 ---
 

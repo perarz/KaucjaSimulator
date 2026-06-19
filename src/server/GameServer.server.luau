@@ -18,5 +18,6 @@ require(script.Parent.PvPService)
 require(script.Parent.HatShopService)
 require(script.Parent.DeathDropService)
 require(script.Parent.AdminService)
-require(script.Parent.DeskaService)        -- przed BoostShopService (ProcessReceipt grantuje deski VIP)
 require(script.Parent.BoostShopService)
+-- DeskaService i ParkingService to standalone Scripty (.server.luau) — uruchamiają się same,
+-- NIE wymagaj ich tutaj (require na Script rzuca "invalid argument").

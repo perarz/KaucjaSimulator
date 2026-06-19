@@ -4,6 +4,7 @@
 local Players            = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
@@ -63,15 +64,17 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
-	-- Deski w Robux (np. VIP) — grant przez DeskaService
-	local okDeska, DeskaService = pcall(function()
-		return require(script.Parent:WaitForChild("DeskaService"))
-	end)
-	if okDeska and DeskaService then
-		local deck = DeskaService.GetDeckByProductId(receiptInfo.ProductId)
-		if deck then
-			DeskaService.GrantDeck(player, deck.key)
-			return Enum.ProductPurchaseDecision.PurchaseGranted
+	-- Deski w Robux (np. VIP) — DeskaService to standalone Script, więc grant idzie
+	-- przez BindableEvent GrantDeckEvent (nie require, bo to Script a nie ModuleScript).
+	for _, deck in ipairs(Config.Decks or {}) do
+		if deck.CostType == "Robux" and deck.RobuxProductId == receiptInfo.ProductId and deck.RobuxProductId ~= 0 then
+			local ev = ServerScriptService:FindFirstChild("GrantDeckEvent")
+			if ev then
+				ev:Fire(player, deck.key)
+				return Enum.ProductPurchaseDecision.PurchaseGranted
+			end
+			warn("[BoostShop] GrantDeckEvent nie istnieje — DeskaService nie wystartował?")
+			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 	end
 

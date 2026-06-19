@@ -1,7 +1,8 @@
--- DeskaService.luau
+-- DeskaService.server.luau
 -- Deski (skateboardy): kupowanie przy gablotach, posiadanie/equip, jazda po R.
 -- Mount klonuje szablon z workspace.Deski[model] i przyspawia go do gracza (clone-per-mount → multiplayer-safe).
--- VIP kupowane w Robux — grant leci przez BoostShopService.ProcessReceipt → DeskaService.GrantDeck.
+-- Standalone Script (.server.luau) — NIE wymagany przez GameServer (uruchamia się sam).
+-- VIP (Robux) grantowany przez BoostShopService.ProcessReceipt → BindableEvent GrantDeckEvent (poniżej).
 
 local Players            = game:GetService("Players")
 local ReplicatedStorage  = game:GetService("ReplicatedStorage")
@@ -23,9 +24,6 @@ local EquipDeck       = Events:WaitForChild("EquipDeck")
 local DeckStatus      = Events:WaitForChild("DeckStatus")
 
 local BOARD_Y_OFFSET = -3.0
-local MAX_MOUNT_DIST = 10
-
-local DeskaService = {}
 
 -- [Player] = { weld, board(clone), parts={[part]=savedState}, deckKey }
 local mountedData: { [Player]: any } = {}
@@ -86,7 +84,7 @@ local function getActiveFolder(): Folder
 end
 
 -- ── Status sync do klienta ─────────────────────────────────────────────────────
-function DeskaService.PushStatus(player: Player)
+local function pushStatus(player: Player)
 	local data = PlayerDataService.GetData(player)
 	DeckStatus:FireClient(player, {
 		owned    = data.OwnedDecks or {},
@@ -115,7 +113,6 @@ local function dismountPlayer(player: Player)
 
 	DeskMountResult:FireClient(player, false, nil)
 end
-DeskaService.Dismount = dismountPlayer
 
 local function mountPlayer(player: Player, deckKey: string)
 	if mountedData[player] then return end
@@ -150,10 +147,8 @@ local function mountPlayer(player: Player, deckKey: string)
 		return
 	end
 
-	local savedParts = {}
 	for _, part in board:GetDescendants() do
 		if part:IsA("BasePart") then
-			savedParts[part] = { canCollide = part.CanCollide }
 			part.Anchored     = false
 			part.CanCollide   = false
 			part.Massless     = true
@@ -173,7 +168,7 @@ local function mountPlayer(player: Player, deckKey: string)
 	humanoid.WalkSpeed  = deck.Speed
 	humanoid.JumpHeight = 0
 
-	mountedData[player] = { weld = weld, board = board, parts = savedParts, deckKey = deckKey }
+	mountedData[player] = { weld = weld, board = board, deckKey = deckKey }
 	DeskMountResult:FireClient(player, true, board)
 	print(string.format("[DeskaService] %s jeździ na %s (speed %d)", player.Name, deck.name, deck.Speed))
 end
@@ -186,25 +181,16 @@ local function grantDeckInternal(player: Player, key: string, autoEquip: boolean
 	if autoEquip and (not data.EquippedDeck or data.EquippedDeck == "") then
 		data.EquippedDeck = key
 	end
-	DeskaService.PushStatus(player)
+	pushStatus(player)
 end
 
--- Public: użyte przez BoostShopService.ProcessReceipt dla VIP (Robux)
-function DeskaService.GrantDeck(player: Player, key: string)
+-- Wywoływane przez BoostShopService.ProcessReceipt (przez BindableEvent) dla VIP w Robux
+local function grantDeck(player: Player, key: string)
 	if not getDeckByKey(key) then return end
 	grantDeckInternal(player, key, true)
 	PlayerDataService.SaveData(player)
 	BuyDeckResult:FireClient(player, { success = true, deckKey = key })
-end
-
--- Zwraca deck (Robux) dopasowany po ProductId — dla ProcessReceipt
-function DeskaService.GetDeckByProductId(productId: number)
-	for _, deck in ipairs(Config.Decks) do
-		if deck.CostType == "Robux" and deck.RobuxProductId == productId then
-			return deck
-		end
-	end
-	return nil
+	print(string.format("[DeskaService] %s otrzymał %s (Robux)", player.Name, key))
 end
 
 local function tryBuyDeck(player: Player, key: string)
@@ -262,7 +248,10 @@ local function setupGablota(model: Instance)
 		end
 		anchor = anchor or model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true)
 	end
-	if not anchor then return end
+	if not anchor then
+		warn("[DeskaService] Gablota", model.Name, "— brak BasePart/Proximity na prompt")
+		return
+	end
 
 	local prompt = anchor:FindFirstChildWhichIsA("ProximityPrompt")
 	if not prompt then
@@ -278,6 +267,7 @@ local function setupGablota(model: Instance)
 	prompt.Triggered:Connect(function(player: Player)
 		OpenDeckShop:FireClient(player, deck.key)
 	end)
+	print(string.format("[DeskaService] Gablota %d → %s (prompt na %s)", num, deck.key, anchor:GetFullName()))
 end
 
 local function setupGabloty()
@@ -291,6 +281,18 @@ local function setupGabloty()
 	end
 	folder.ChildAdded:Connect(setupGablota)
 end
+
+-- ── BindableEvent grant (most z BoostShopService.ProcessReceipt dla VIP Robux) ──
+local grantDeckEvent = ServerScriptService:FindFirstChild("GrantDeckEvent")
+if not grantDeckEvent then
+	grantDeckEvent = Instance.new("BindableEvent")
+	grantDeckEvent.Name = "GrantDeckEvent"
+	grantDeckEvent.Parent = ServerScriptService
+end
+grantDeckEvent.Event:Connect(function(player: Player, key: string)
+	if typeof(player) ~= "Instance" or type(key) ~= "string" then return end
+	grantDeck(player, key)
+end)
 
 -- ── Eventy ─────────────────────────────────────────────────────────────────────
 DeskMount.OnServerEvent:Connect(function(player: Player, _board: Instance?)
@@ -321,7 +323,7 @@ EquipDeck.OnServerEvent:Connect(function(player: Player, key: string)
 	-- Natychmiast wsiada na wybraną deskę
 	if mountedData[player] then dismountPlayer(player) end
 	mountPlayer(player, key)
-	DeskaService.PushStatus(player)
+	pushStatus(player)
 end)
 
 BuyDeck.OnServerEvent:Connect(function(player: Player, key: string)
@@ -334,7 +336,7 @@ Players.PlayerAdded:Connect(function(player)
 	task.spawn(function()
 		PlayerDataService.GetData(player)  -- upewnij się że dane wczytane
 		task.wait(1)
-		DeskaService.PushStatus(player)
+		pushStatus(player)
 	end)
 	player.CharacterAdded:Connect(function()
 		-- po respawnie nie jeździmy — posprzątaj osierocony klon deski (weld zginął z postacią)
@@ -342,7 +344,7 @@ Players.PlayerAdded:Connect(function(player)
 		if prev and prev.board and prev.board.Parent then prev.board:Destroy() end
 		mountedData[player] = nil
 		task.wait(0.5)
-		DeskaService.PushStatus(player)
+		pushStatus(player)
 	end)
 end)
 
@@ -350,6 +352,4 @@ Players.PlayerRemoving:Connect(dismountPlayer)
 
 setupGabloty()
 
-print("[DeskaService] Gotowy —", #Config.Decks, "desek")
-
-return DeskaService
+print("[DeskaService] Gotowy —", #Config.Decks, "desek (standalone Script)")
