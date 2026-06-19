@@ -37,6 +37,8 @@ local DEFAULT_DATA = {
 		hasSyrup      = false,   -- true gdy gracz podniesie syrop
 	},
 	RedeemedCodes = {},  -- [codeKey] = true — kody promocyjne już użyte (jednorazowe per gracz)
+	OwnedDecks    = {},     -- [deckKey] = true — posiadane deski (skateboardy)
+	EquippedDeck  = "",     -- klucz wyposażonej deski ("" = brak; R jeździ najlepszą posiadaną)
 	HatOwned      = false,  -- czapka z HatShop — permanentny zakup, daje +HP +stamina +speed
 	-- Layout slotów ekwipunku — lista stacków { rarity, count } w kolejności wyświetlania.
 	-- Pozwala zachować splity (np. Zwykla 5+5) między sesjami. Klient wysyła SyncInventoryLayout przy każdej zmianie.

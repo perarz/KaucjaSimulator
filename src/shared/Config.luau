@@ -17,6 +17,23 @@ return {
 		},
 	},
 
+	-- Deski (skateboardy) — kupowane przy gablotach (workspace.Gabloty.Gablota1..4),
+	-- jeżdżone po naciśnięciu R. Każda deska to model w workspace.Deski o nazwie `model`.
+	-- Kolejność w tablicy = ranking prędkości (ostatnia = najszybsza = "najlepsza" przy R).
+	-- gablota = numer gabloty która sprzedaje tę deskę (Gablota1 → Default, itd.)
+	-- Default/Red/Blue płatne w złotówkach; VIP w Robux (Developer Product).
+	Decks = {
+		{ key = "Default", name = "Deska Default", model = "DeskaDefault", Speed = 40, CostType = "Zlotowki", Cost = 1000, gablota = 1, color = Color3.fromRGB(190, 190, 190) },
+		{ key = "Red",     name = "Deska Red",     model = "DeskaRed",     Speed = 48, CostType = "Zlotowki", Cost = 3000, gablota = 2, color = Color3.fromRGB(205, 70, 70) },
+		{ key = "Blue",    name = "Deska Blue",    model = "DeskaBlue",    Speed = 56, CostType = "Zlotowki", Cost = 5000, gablota = 3, color = Color3.fromRGB(70, 120, 205) },
+		{ key = "VIP",     name = "Deska VIP",     model = "DeskaVIP",     Speed = 68, CostType = "Robux",    RobuxProductId = 0, RobuxPrice = 30, gablota = 4, color = Color3.fromRGB(230, 190, 60) },
+	},
+	-- WalkSpeed/JumpHeight przywracane po zejściu z deski
+	DeckDismountWalkSpeed = 16,
+	DeckDismountJumpHeight = 7.2,
+	-- Ikona przycisku hoverboard (HUD) — otwiera menu desek
+	DeckMenuIconId = "rbxassetid://123773463706470",
+
 	-- Sklep czapek (workspace.SKLEP2.Cashier) — jednorazowy zakup permanentnej czapki z bonusami
 	HatShop = {
 		ItemName     = "Czapka",

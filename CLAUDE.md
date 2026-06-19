@@ -1442,6 +1442,56 @@ BoostShop = {
 
 ---
 
+## Deski / Skateboardy (DeskaService + DeskaController + DeckShopController)
+
+### Cel
+Gracz kupuje deski (skateboardy) przy gablotach, wyposaża wybraną i jeździ po naciśnięciu **R**. 4 typy o rosnącej prędkości: **Default < Red < Blue < VIP**.
+
+### Config.Decks (tablica = ranking prędkości; ostatnia = najszybsza)
+```lua
+Decks = {
+    { key="Default", name="Deska Default", model="DeskaDefault", Speed=40, CostType="Zlotowki", Cost=1000, gablota=1, color=... },
+    { key="Red",     name="Deska Red",     model="DeskaRed",     Speed=48, CostType="Zlotowki", Cost=3000, gablota=2, color=... },
+    { key="Blue",    name="Deska Blue",    model="DeskaBlue",    Speed=56, CostType="Zlotowki", Cost=5000, gablota=3, color=... },
+    { key="VIP",     name="Deska VIP",     model="DeskaVIP",     Speed=68, CostType="Robux", RobuxProductId=0, RobuxPrice=30, gablota=4, color=... },
+}
+DeckMenuIconId = "rbxassetid://123773463706470"  -- ikona przycisku hoverboard w HUD
+```
+- `model` = nazwa Modelu w `workspace.Deski` (szablon klonowany przy jeździe)
+- `gablota` = numer gabloty w `workspace.Gabloty` która sprzedaje tę deskę
+- **VIP RobuxProductId = 0** — placeholder, wpisz Developer Product ID z dashboardu Roblox
+
+### Persystencja (PlayerData, merge bez bumpu klucza)
+- `data.OwnedDecks = { [deckKey]=true }` — posiadane deski
+- `data.EquippedDeck = ""` — wyposażona deska ("" = brak; R jeździ najlepszą posiadaną)
+
+### Setup w Studio
+- **`workspace.Deski`** — Folder z 4 Modelami: `DeskaDefault`, `DeskaRed`, `DeskaBlue`, `DeskaVIP` (każdy z PrimaryPart). To szablony — DeskaService klonuje je przy jeździe do `workspace.ActiveDecks` (auto-folder)
+- **`workspace.Gabloty`** — Folder z `Gablota1..4` (BasePart lub Model z PrimaryPart). DeskaService auto-dodaje ProximityPrompt, mapuje numer w nazwie → deck przez pole `gablota`
+
+### Przepływ
+1. **Zakup**: ProximityPrompt na gablocie → `OpenDeckShop:FireClient(deckKey)` → panel zakupu (nazwa, prędkość, cena, KUP). Default/Red/Blue za zł (`BuyDeck`), VIP → `MarketplaceService:PromptProductPurchase`. Grant VIP w **BoostShopService.ProcessReceipt** (jedyny ProcessReceipt w grze) → `DeskaService.GrantDeck(player, "VIP")`
+2. **Jazda (R)**: `DeskMount:FireServer(nil)` → serwer klonuje szablon wyposażonej (lub najlepszej posiadanej) deski, weld do HRP, `WalkSpeed = deck.Speed`, `JumpHeight = 0`. Ponowne R = dismount (`DeskDismount`)
+3. **Menu desek**: przycisk hoverboard w HUD (lewa strona, pod MENU) → panel TWOJE DESKI z 4 kartami. Klik karty → detale (prędkość, status) + przycisk **WYPOSAŻ** (`EquipDeck`) → serwer ustawia EquippedDeck + natychmiast wsiada na tę deskę
+- `DeckStatus:FireClient({owned, equipped, riding})` synchronizuje stan (PlayerAdded + każda zmiana)
+
+### Mount/dismount (DeskaController — visuals)
+- DeskMountResult(success, board) → animacja jazdy (`SKATE_ANIM_ID`), gracz bokiem (AutoRotate=false + RenderStepped obraca HRP od kamery), wycisza dźwięki kroków
+- Dismount przywraca `Config.DeckDismountWalkSpeed=16` / `DeckDismountJumpHeight=7.2`
+- Respawn czyści osierocony klon deski (weld ginie z postacią)
+
+### RemoteEvents
+- `DeskMount`/`DeskDismount`/`DeskMountResult`/`QuickMount` — jazda
+- `OpenDeckShop` (server→client) — trigger gabloty
+- `BuyDeck` (client→server) / `BuyDeckResult` (server→client `{success, reason?, deckKey?}`)
+- `EquipDeck` (client→server) — wyposaż + wsiądź
+- `DeckStatus` (server→client) — sync owned/equipped/riding
+
+### Bootstrap
+- `DeskaService` (ModuleScript) wymagany w GameServer **przed BoostShopService** (jego ProcessReceipt grantuje deski VIP)
+
+---
+
 ## Zmiany od MVP — szybki przegląd
 
 - **Menu ma 5 zakładek** (zmiana z 4): EKWIPUNEK / UMIEJĘTNOŚCI / QUESTY / **SKLEP** / USTAWIENIA. Settings na indeksie 5.
@@ -1542,6 +1592,9 @@ BoostShop = {
 | `workspace.BANK` | Folder/Model z dzieckiem `Bankier` (Model R15 lub BasePart) | BankService |
 | `workspace.BUTELKOMANIACY` | Folder/Model z dzieckiem `Kasjer` (Model R6/R15 lub BasePart) | ShopService (sklep z plecakami) |
 | `workspace.SKLEP2` | Folder/Model z dzieckiem `Cashier` (R6/R15 lub BasePart) | HatShopService |
+| `workspace.Deski` | Folder z 4 Modelami: `DeskaDefault/DeskaRed/DeskaBlue/DeskaVIP` (PrimaryPart) — szablony desek | DeskaService (klonuje) |
+| `workspace.Gabloty` | Folder z `Gablota1..4` (BasePart/Model) — sprzedaż desek przez ProximityPrompt | DeskaService |
+| `workspace.ActiveDecks` | Auto-tworzony — klony desek aktualnie jeżdżących graczy | DeskaService (auto) |
 | `workspace.PVPZone` | BasePart (Anchored, CanCollide=false, Transparency=1) — strefa PvP gdziekolwiek w workspace | PvPService |
 | `ReplicatedStorage.Sword` | Tool — ClassicSword z toolboxa | PvPService (klonuje do plecaka w strefie) |
 | `ReplicatedStorage.Czapka` | Accessory (HatAccessory) — czapka z bonusami | HatShopService |
@@ -1570,5 +1623,6 @@ require(script.Parent.PvPService)
 require(script.Parent.HatShopService)
 require(script.Parent.DeathDropService)
 require(script.Parent.AdminService)
+require(script.Parent.DeskaService)        -- przed BoostShopService (ProcessReceipt grantuje deski VIP)
 require(script.Parent.BoostShopService)
 ```
