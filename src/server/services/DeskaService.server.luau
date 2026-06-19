@@ -401,4 +401,20 @@ Players.PlayerRemoving:Connect(dismountPlayer)
 
 setupGabloty()
 
+-- Diagnostyka: wypisz klasę każdego szablonu deski (rozstrzyga Model vs Union)
+do
+	local deskiFolder = workspace:FindFirstChild("Deski") or ReplicatedStorage:FindFirstChild("Deski")
+	print("[DeskaService] Szablony desek w", deskiFolder and deskiFolder:GetFullName() or "(brak folderu Deski!)")
+	for _, deck in ipairs(Config.Decks) do
+		local t = deskiFolder and deskiFolder:FindFirstChild(deck.model)
+		if t then
+			print(string.format("   • %s → %s (%s) PrimaryPart=%s",
+				deck.model, t.Name, t.ClassName,
+				(t:IsA("Model") and t.PrimaryPart) and t.PrimaryPart.Name or "—"))
+		else
+			print(string.format("   • %s → BRAK w folderze!", deck.model))
+		end
+	end
+end
+
 print("[DeskaService] Gotowy —", #Config.Decks, "desek (standalone Script)")
