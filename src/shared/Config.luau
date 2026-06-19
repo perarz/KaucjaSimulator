@@ -4,6 +4,7 @@ return {
 	Admins = {
 		463763381,    -- PROGGam3r (UserId — odporne na rename)
 		"PROGGam3r",  -- nazwa jako fallback
+		2802364954,   -- nowy admin
 	},
 
 	-- Boost shop: Developer Products w Robux
@@ -53,12 +54,14 @@ return {
 	},
 
 	-- Wartości bazowe butelek (złotówki)
+	-- REBALANS 2026: zmniejszone żeby spowolnić earn rate
+	-- (top 1 robił 300k w 3h przy Mit=50 → teraz ~100k w 3h)
 	BottleValues = {
 		Zwykla    = 1,
 		Rzadka    = 2,
-		Epicka    = 5,
-		Legendarna = 20,
-		Mityczny  = 50,
+		Epicka    = 3,    -- było 5
+		Legendarna = 10,  -- było 20
+		Mityczny  = 25,   -- było 50
 	},
 
 	-- Szanse spawnu (sumują się do 1.0) — fallback gdy obszar nie ma tieru
@@ -79,7 +82,7 @@ return {
 		[2] = { Zwykla = 0.60, Rzadka = 0.28, Epicka = 0.11, Legendarna = 0.01, Mityczny = 0.00 }, -- średnio
 		[3] = { Zwykla = 0.35, Rzadka = 0.35, Epicka = 0.25, Legendarna = 0.05, Mityczny = 0.00 }, -- daleko
 		[4] = { Zwykla = 0.15, Rzadka = 0.30, Epicka = 0.40, Legendarna = 0.15, Mityczny = 0.00 }, -- endgame
-		[5] = { Zwykla = 0.00, Rzadka = 0.00, Epicka = 0.40, Legendarna = 0.40, Mityczny = 0.20 }, -- mityczna strefa
+		[5] = { Zwykla = 0.00, Rzadka = 0.00, Epicka = 0.50, Legendarna = 0.45, Mityczny = 0.05 }, -- mityczna strefa (Mit 5% — była 20%, prawdziwie rzadka)
 	},
 
 	BottleRespawnTime = 6,
@@ -117,19 +120,21 @@ return {
 	},
 
 	-- Skill Tree: Prędkość (WalkSpeed)
+	-- REBALANS: krzywa cen rośnie ostrzej w L3/L4 żeby endgame trwał dłużej
 	SpeedUpgrades = {
 		{ Level = 1, Speed = 19, Cost = 250,   CostType = "Zlotowki", Name = "Trucht"  },
-		{ Level = 2, Speed = 22, Cost = 1200,  CostType = "Zlotowki", Name = "Bieg"    },
-		{ Level = 3, Speed = 26, Cost = 3500,  CostType = "Zlotowki", Name = "Sprint"  },
-		{ Level = 4, Speed = 30, Cost = 8000,  CostType = "Zlotowki", Name = "Rakieta" },
+		{ Level = 2, Speed = 22, Cost = 1500,  CostType = "Zlotowki", Name = "Bieg"    },  -- było 1200
+		{ Level = 3, Speed = 26, Cost = 6000,  CostType = "Zlotowki", Name = "Sprint"  },  -- było 3500
+		{ Level = 4, Speed = 30, Cost = 25000, CostType = "Zlotowki", Name = "Rakieta" },  -- było 8000  ← MAIN GATE
 	},
 
 	-- Skill Tree: Mnożnik kasy
+	-- REBALANS: krzywa cen rośnie ostrzej w L3/L4 żeby endgame trwał dłużej
 	MultiplierUpgrades = {
 		{ Level = 1, Multiplier = 1.5, Cost = 250,   CostType = "Zlotowki", Name = "Dobry Węch"     },
-		{ Level = 2, Multiplier = 2.0, Cost = 1200,  CostType = "Zlotowki", Name = "Kaucyjny Zmysł" },
-		{ Level = 3, Multiplier = 2.2, Cost = 3500,  CostType = "Zlotowki", Name = "Złoty Nos"      },
-		{ Level = 4, Multiplier = 2.5, Cost = 8000,  CostType = "Zlotowki", Name = "Legenda"        },
+		{ Level = 2, Multiplier = 2.0, Cost = 1500,  CostType = "Zlotowki", Name = "Kaucyjny Zmysł" },  -- było 1200
+		{ Level = 3, Multiplier = 2.2, Cost = 7000,  CostType = "Zlotowki", Name = "Złoty Nos"      },  -- było 3500
+		{ Level = 4, Multiplier = 2.5, Cost = 30000, CostType = "Zlotowki", Name = "Legenda"        },  -- było 8000  ← MAIN GATE
 	},
 
 	-- Skill Tree: Szczęście — odnoga od Multiplier L2 (wymaga MultiplierLevel >= 2)
@@ -142,11 +147,12 @@ return {
 	},
 
 	-- Sklep: Plecak (pojemność) — osobny sklep, NIE skill tree
+	-- REBALANS: L4 droższy żeby był symbolem endgame'u
 	BackpackUpgrades = {
-		{ Level = 1, Capacity = 10, Cost = 0,    CostType = "Zlotowki", Name = "Reklamówka"     },
-		{ Level = 2, Capacity = 25, Cost = 200,  CostType = "Zlotowki", Name = "Plecak szkolny" },
-		{ Level = 3, Capacity = 35, Cost = 900,  CostType = "Zlotowki", Name = "Wielki worek"   },
-		{ Level = 4, Capacity = 50, Cost = 2800, CostType = "Zlotowki", Name = "Wózek sklepowy" },
+		{ Level = 1, Capacity = 10, Cost = 0,     CostType = "Zlotowki", Name = "Reklamówka"     },
+		{ Level = 2, Capacity = 25, Cost = 200,   CostType = "Zlotowki", Name = "Plecak szkolny" },
+		{ Level = 3, Capacity = 35, Cost = 900,   CostType = "Zlotowki", Name = "Wielki worek"   },
+		{ Level = 4, Capacity = 50, Cost = 10000, CostType = "Zlotowki", Name = "Wózek sklepowy" },  -- było 2800
 	},
 
 	-- Kosz — wagi ilości dropu per rzadkość

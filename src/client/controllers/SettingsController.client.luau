@@ -373,13 +373,13 @@ codeBtn.BorderSizePixel        = 0
 codeBtn.Text                   = "AKTYWUJ"
 codeBtn.TextSize               = 18
 codeBtn.Font                   = FONT
-codeBtn.TextColor3             = Color3.fromRGB(20, 40, 25)
+codeBtn.TextColor3             = Color3.fromRGB(0, 0, 0)
 codeBtn.AutoButtonColor        = false
 codeBtn.ZIndex                 = 3
 codeBtn.Parent                 = panel
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = codeBtn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = codeBtn
+	-- UIStroke usunięty — czarny tekst na zielonym tle wystarczy do czytelności, obramówka się zlewała z tekstem
 	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = codeBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
 	codeBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
