@@ -256,13 +256,15 @@ local function setupGablota(model: Instance)
 	local prompt = anchor:FindFirstChildWhichIsA("ProximityPrompt")
 	if not prompt then
 		prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText          = "Kup deskę"
-		prompt.ObjectText          = deck.name
-		prompt.HoldDuration        = 0
-		prompt.MaxActivationDistance = 8
-		prompt.RequiresLineOfSight = false
 		prompt.Parent = anchor
 	end
+	-- Wymuś poprawne ustawienia (także na istniejącym prompcie — np. Gablota1 miała Enabled=false)
+	prompt.ActionText            = "Kup deskę"
+	prompt.ObjectText            = deck.name
+	prompt.HoldDuration          = 0
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight   = false
+	prompt.Enabled               = true
 
 	prompt.Triggered:Connect(function(player: Player)
 		OpenDeckShop:FireClient(player, deck.key)
