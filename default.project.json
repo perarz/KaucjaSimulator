@@ -133,7 +133,7 @@
         "$path": "src/server/services/BoostShopService.luau"
       },
       "DeskaService": {
-        "$path": "src/server/services/DeskaService.luau"
+        "$path": "src/server/services/DeskaService.server.luau"
       },
       "ParkingService": {
         "$path": "src/server/services/ParkingService.server.luau"
