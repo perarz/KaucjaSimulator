@@ -1,0 +1,216 @@
+{
+  "name": "KaucjaSimulator",
+  "tree": {
+    "$className": "DataModel",
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$properties": {
+        "EnableMouseLockOption": false
+      },
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "CollectController": {
+          "$path": "src/client/controllers/CollectController.client.luau"
+        },
+        "SkillTreeController": {
+          "$path": "src/client/controllers/SkillTreeController.client.luau"
+        },
+        "ShopController": {
+          "$path": "src/client/controllers/ShopController.client.luau"
+        },
+        "KoszController": {
+          "$path": "src/client/controllers/KoszController.client.luau"
+        },
+        "QuestController": {
+          "$path": "src/client/controllers/QuestController.client.luau"
+        },
+        "IntroController": {
+          "$path": "src/client/controllers/IntroController.client.luau"
+        },
+        "LoadingController": {
+          "$path": "src/client/controllers/LoadingController.client.luau"
+        },
+        "SettingsController": {
+          "$path": "src/client/controllers/SettingsController.client.luau"
+        },
+        "MobileScaleController": {
+          "$path": "src/client/controllers/MobileScaleController.client.luau"
+        },
+        "LegendaryEventController": {
+          "$path": "src/client/controllers/LegendaryEventController.client.luau"
+        },
+        "GrandpaController": {
+          "$path": "src/client/controllers/GrandpaController.client.luau"
+        },
+        "MenuController": {
+          "$path": "src/client/controllers/MenuController.client.luau"
+        },
+        "BankController": {
+          "$path": "src/client/controllers/BankController.client.luau"
+        },
+        "SprintController": {
+          "$path": "src/client/controllers/SprintController.client.luau"
+        },
+        "HatShopController": {
+          "$path": "src/client/controllers/HatShopController.client.luau"
+        },
+        "AdminController": {
+          "$path": "src/client/controllers/AdminController.client.luau"
+        },
+        "BoostShopController": {
+          "$path": "src/client/controllers/BoostShopController.client.luau"
+        }
+      }
+    },
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "GameServer": {
+        "$path": "src/server/GameServer.server.luau"
+      },
+      "PlayerDataService": {
+        "$path": "src/server/services/PlayerDataService.luau"
+      },
+      "BottleService": {
+        "$path": "src/server/services/BottleService.luau"
+      },
+      "UpgradeService": {
+        "$path": "src/server/services/UpgradeService.luau"
+      },
+      "ShopService": {
+        "$path": "src/server/services/ShopService.luau"
+      },
+      "LeaderboardService": {
+        "$path": "src/server/services/LeaderboardService.luau"
+      },
+      "KoszService": {
+        "$path": "src/server/services/KoszService.luau"
+      },
+      "QuestService": {
+        "$path": "src/server/services/QuestService.luau"
+      },
+      "IntroService": {
+        "$path": "src/server/services/IntroService.luau"
+      },
+      "GrandpaService": {
+        "$path": "src/server/services/GrandpaService.luau"
+      },
+      "SyrupService": {
+        "$path": "src/server/services/SyrupService.luau"
+      },
+      "BankService": {
+        "$path": "src/server/services/BankService.luau"
+      },
+      "CodeService": {
+        "$path": "src/server/services/CodeService.luau"
+      },
+      "BackpackEquipService": {
+        "$path": "src/server/services/BackpackEquipService.luau"
+      },
+      "PvPService": {
+        "$path": "src/server/services/PvPService.luau"
+      },
+      "HatShopService": {
+        "$path": "src/server/services/HatShopService.luau"
+      },
+      "DeathDropService": {
+        "$path": "src/server/services/DeathDropService.luau"
+      },
+      "AdminService": {
+        "$path": "src/server/services/AdminService.luau"
+      },
+      "BoostShopService": {
+        "$path": "src/server/services/BoostShopService.luau"
+      }
+    },
+
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Config": {
+        "$path": "src/shared/Config.luau"
+      },
+      "Events": {
+        "$className": "Folder",
+        "CollectBottle":       { "$className": "RemoteEvent" },
+        "CollectBottleResult": { "$className": "RemoteEvent" },
+        "DropBottle":          { "$className": "RemoteEvent" },
+        "SyncInventoryLayout": { "$className": "RemoteEvent" },
+        "EmptyBackpack":       { "$className": "RemoteEvent" },
+        "EmptyBackpackResult": { "$className": "RemoteEvent" },
+        "UpdateHUD":           { "$className": "RemoteEvent" },
+        "BuySkillUpgrade":     { "$className": "RemoteEvent" },
+        "SkillTreeUpdate":     { "$className": "RemoteEvent" },
+        "SkillTreeInit":       { "$className": "RemoteEvent" },
+        "OpenShop":            { "$className": "RemoteEvent" },
+        "BuyBackpack":         { "$className": "RemoteEvent" },
+        "BackpackResult":      { "$className": "RemoteEvent" },
+        "KoszResult":          { "$className": "RemoteEvent" },
+        "QuestInit":           { "$className": "RemoteEvent" },
+        "QuestUpdate":         { "$className": "RemoteEvent" },
+        "ClaimQuest":          { "$className": "RemoteEvent" },
+        "ClaimQuestResult":    { "$className": "RemoteEvent" },
+        "PlayIntro":           { "$className": "RemoteEvent" },
+        "IntroFinished":       { "$className": "RemoteEvent" },
+        "LegendaryEventStart": { "$className": "RemoteEvent" },
+        "LegendaryEventEnd":   { "$className": "RemoteEvent" },
+        "ResetProgress":       { "$className": "RemoteEvent" },
+        "GrandpaTalk":         { "$className": "RemoteEvent" },
+        "GrandpaDialog":       { "$className": "RemoteEvent" },
+        "GrandpaAccept":       { "$className": "RemoteEvent" },
+        "GrandpaTurnIn":       { "$className": "RemoteEvent" },
+        "GrandpaState":        { "$className": "RemoteEvent" },
+        "SyrupPickupResult":   { "$className": "RemoteEvent" },
+        "BankInit":            { "$className": "RemoteEvent" },
+        "BankDeposit":         { "$className": "RemoteEvent" },
+        "BankWithdraw":        { "$className": "RemoteEvent" },
+        "BankResult":          { "$className": "RemoteEvent" },
+        "RedeemCode":          { "$className": "RemoteEvent" },
+        "RedeemCodeResult":    { "$className": "RemoteEvent" },
+        "BoostStatusUpdate":   { "$className": "RemoteEvent" },
+        "PromptBoostPurchase": { "$className": "RemoteEvent" },
+        "AdminInit":           { "$className": "RemoteEvent" },
+        "AdminAction":         { "$className": "RemoteEvent" },
+        "AdminBroadcast":      { "$className": "RemoteEvent" },
+        "OpenHatShop":         { "$className": "RemoteEvent" },
+        "BuyHat":              { "$className": "RemoteEvent" },
+        "BuyHatResult":        { "$className": "RemoteEvent" },
+        "HatStatusUpdate":     { "$className": "RemoteEvent" }
+      }
+    },
+
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "FilteringEnabled": true
+      },
+      "Baseplate": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Color": [0.388, 0.373, 0.388],
+          "Locked": true,
+          "Position": [0, -10, 0],
+          "Size": [512, 20, 512]
+        }
+      }
+    },
+
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Ambient": [0, 0, 0],
+        "Brightness": 2,
+        "GlobalShadows": true,
+        "Technology": "Voxel"
+      }
+    },
+
+    "SoundService": {
+      "$className": "SoundService",
+      "$properties": {
+        "RespectFilteringEnabled": true
+      }
+    }
+  }
+}

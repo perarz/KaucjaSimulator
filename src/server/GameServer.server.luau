@@ -1,0 +1,21 @@
+-- GameServer.luau
+-- Entry point serwera — bootstrapuje wszystkie serwisy
+require(script.Parent.PlayerDataService)
+require(script.Parent.QuestService)        -- przed wszystkimi co go używają
+require(script.Parent.BottleService)
+require(script.Parent.UpgradeService)
+require(script.Parent.ShopService)
+require(script.Parent.LeaderboardService)
+require(script.Parent.KoszService)
+require(script.Parent.IntroService)
+-- SyrupService musi być przed GrandpaService (GrandpaService używa go w hooku Accept)
+require(script.Parent.SyrupService)
+require(script.Parent.GrandpaService)
+require(script.Parent.BankService)
+require(script.Parent.CodeService)
+require(script.Parent.BackpackEquipService)
+require(script.Parent.PvPService)
+require(script.Parent.HatShopService)
+require(script.Parent.DeathDropService)
+require(script.Parent.AdminService)
+require(script.Parent.BoostShopService)

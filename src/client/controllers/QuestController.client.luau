@@ -1,0 +1,723 @@
+-- QuestController.luau
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService      = game:GetService("TweenService")
+local UserInputService  = game:GetService("UserInputService")
+local RunService        = game:GetService("RunService")
+
+local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Events            = ReplicatedStorage:WaitForChild("Events")
+local QuestInit         = Events:WaitForChild("QuestInit")
+local QuestUpdate       = Events:WaitForChild("QuestUpdate")
+local ClaimQuest        = Events:WaitForChild("ClaimQuest")
+local ClaimQuestResult  = Events:WaitForChild("ClaimQuestResult")
+local GrandpaState      = Events:WaitForChild("GrandpaState")
+
+local localPlayer = Players.LocalPlayer
+local playerGui   = localPlayer:WaitForChild("PlayerGui")
+
+-- ── Paleta ────────────────────────────────────────────────────────────────
+
+local FONT       = Enum.Font.GothamBlack
+local C_BG       = Color3.fromRGB(18, 91, 73)
+local C_PANEL    = Color3.fromRGB(24, 110, 90)
+local C_HEADER   = Color3.fromRGB(0, 53, 39)
+local C_CARD     = Color3.fromRGB(14, 75, 60)
+local C_BORDER   = Color3.fromRGB(5, 25, 20)
+local C_WHITE    = Color3.fromRGB(255, 255, 255)
+local C_DIMTEXT  = Color3.fromRGB(175, 175, 175)
+local C_GREEN    = Color3.fromRGB(170, 221, 102)
+local C_BLUE     = Color3.fromRGB(88, 166, 255)
+local C_SYRUP    = Color3.fromRGB(200, 130, 60)  -- akcent dla questa dziadka
+local X_RED      = Color3.fromRGB(220, 70, 70)
+local X_RED_HOVER = Color3.fromRGB(255, 110, 110)
+
+-- ── Stan ──────────────────────────────────────────────────────────────────
+
+local questState = {
+	activeIds = {},
+	progress  = {},
+	claimed   = {},
+	refreshAt = 0,
+}
+
+-- Stan questa dziadka (z RemoteEvent GrandpaState)
+local grandpaQuest = {
+	state    = "none",   -- "none" | "active" | "done"
+	hasSyrup = false,
+	desc     = "Znajdź syrop klonowy dziadka w parku",
+	reward   = 1000,
+}
+
+local isOpen = false
+
+local function findQuest(id: string)
+	for _, q in ipairs(Config.Quests) do
+		if q.id == id then return q end
+	end
+	return nil
+end
+
+-- ── ScreenGui ─────────────────────────────────────────────────────────────
+
+local PANEL_W  = 560
+-- HEADER_H = 0 — panel mieszka w zakładce MenuController, własny header schowany.
+-- Pozycje children referencują HEADER_H jako offset Y, więc samo wyzerowanie
+-- shifuje całość do góry.
+local HEADER_H = 0
+local CARD_H   = 110
+local CARD_GAP = 12
+local PAD      = 22
+local SECTION_LBL_H = 26
+local SECTION_GAP   = 6   -- między section label a pierwszą kartą
+local DAILY_AREA = Config.QuestActiveCount * CARD_H + (Config.QuestActiveCount - 1) * CARD_GAP
+
+-- Layout pionowy:
+-- header / PAD / "DZIADEK" label / SECTION_GAP / grandpa card / CARD_GAP / "ZADANIA DZIENNE" label / SECTION_GAP / daily cards / PAD
+local PANEL_H  = HEADER_H + PAD
+	+ SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP
+	+ SECTION_LBL_H + SECTION_GAP + DAILY_AREA
+	+ PAD
+
+local gui = Instance.new("ScreenGui")
+gui.Name           = "Quests"
+gui.ResetOnSpawn   = false
+gui.IgnoreGuiInset = true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Enabled        = false
+gui.Parent         = playerGui
+
+local overlay = Instance.new("TextButton")
+overlay.Size                   = UDim2.fromScale(1, 1)
+overlay.BackgroundColor3       = Color3.new(0, 0, 0)
+overlay.BackgroundTransparency = 1
+overlay.BorderSizePixel        = 0
+overlay.Text                   = ""
+overlay.AutoButtonColor        = false
+overlay.ZIndex                 = 1
+overlay.Parent                 = gui
+
+local panel = Instance.new("Frame")
+panel.Size                  = UDim2.fromOffset(PANEL_W, PANEL_H)
+panel.AnchorPoint           = Vector2.new(0.5, 0.5)
+panel.Position              = UDim2.new(0.5, 0, 0.55, 0)
+-- Bez własnej ramki/tła — content siedzi w zakładce MenuController.
+panel.BackgroundTransparency = 1
+panel.BorderSizePixel       = 0
+panel.ClipsDescendants      = false
+panel.ZIndex                = 2
+panel.Parent                = gui
+
+-- Header — niewidoczny w nowym UI (zakładka MenuController ma swój pasek)
+local header = Instance.new("Frame")
+header.Size             = UDim2.new(1, 0, 0, HEADER_H)
+header.Visible          = false
+header.BackgroundColor3 = C_HEADER
+header.BorderSizePixel  = 0
+header.ZIndex           = 3
+header.Parent           = panel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = header
+	local fill = Instance.new("Frame")
+	fill.Size             = UDim2.new(1, 0, 0, 10)
+	fill.Position         = UDim2.new(0, 0, 1, -10)
+	fill.BackgroundColor3 = C_HEADER
+	fill.BorderSizePixel  = 0
+	fill.ZIndex           = 3
+	fill.Parent           = header
+	local sep = Instance.new("Frame")
+	sep.Size             = UDim2.new(1, 0, 0, 2)
+	sep.Position         = UDim2.new(0, 0, 1, -2)
+	sep.BackgroundColor3 = C_BORDER
+	sep.BorderSizePixel  = 0
+	sep.ZIndex           = 5
+	sep.Parent           = header
+end
+
+local title = Instance.new("TextLabel")
+title.Size                   = UDim2.new(0, 200, 1, 0)
+title.Position               = UDim2.fromOffset(22, 0)
+title.BackgroundTransparency = 1
+title.Text                   = "QUESTY"
+title.TextSize               = 18
+title.Font                   = FONT
+title.TextColor3             = C_WHITE
+title.TextXAlignment         = Enum.TextXAlignment.Left
+title.ZIndex                 = 4
+title.Parent                 = header
+
+-- refreshLbl ("Nowe za Xh Ym") — siedzi obok "ZADANIA DZIENNE" label
+-- (jego Position ustawiamy dalej, po deklaracji sekcji daily — patrz niżej)
+local refreshLbl = Instance.new("TextLabel")
+refreshLbl.AnchorPoint            = Vector2.new(1, 0)
+refreshLbl.BackgroundTransparency = 1
+refreshLbl.Text                   = ""
+refreshLbl.TextSize               = 14
+refreshLbl.Font                   = FONT
+refreshLbl.TextColor3             = C_DIMTEXT
+refreshLbl.TextXAlignment         = Enum.TextXAlignment.Right
+refreshLbl.ZIndex                 = 4
+refreshLbl.Parent                 = panel
+
+-- Close X
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size                   = UDim2.fromOffset(36, 36)
+closeBtn.AnchorPoint            = Vector2.new(1, 0.5)
+closeBtn.Position               = UDim2.new(1, -12, 0.5, 0)
+closeBtn.BackgroundTransparency = 1
+closeBtn.BorderSizePixel        = 0
+closeBtn.Text                   = "X"
+closeBtn.TextSize               = 24
+closeBtn.Font                   = FONT
+closeBtn.TextColor3             = X_RED
+closeBtn.AutoButtonColor        = false
+closeBtn.ZIndex                 = 5
+closeBtn.Parent                 = header
+do
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = closeBtn
+	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	closeBtn.MouseEnter:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.18 }):Play()
+		closeBtn.TextColor3 = X_RED_HOVER
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.00 }):Play()
+		closeBtn.TextColor3 = X_RED
+	end)
+end
+
+-- ── Karty questów ────────────────────────────────────────────────────────
+
+type CardHandle = {
+	slot:        number,
+	frame:       Frame,
+	descLbl:     TextLabel,
+	progBarBG:   Frame,
+	progBarFill: Frame,
+	progLbl:     TextLabel,
+	rewardLbl:   TextLabel,
+	claimBtn:    TextButton,
+	claimStroke: UIStroke,
+}
+
+local cards: { CardHandle } = {}
+
+-- Sekcja: DZIADEK
+local grandpaLbl = Instance.new("TextLabel")
+grandpaLbl.Size                   = UDim2.new(1, -PAD * 2, 0, SECTION_LBL_H)
+grandpaLbl.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD)
+grandpaLbl.BackgroundTransparency = 1
+grandpaLbl.Text                   = "DZIADEK"
+grandpaLbl.Font                   = FONT
+grandpaLbl.TextSize               = 16
+grandpaLbl.TextColor3             = C_SYRUP
+grandpaLbl.TextXAlignment         = Enum.TextXAlignment.Left
+grandpaLbl.ZIndex                 = 3
+grandpaLbl.Parent                 = panel
+
+local grandpaContainer = Instance.new("Frame")
+grandpaContainer.Size                   = UDim2.new(1, -PAD * 2, 0, CARD_H)
+grandpaContainer.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP)
+grandpaContainer.BackgroundTransparency = 1
+grandpaContainer.BorderSizePixel        = 0
+grandpaContainer.ZIndex                 = 3
+grandpaContainer.Parent                 = panel
+
+-- Sekcja: ZADANIA DZIENNE
+local dailyLbl = Instance.new("TextLabel")
+dailyLbl.Size                   = UDim2.new(1, -PAD * 2, 0, SECTION_LBL_H)
+dailyLbl.Position               = UDim2.fromOffset(PAD,
+	HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP)
+dailyLbl.BackgroundTransparency = 1
+dailyLbl.Text                   = "ZADANIA DZIENNE"
+dailyLbl.Font                   = FONT
+dailyLbl.TextSize               = 16
+dailyLbl.TextColor3             = C_GREEN
+dailyLbl.TextXAlignment         = Enum.TextXAlignment.Left
+dailyLbl.ZIndex                 = 3
+dailyLbl.Parent                 = panel
+
+-- refreshLbl wyrównane do dailyLbl (ten sam Y), po prawej
+refreshLbl.Size     = UDim2.new(0, 240, 0, SECTION_LBL_H)
+refreshLbl.Position = UDim2.new(1, -PAD, 0,
+	HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP)
+
+local cardsContainer = Instance.new("Frame")
+cardsContainer.Size                   = UDim2.new(1, -PAD * 2, 0, DAILY_AREA)
+cardsContainer.Position               = UDim2.fromOffset(PAD,
+	HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP + SECTION_LBL_H + SECTION_GAP)
+cardsContainer.BackgroundTransparency = 1
+cardsContainer.BorderSizePixel        = 0
+cardsContainer.ZIndex                 = 3
+cardsContainer.Parent                 = panel
+
+local function buildCard(slot: number): CardHandle
+	local frame = Instance.new("Frame")
+	frame.Size            = UDim2.new(1, 0, 0, CARD_H)
+	frame.Position        = UDim2.fromOffset(0, (slot - 1) * (CARD_H + CARD_GAP))
+	frame.BackgroundColor3 = C_CARD
+	frame.BorderSizePixel = 0
+	frame.ZIndex          = 3
+	frame.Parent          = cardsContainer
+	do
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = frame
+		local s = Instance.new("UIStroke")
+		s.Color = C_BORDER; s.Thickness = 3; s.Parent = frame
+	end
+
+	-- Opis questa
+	local descLbl = Instance.new("TextLabel")
+	descLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 28)
+	descLbl.Position               = UDim2.fromOffset(16, 12)
+	descLbl.BackgroundTransparency = 1
+	descLbl.Text                   = ""
+	descLbl.TextSize               = 16
+	descLbl.Font                   = FONT
+	descLbl.TextColor3             = C_WHITE
+	descLbl.TextXAlignment         = Enum.TextXAlignment.Left
+	descLbl.TextYAlignment         = Enum.TextYAlignment.Top
+	descLbl.TextWrapped            = true
+	descLbl.ZIndex                 = 4
+	descLbl.Parent                 = frame
+
+	-- Pasek progresu — tło
+	local progBarBG = Instance.new("Frame")
+	progBarBG.Size            = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 14)
+	progBarBG.Position        = UDim2.fromOffset(16, 56)
+	progBarBG.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+	progBarBG.BorderSizePixel = 0
+	progBarBG.ZIndex          = 4
+	progBarBG.Parent          = frame
+	do
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = progBarBG
+		local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = progBarBG
+	end
+
+	local progBarFill = Instance.new("Frame")
+	progBarFill.Size            = UDim2.new(0, 0, 1, 0)
+	progBarFill.BackgroundColor3 = C_BLUE
+	progBarFill.BorderSizePixel = 0
+	progBarFill.ZIndex          = 5
+	progBarFill.Parent          = progBarBG
+	do
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = progBarFill
+	end
+
+	-- Tekst progresu "X/Y"
+	local progLbl = Instance.new("TextLabel")
+	progLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 18)
+	progLbl.Position               = UDim2.fromOffset(16, 76)
+	progLbl.BackgroundTransparency = 1
+	progLbl.Text                   = ""
+	progLbl.TextSize               = 12
+	progLbl.Font                   = FONT
+	progLbl.TextColor3             = C_DIMTEXT
+	progLbl.TextXAlignment         = Enum.TextXAlignment.Left
+	progLbl.ZIndex                 = 4
+	progLbl.Parent                 = frame
+
+	-- Nagroda label
+	local rewardLbl = Instance.new("TextLabel")
+	rewardLbl.Size                   = UDim2.fromOffset(190, 24)
+	rewardLbl.AnchorPoint            = Vector2.new(1, 0)
+	rewardLbl.Position               = UDim2.new(1, -14, 0, 14)
+	rewardLbl.BackgroundTransparency = 1
+	rewardLbl.Text                   = ""
+	rewardLbl.TextSize               = 16
+	rewardLbl.Font                   = FONT
+	rewardLbl.TextColor3             = C_GREEN
+	rewardLbl.TextXAlignment         = Enum.TextXAlignment.Right
+	rewardLbl.ZIndex                 = 4
+	rewardLbl.Parent                 = frame
+
+	-- Przycisk KUP/CLAIM
+	local claimBtn = Instance.new("TextButton")
+	claimBtn.Size                 = UDim2.fromOffset(190, 50)
+	claimBtn.AnchorPoint          = Vector2.new(1, 1)
+	claimBtn.Position             = UDim2.new(1, -14, 1, -14)
+	claimBtn.BackgroundColor3     = C_BG
+	claimBtn.BorderSizePixel      = 0
+	claimBtn.Text                 = "TRWA…"
+	claimBtn.TextSize             = 15
+	claimBtn.Font                 = FONT
+	claimBtn.TextColor3           = C_DIMTEXT
+	claimBtn.AutoButtonColor      = false
+	claimBtn.ZIndex               = 4
+	claimBtn.Parent               = frame
+
+	local claimStroke
+	do
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = claimBtn
+		claimStroke = Instance.new("UIStroke")
+		claimStroke.Color = C_BORDER; claimStroke.Thickness = 0  -- bez obramowki — czyściej
+		claimStroke.Parent = claimBtn
+		local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = claimBtn
+		local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+		claimBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
+		claimBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
+	end
+
+	return {
+		slot        = slot,
+		frame       = frame,
+		descLbl     = descLbl,
+		progBarBG   = progBarBG,
+		progBarFill = progBarFill,
+		progLbl     = progLbl,
+		rewardLbl   = rewardLbl,
+		claimBtn    = claimBtn,
+		claimStroke = claimStroke,
+	}
+end
+
+for i = 1, Config.QuestActiveCount do
+	cards[i] = buildCard(i)
+	local slot = i
+	cards[i].claimBtn.MouseButton1Click:Connect(function()
+		local qid = questState.activeIds[slot]
+		if not qid then return end
+		ClaimQuest:FireServer(qid)
+	end)
+end
+
+-- ── Karta questa dziadka ────────────────────────────────────────────────
+-- Wzoruje się na buildCard, ale zamiast przycisku ODBIERZ — status label
+-- (claim jest u dziadka, nie tu).
+
+local grandpaCard = {
+	frame       = Instance.new("Frame"),
+	descLbl     = nil :: TextLabel?,
+	progBarBG   = nil :: Frame?,
+	progBarFill = nil :: Frame?,
+	progLbl     = nil :: TextLabel?,
+	rewardLbl   = nil :: TextLabel?,
+	statusLbl   = nil :: TextLabel?,
+	emptyLbl    = nil :: TextLabel?,
+}
+
+do
+	local frame = grandpaCard.frame
+	frame.Size            = UDim2.new(1, 0, 1, 0)
+	frame.BackgroundColor3 = C_CARD
+	frame.BorderSizePixel = 0
+	frame.ZIndex          = 3
+	frame.Parent          = grandpaContainer
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = frame
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = frame
+
+	-- Opis
+	local descLbl = Instance.new("TextLabel")
+	descLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 28)
+	descLbl.Position               = UDim2.fromOffset(16, 12)
+	descLbl.BackgroundTransparency = 1
+	descLbl.Text                   = grandpaQuest.desc
+	descLbl.TextSize               = 16
+	descLbl.Font                   = FONT
+	descLbl.TextColor3             = C_WHITE
+	descLbl.TextXAlignment         = Enum.TextXAlignment.Left
+	descLbl.TextYAlignment         = Enum.TextYAlignment.Top
+	descLbl.TextWrapped            = true
+	descLbl.ZIndex                 = 4
+	descLbl.Parent                 = frame
+	grandpaCard.descLbl = descLbl
+
+	-- Pasek progresu
+	local progBarBG = Instance.new("Frame")
+	progBarBG.Size            = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 14)
+	progBarBG.Position        = UDim2.fromOffset(16, 56)
+	progBarBG.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+	progBarBG.BorderSizePixel = 0
+	progBarBG.ZIndex          = 4
+	progBarBG.Parent          = frame
+	do
+		local cc = Instance.new("UICorner"); cc.CornerRadius = UDim.new(0, 4); cc.Parent = progBarBG
+		local ss = Instance.new("UIStroke"); ss.Color = C_BORDER; ss.Thickness = 2; ss.Parent = progBarBG
+	end
+	local progBarFill = Instance.new("Frame")
+	progBarFill.Size            = UDim2.new(0, 0, 1, 0)
+	progBarFill.BackgroundColor3 = C_SYRUP
+	progBarFill.BorderSizePixel = 0
+	progBarFill.ZIndex          = 5
+	progBarFill.Parent          = progBarBG
+	local pc = Instance.new("UICorner"); pc.CornerRadius = UDim.new(0, 4); pc.Parent = progBarFill
+	grandpaCard.progBarBG   = progBarBG
+	grandpaCard.progBarFill = progBarFill
+
+	-- Tekst progresu "0/1"
+	local progLbl = Instance.new("TextLabel")
+	progLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 18)
+	progLbl.Position               = UDim2.fromOffset(16, 76)
+	progLbl.BackgroundTransparency = 1
+	progLbl.Text                   = "0 / 1"
+	progLbl.TextSize               = 12
+	progLbl.Font                   = FONT
+	progLbl.TextColor3             = C_DIMTEXT
+	progLbl.TextXAlignment         = Enum.TextXAlignment.Left
+	progLbl.ZIndex                 = 4
+	progLbl.Parent                 = frame
+	grandpaCard.progLbl = progLbl
+
+	-- Nagroda
+	local rewardLbl = Instance.new("TextLabel")
+	rewardLbl.Size                   = UDim2.fromOffset(190, 24)
+	rewardLbl.AnchorPoint            = Vector2.new(1, 0)
+	rewardLbl.Position               = UDim2.new(1, -14, 0, 14)
+	rewardLbl.BackgroundTransparency = 1
+	rewardLbl.Text                   = "Nagroda: " .. grandpaQuest.reward .. " ZŁ"
+	rewardLbl.TextSize               = 16
+	rewardLbl.Font                   = FONT
+	rewardLbl.TextColor3             = C_GREEN
+	rewardLbl.TextXAlignment         = Enum.TextXAlignment.Right
+	rewardLbl.ZIndex                 = 4
+	rewardLbl.Parent                 = frame
+	grandpaCard.rewardLbl = rewardLbl
+
+	-- Status label zamiast przycisku claim
+	local statusLbl = Instance.new("TextLabel")
+	statusLbl.Size                   = UDim2.fromOffset(190, 50)
+	statusLbl.AnchorPoint            = Vector2.new(1, 1)
+	statusLbl.Position               = UDim2.new(1, -14, 1, -14)
+	statusLbl.BackgroundColor3       = C_BG
+	statusLbl.BorderSizePixel        = 0
+	statusLbl.Text                   = "ZNAJDŹ"
+	statusLbl.TextSize               = 15
+	statusLbl.Font                   = FONT
+	statusLbl.TextColor3             = C_DIMTEXT
+	statusLbl.ZIndex                 = 4
+	statusLbl.Parent                 = frame
+	local stC = Instance.new("UICorner"); stC.CornerRadius = UDim.new(0, 8); stC.Parent = statusLbl
+	local stS = Instance.new("UIStroke"); stS.Color = C_BORDER; stS.Thickness = 3; stS.Parent = statusLbl
+	grandpaCard.statusLbl = statusLbl
+
+	-- Empty state label (wyświetlany gdy state="none" lub "done")
+	local emptyLbl = Instance.new("TextLabel")
+	emptyLbl.Size                   = UDim2.new(1, -32, 1, -24)
+	emptyLbl.Position               = UDim2.fromOffset(16, 12)
+	emptyLbl.BackgroundTransparency = 1
+	emptyLbl.Text                   = ""
+	emptyLbl.TextSize               = 14
+	emptyLbl.Font                   = FONT
+	emptyLbl.TextColor3             = C_DIMTEXT
+	emptyLbl.TextXAlignment         = Enum.TextXAlignment.Center
+	emptyLbl.TextYAlignment         = Enum.TextYAlignment.Center
+	emptyLbl.TextWrapped            = true
+	emptyLbl.Visible                = false
+	emptyLbl.ZIndex                 = 5
+	emptyLbl.Parent                 = frame
+	grandpaCard.emptyLbl = emptyLbl
+end
+
+local function renderGrandpa()
+	local g = grandpaQuest
+	local active = (g.state == "active")
+	-- Pokazuj content tylko gdy quest aktywny; inaczej empty state
+	grandpaCard.descLbl.Visible     = active
+	grandpaCard.progBarBG.Visible   = active
+	grandpaCard.progLbl.Visible     = active
+	grandpaCard.rewardLbl.Visible   = active
+	grandpaCard.statusLbl.Visible   = active
+	grandpaCard.emptyLbl.Visible    = not active
+
+	if not active then
+		if g.state == "done" then
+			grandpaCard.emptyLbl.Text = "Pomogłeś już dziadkowi. Wróć później — może będzie miał coś nowego."
+		else
+			grandpaCard.emptyLbl.Text = "Porozmawiaj z Dziadkiem żeby przyjąć questa."
+		end
+		return
+	end
+
+	local prog = g.hasSyrup and 1 or 0
+	grandpaCard.progLbl.Text       = string.format("%d / 1", prog)
+	grandpaCard.progBarFill.Size   = UDim2.fromScale(prog, 1)
+	if g.hasSyrup then
+		grandpaCard.statusLbl.Text       = "ODDAJ DZIADKOWI"
+		grandpaCard.statusLbl.TextColor3 = C_SYRUP
+		local s = grandpaCard.statusLbl:FindFirstChildOfClass("UIStroke")
+		if s then s.Color = C_SYRUP end
+		grandpaCard.progBarFill.BackgroundColor3 = C_SYRUP
+	else
+		grandpaCard.statusLbl.Text       = "ZNAJDŹ W PARKU"
+		grandpaCard.statusLbl.TextColor3 = C_DIMTEXT
+		local s = grandpaCard.statusLbl:FindFirstChildOfClass("UIStroke")
+		if s then s.Color = C_BORDER end
+		grandpaCard.progBarFill.BackgroundColor3 = C_SYRUP
+	end
+end
+
+-- ── Render ───────────────────────────────────────────────────────────────
+
+local function formatTimeLeft(seconds: number): string
+	if seconds <= 0 then return "wkrótce!" end
+	local h = math.floor(seconds / 3600)
+	local m = math.floor((seconds % 3600) / 60)
+	local s = math.floor(seconds % 60)
+	if h > 0 then
+		return string.format("Nowe za %dh %dm", h, m)
+	elseif m > 0 then
+		return string.format("Nowe za %dm %ds", m, s)
+	end
+	return string.format("Nowe za %ds", s)
+end
+
+local function renderCards()
+	for slot = 1, Config.QuestActiveCount do
+		local card = cards[slot]
+		local qid = questState.activeIds[slot]
+		if not qid then
+			card.descLbl.Text   = "—"
+			card.progLbl.Text   = ""
+			card.rewardLbl.Text = ""
+			card.progBarFill.Size = UDim2.new(0, 0, 1, 0)
+			card.claimBtn.Text  = "—"
+			card.claimBtn.TextColor3 = C_DIMTEXT
+			card.claimBtn.BackgroundColor3 = C_BG
+			card.claimStroke.Color = C_BORDER
+			continue
+		end
+		local quest = findQuest(qid)
+		if not quest then continue end
+
+		card.descLbl.Text   = quest.desc
+		local prog = questState.progress[qid] or 0
+		local target = quest.target
+		card.progLbl.Text   = string.format("%d / %d", prog, target)
+		local ratio = math.clamp(prog / target, 0, 1)
+		card.progBarFill.Size = UDim2.fromScale(ratio, 1)
+
+		-- Nagroda
+		card.rewardLbl.Text = "Nagroda: " .. quest.reward.amount .. " ZŁ"
+
+		-- Stan przycisku
+		if questState.claimed[qid] then
+			card.claimBtn.Text       = "ODEBRANO ✓"
+			card.claimBtn.TextColor3 = C_GREEN
+			card.claimBtn.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
+			card.claimStroke.Color   = C_GREEN
+			card.progBarFill.BackgroundColor3 = C_GREEN
+		elseif prog >= target then
+			card.claimBtn.Text       = "ODBIERZ"
+			card.claimBtn.TextColor3 = Color3.new(0, 0, 0)
+			card.claimBtn.BackgroundColor3 = C_GREEN
+			card.claimStroke.Color   = C_GREEN
+			card.progBarFill.BackgroundColor3 = C_GREEN
+		else
+			card.claimBtn.Text       = "W TRAKCIE"
+			card.claimBtn.TextColor3 = C_DIMTEXT
+			card.claimBtn.BackgroundColor3 = C_BG
+			card.claimStroke.Color   = C_BORDER
+			card.progBarFill.BackgroundColor3 = C_BLUE
+		end
+	end
+end
+
+-- ── Refresh timer (Heartbeat throttle) ───────────────────────────────────
+
+local refreshAccum = 0
+RunService.Heartbeat:Connect(function(dt)
+	refreshAccum += dt
+	if refreshAccum < 1 then return end
+	refreshAccum = 0
+	-- Refresh countdown zawsze updateowany — panel siedzi w MenuController
+	local left = (questState.refreshAt or 0) - os.time()
+	refreshLbl.Text = formatTimeLeft(left)
+end)
+
+-- ── Toggle ───────────────────────────────────────────────────────────────
+
+local POS_SHOW = UDim2.new(0.5, 0, 0.5,  0)
+local POS_HIDE = UDim2.new(0.5, 0, 0.55, 0)
+local TI_OPEN  = TweenInfo.new(0.30, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+local TI_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+
+local function setOpen(open: boolean)
+	isOpen = open
+	if open then
+		gui.Enabled              = true
+		panel.Position           = POS_HIDE
+		overlay.BackgroundTransparency = 1
+		renderCards()
+		renderGrandpa()
+		local left = (questState.refreshAt or 0) - os.time()
+		refreshLbl.Text = formatTimeLeft(left)
+		TweenService:Create(panel,   TI_OPEN, { Position = POS_SHOW }):Play()
+		TweenService:Create(overlay, TI_OPEN, { BackgroundTransparency = 0.30 }):Play()
+	else
+		TweenService:Create(panel, TI_CLOSE, { Position = POS_HIDE }):Play()
+		local tw = TweenService:Create(overlay, TI_CLOSE, { BackgroundTransparency = 1 })
+		tw.Completed:Connect(function()
+			if not isOpen then gui.Enabled = false end
+		end)
+		tw:Play()
+	end
+end
+
+closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+
+-- Eksport toggle do HUD (przycisk QUESTY)
+-- Eksport panelu dla MenuController — przeniesie go do zakładki 3 (QUESTY)
+_G["__questsPanel"] = panel
+_G["__questsReady"] = true
+
+-- Toggle kieruje do MenuController na zakładkę 3 (QUESTY)
+_G["__questToggle"] = function()
+	if _G["__menuSetActiveTab"] then
+		_G["__menuOpen"]()
+		_G["__menuSetActiveTab"](3)
+	else
+		setOpen(not isOpen)  -- fallback
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, proc)
+	if proc then return end
+	if input.KeyCode == Enum.KeyCode.Q then
+		if _G["__questToggle"] then _G["__questToggle"]() end
+	end
+end)
+
+-- ── Remote listeners ─────────────────────────────────────────────────────
+
+-- Render zawsze (panel siedzi w MenuController, isOpen flag już nie używana)
+QuestInit.OnClientEvent:Connect(function(snap)
+	questState.activeIds = snap.activeIds or {}
+	questState.progress  = snap.progress  or {}
+	questState.claimed   = snap.claimed   or {}
+	questState.refreshAt = snap.refreshAt or 0
+	renderCards()
+end)
+
+QuestUpdate.OnClientEvent:Connect(function(payload)
+	if payload.progress then
+		for qid, val in pairs(payload.progress) do
+			questState.progress[qid] = val
+		end
+		renderCards()
+	end
+end)
+
+ClaimQuestResult.OnClientEvent:Connect(function(result)
+	if result.success then
+		questState.claimed[result.questId] = true
+		renderCards()
+	end
+end)
+
+GrandpaState.OnClientEvent:Connect(function(payload)
+	if not payload then return end
+	grandpaQuest.state    = payload.state    or grandpaQuest.state
+	grandpaQuest.hasSyrup = payload.hasSyrup or false
+	if payload.desc   then grandpaQuest.desc   = payload.desc end
+	if payload.reward then grandpaQuest.reward = payload.reward end
+	if grandpaCard.rewardLbl then
+		grandpaCard.rewardLbl.Text = "Nagroda: " .. grandpaQuest.reward .. " ZŁ"
+	end
+	if grandpaCard.descLbl then
+		grandpaCard.descLbl.Text = grandpaQuest.desc
+	end
+	renderGrandpa()
+end)
+
+-- Initial render — empty state przy starcie klienta, prawdziwe dane po QuestInit
+renderGrandpa()
+renderCards()
