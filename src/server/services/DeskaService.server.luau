@@ -278,7 +278,21 @@ local function setupGablota(model: Instance)
 	prompt.Triggered:Connect(function(player: Player)
 		OpenDeckShop:FireClient(player, deck.key)
 	end)
-	print(string.format("[DeskaService] Gablota %d → %s (prompt na %s)", num, deck.key, anchor:GetFullName()))
+
+	-- Diagnostyka: gdzie jest anchor względem modelu (wykrywa "Proximity" part odsunięty/na 0,0,0)
+	local modelPos = model:IsA("Model") and model:GetPivot().Position or anchor.Position
+	local dist = (anchor.Position - modelPos).Magnitude
+	local promptCount, proxParts = 0, 0
+	for _, d in model:GetDescendants() do
+		if d:IsA("ProximityPrompt") then promptCount += 1 end
+		if d:IsA("BasePart") and string.find(string.lower(d.Name), "proximity") then proxParts += 1 end
+	end
+	print(string.format(
+		"[DeskaService] Gablota %d → %s | anchor=%s pos=(%.0f,%.0f,%.0f) size=(%.1f,%.1f,%.1f) distOdModelu=%.1f | promptów=%d proxParts=%d",
+		num, deck.key, anchor.Name,
+		anchor.Position.X, anchor.Position.Y, anchor.Position.Z,
+		anchor.Size.X, anchor.Size.Y, anchor.Size.Z,
+		dist, promptCount, proxParts))
 end
 
 local function setupGabloty()
