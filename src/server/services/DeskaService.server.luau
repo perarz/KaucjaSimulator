@@ -273,26 +273,50 @@ end
 local function setupGabloty()
 	-- Najpierw folder "Gabloty" bezpośrednio, potem rekurencyjnie (gdy zagnieżdżony w mapie)
 	local folder = workspace:FindFirstChild("Gabloty") or workspace:FindFirstChild("Gabloty", true)
+	local searchRoot = folder or workspace
+
 	if folder then
+		print("[DeskaService] Folder Gabloty znaleziony →", folder:GetFullName())
+		print("[DeskaService] Dzieci folderu Gabloty:")
 		for _, child in folder:GetChildren() do
-			setupGablota(child)
+			print("   •", child.Name, "(", child.ClassName, ")")
 		end
 		folder.ChildAdded:Connect(setupGablota)
-		print("[DeskaService] Folder Gabloty znaleziony →", folder:GetFullName())
-		return
+	else
+		warn("[DeskaService] Brak folderu 'Gabloty' — skanuję cały workspace")
 	end
 
-	-- Fallback: brak folderu — przeskanuj cały workspace po nazwach Gablota<N> (gdziekolwiek)
-	warn("[DeskaService] Brak folderu 'Gabloty' — skanuję workspace po nazwach Gablota<N>")
+	local seen = {}
 	local found = 0
-	for _, d in workspace:GetDescendants() do
-		if (d:IsA("Model") or d:IsA("BasePart")) and string.match(string.lower(d.Name), "^gablota%s*%d+") then
+	local function tryAttach(d: Instance)
+		if seen[d] then return end
+		if not (d:IsA("Model") or d:IsA("BasePart")) then return end
+		local num = tonumber(string.match(d.Name, "(%d+)"))
+		if num and getDeckByGablota(num) then
+			seen[d] = true
 			setupGablota(d)
 			found += 1
 		end
 	end
+
+	-- 1) Bezpośrednie dzieci folderu (covers "1" / "Gablota1" / "Gablota 1")
+	if folder then
+		for _, child in folder:GetChildren() do
+			tryAttach(child)
+		end
+	end
+
+	-- 2) Dowolny zagnieżdżony obiekt z "gablota" w nazwie (gdy gabloty są opakowane głębiej)
+	for _, d in searchRoot:GetDescendants() do
+		if string.find(string.lower(d.Name), "gablota") then
+			tryAttach(d)
+		end
+	end
+
 	if found == 0 then
-		warn("[DeskaService] Nie znaleziono żadnych Gablot w workspace — gabloty zakupu nie działają")
+		warn("[DeskaService] Nie znaleziono żadnych Gablot — nazwy muszą zawierać numer 1-4 (np. 'Gablota1'). Patrz lista dzieci wyżej.")
+	else
+		print("[DeskaService] Podłączono", found, "gablot z promptami")
 	end
 end
 
