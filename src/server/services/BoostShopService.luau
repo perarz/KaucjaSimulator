@@ -63,6 +63,18 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
+	-- Deski w Robux (np. VIP) — grant przez DeskaService
+	local okDeska, DeskaService = pcall(function()
+		return require(script.Parent:WaitForChild("DeskaService"))
+	end)
+	if okDeska and DeskaService then
+		local deck = DeskaService.GetDeckByProductId(receiptInfo.ProductId)
+		if deck then
+			DeskaService.GrantDeck(player, deck.key)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+	end
+
 	-- Nieznany ProductId
 	warn("[BoostShop] Nieznany ProductId:", receiptInfo.ProductId)
 	return Enum.ProductPurchaseDecision.NotProcessedYet

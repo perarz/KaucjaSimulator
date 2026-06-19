@@ -72,6 +72,17 @@ AdminAction.OnServerEvent:Connect(function(player: Player, payload)
 	elseif action == "kick" then
 		local target = Players:FindFirstChild(tostring(payload.target or ""))
 		if target then target:Kick("[Admin] " .. tostring(payload.reason or "Kick")) end
+
+	elseif action == "addCode" then
+		-- Dodaje runtime'owy kod promocyjny — żyje do restartu serwera.
+		-- CodeService czyta Config.Codes server-side, więc mutacja tu działa.
+		local code = string.upper(string.gsub(tostring(payload.code or ""), "%s", ""))
+		local reward = tonumber(payload.reward) or 0
+		if #code == 0 or #code > 32 then return end
+		if reward <= 0 or reward > 1000000 then return end
+		Config.Codes = Config.Codes or {}
+		Config.Codes[code] = { reward = reward }
+		print(string.format("[AdminService] %s dodał kod %s = %d zł", player.Name, code, reward))
 	end
 end)
 

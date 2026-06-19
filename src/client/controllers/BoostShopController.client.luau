@@ -75,7 +75,7 @@ badge.Size = UDim2.fromOffset(78, 28); badge.AnchorPoint = Vector2.new(1, 0)
 badge.Position = UDim2.new(1, -16, 0, 16)
 badge.BackgroundColor3 = C_ROBUX; badge.BorderSizePixel = 0
 badge.Text = "ROBUX"; badge.TextSize = 14; badge.Font = FONT
-badge.TextColor3 = Color3.fromRGB(40, 30, 0)
+badge.TextColor3 = Color3.fromRGB(0, 0, 0)  -- czarny na żółtym dla kontrastu
 badge.Parent = card
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = badge
@@ -84,7 +84,10 @@ end
 local cardTitle = Instance.new("TextLabel")
 cardTitle.Size = UDim2.new(1, -32, 0, 36); cardTitle.Position = UDim2.fromOffset(16, 60)
 cardTitle.BackgroundTransparency = 1; cardTitle.Text = "×2 KASA Z BUTELKOMATU"
-cardTitle.TextSize = 22; cardTitle.Font = FONT; cardTitle.TextColor3 = C_ACTIVE
+cardTitle.TextSize = 22; cardTitle.Font = FONT
+cardTitle.TextColor3 = C_ROBUX                       -- żółty na ciemnozielonym — wyraźny kontrast (było jasny zielony na zielonym tle)
+cardTitle.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+cardTitle.TextStrokeTransparency = 0.4
 cardTitle.TextXAlignment = Enum.TextXAlignment.Center
 cardTitle.Parent = card
 
@@ -93,13 +96,18 @@ desc.Size = UDim2.new(1, -32, 0, 80); desc.Position = UDim2.fromOffset(16, 108)
 desc.BackgroundTransparency = 1
 desc.Text = "Podwaja zarobki ze sprzedaży butelek w butelkomacie.\nTrwa 10 minut. Stackuje się z mnożnikiem ze skill tree."
 desc.TextSize = 14; desc.Font = FONT; desc.TextColor3 = C_WHITE
+desc.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+desc.TextStrokeTransparency = 0.5
 desc.TextWrapped = true; desc.TextXAlignment = Enum.TextXAlignment.Center
 desc.Parent = card
 
 local status = Instance.new("TextLabel")
 status.Size = UDim2.new(1, -32, 0, 28); status.Position = UDim2.fromOffset(16, 200)
 status.BackgroundTransparency = 1; status.Text = ""
-status.TextSize = 16; status.Font = FONT; status.TextColor3 = C_ACTIVE
+status.TextSize = 16; status.Font = FONT
+status.TextColor3 = C_WHITE                          -- biały zamiast jasnego zielonego (blendował z zielonym tłem karty)
+status.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+status.TextStrokeTransparency = 0.4
 status.TextXAlignment = Enum.TextXAlignment.Center
 status.Parent = card
 
@@ -112,12 +120,13 @@ buyBtn.BorderSizePixel        = 0
 buyBtn.Text                   = "KUP — 19 R$"
 buyBtn.TextSize               = 20
 buyBtn.Font                   = FONT
-buyBtn.TextColor3             = Color3.fromRGB(40, 30, 0)
+buyBtn.TextColor3             = Color3.fromRGB(0, 0, 0)  -- czarny tekst na żółtym tle dla kontrastu
 buyBtn.AutoButtonColor        = false
 buyBtn.Parent                 = card
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = buyBtn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = buyBtn
+	-- Ciemny gold zamiast czarnego/zielonego — kontrast z czarnym tekstem (różny kolor) i żółtym tłem (ciemniejszy)
+	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(150, 100, 0); s.Thickness = 3; s.Parent = buyBtn
 	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = buyBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
 	buyBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.03 }):Play() end)

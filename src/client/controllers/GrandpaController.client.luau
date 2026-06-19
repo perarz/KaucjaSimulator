@@ -275,12 +275,7 @@ local function makeButton(text: string, color: Color3, textColor: Color3, onClic
 	b.TextSize           = 20
 	b.TextColor3         = textColor
 	b.AnchorPoint        = Vector2.new(0.5, 0.5)
-	-- Brak UICorner — square style dla dialog boxu
-
-	local s = Instance.new("UIStroke")
-	s.Color     = C_BORDER
-	s.Thickness = 4
-	s.Parent    = b
+	-- Brak UICorner ani UIStroke — czysty kolor tła + tekst, bez "obramówki" wokół liter
 
 	local sc = Instance.new("UIScale")
 	sc.Parent = b

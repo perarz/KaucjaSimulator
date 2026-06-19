@@ -49,6 +49,9 @@ src/
       HatShopController.client.luau         -- standalone UI sklepu czapek (workspace.SKLEP2.Cashier), 1 produkt z bonusami HP/stamina/speed
       AdminController.client.luau           -- panel admina (F2), broadcast tekstu + daj sobie zł/butelki
       BoostShopController.client.luau       -- sklep Robux: x2 KASA 10 min za 19 R$, portowany do zakładki SKLEP w menu
+      DeskaController.client.luau           -- klawisz R wsiada/wysiada z deski, RenderStepped obraca gracza bokiem względem kamery
+      DeckShopController.client.luau        -- GUI zakupu deski przy gablocie + przycisk hoverboard → menu TWOJE DESKI (equip)
+      ParkingGuiController.client.luau      -- GUI opłaty 500 PLN za bilet parkingowy (ProximityPrompt na Kasjerze biletów)
   server/
     services/
       BottleService.luau          -- spawn, respawn, rzadkości butelek (tier per obszar), CollectionService tagging
@@ -68,7 +71,11 @@ src/
       HatShopService.luau         -- sklep czapki (SKLEP2.Cashier), permanentna Czapka za 5000zł+10×Leg+1×Mit, +50HP/+50stamina/+2speed
       DeathDropService.luau       -- drop butelek po śmierci na ziemię (raycast), instant respawn, 5s cooldown na własne dropy
       AdminService.luau           -- panel admina (Config.Admins, F2), broadcast/giveZl/giveBottles/kick
-      BoostShopService.luau       -- Developer Products (Robux), x2 KASA z butelkomatu na 10 min, ProcessReceipt handler
+      BoostShopService.luau       -- Developer Products (Robux), x2 KASA z butelkomatu na 10 min, ProcessReceipt handler (+ grant deski VIP)
+      DeskaService.luau           -- deski: zakup przy gablotach, owned/equip, jazda po R (clone-per-mount), VIP w Robux
+      ParkingService.server.luau  -- bilet parkingowy 500 PLN, BindableEvent ParkingGateEvent → otwiera bramę przez wrzuc_do_bramy
+    scripts/
+      wrzuc_do_bramy.server.luau  -- script w workspace.Parking.bramy — tween brama (Gate_2A/2B przez MeshPart1..4) na ParkingGateEvent
   shared/
     Config.luau                   -- wszystkie stałe (ceny, wartości, czasy, questy, drop kosza)
 default.project.json
@@ -84,12 +91,13 @@ Wszystkie liczby balansowe trzymaj WYŁĄCZNIE w `Config.luau`. Nigdy nie hardko
 ```lua
 -- src/shared/Config.luau
 return {
+    -- REBALANS 2026: wartości obniżone żeby spowolnić earn rate
     BottleValues = {
         Zwykla    = 1,
         Rzadka    = 2,
-        Epicka    = 5,
-        Legendarna = 20,
-        Mityczny  = 50,  -- tylko w tier 5
+        Epicka    = 3,   -- było 5
+        Legendarna = 10, -- było 20
+        Mityczny  = 25,  -- było 50 (tier 5 only)
     },
 
     -- Fallback gdy obszar nie ma tieru w nazwie (T?)
@@ -108,7 +116,7 @@ return {
         [2] = { Zwykla = 0.60, Rzadka = 0.28, Epicka = 0.11, Legendarna = 0.01 }, -- średnio
         [3] = { Zwykla = 0.35, Rzadka = 0.35, Epicka = 0.25, Legendarna = 0.05 }, -- daleko
         [4] = { Zwykla = 0.15, Rzadka = 0.30, Epicka = 0.40, Legendarna = 0.15, Mityczny = 0.00 }, -- endgame
-        [5] = { Zwykla = 0.00, Rzadka = 0.00, Epicka = 0.40, Legendarna = 0.40, Mityczny = 0.20 }, -- mityczna strefa (tylko T5 ma Mityczne)
+        [5] = { Zwykla = 0.00, Rzadka = 0.00, Epicka = 0.50, Legendarna = 0.45, Mityczny = 0.05 }, -- mityczna strefa (Mit 5% po rebalansie — było 20%)
     },
 
     BottleRespawnTime = 6,
@@ -143,20 +151,21 @@ return {
     },
 
     -- Skill Tree: Prędkość (WalkSpeed) — wymaga BaseLevel >= 1. Cap = 30.
-    -- Krzywa cen: L1 tani (quick first unlock), L4 grind.
+    -- REBALANS: L3/L4 droższe — endgame jako sensowny grind
     SpeedUpgrades = {
-        { Level = 1, Speed = 19, Cost = 250,  CostType = "Zlotowki", Name = "Trucht"  },
-        { Level = 2, Speed = 22, Cost = 1200, CostType = "Zlotowki", Name = "Bieg"    },
-        { Level = 3, Speed = 26, Cost = 3500, CostType = "Zlotowki", Name = "Sprint"  },
-        { Level = 4, Speed = 30, Cost = 8000, CostType = "Zlotowki", Name = "Rakieta" },
+        { Level = 1, Speed = 19, Cost = 250,   CostType = "Zlotowki", Name = "Trucht"  },
+        { Level = 2, Speed = 22, Cost = 1500,  CostType = "Zlotowki", Name = "Bieg"    },
+        { Level = 3, Speed = 26, Cost = 6000,  CostType = "Zlotowki", Name = "Sprint"  },
+        { Level = 4, Speed = 30, Cost = 25000, CostType = "Zlotowki", Name = "Rakieta" },  -- ← MAIN GATE
     },
 
     -- Skill Tree: Mnożnik kasy — wymaga BaseLevel >= 1. Cap = ×2.5.
+    -- REBALANS: L3/L4 droższe
     MultiplierUpgrades = {
-        { Level = 1, Multiplier = 1.5, Cost = 250,  CostType = "Zlotowki", Name = "Dobry Węch"     },
-        { Level = 2, Multiplier = 2.0, Cost = 1200, CostType = "Zlotowki", Name = "Kaucyjny Zmysł" },
-        { Level = 3, Multiplier = 2.2, Cost = 3500, CostType = "Zlotowki", Name = "Złoty Nos"      },
-        { Level = 4, Multiplier = 2.5, Cost = 8000, CostType = "Zlotowki", Name = "Legenda"        },
+        { Level = 1, Multiplier = 1.5, Cost = 250,   CostType = "Zlotowki", Name = "Dobry Węch"     },
+        { Level = 2, Multiplier = 2.0, Cost = 1500,  CostType = "Zlotowki", Name = "Kaucyjny Zmysł" },
+        { Level = 3, Multiplier = 2.2, Cost = 7000,  CostType = "Zlotowki", Name = "Złoty Nos"      },
+        { Level = 4, Multiplier = 2.5, Cost = 30000, CostType = "Zlotowki", Name = "Legenda"        },  -- ← MAIN GATE
     },
 
     -- Skill Tree: Szczęście — odnoga od Multiplier L2 (single-level, fioletowy hex z ★)
@@ -169,11 +178,12 @@ return {
     },
 
     -- Sklep: Plecak (pojemność) — osobny sklep, NIE skill tree
-    -- 3 poziomy (Wózek sklepowy usunięty — nie da się sensownie podpiąć modelu wózka do postaci)
+    -- REBALANS: L4 droższy (2800 → 10000), L4 bez wizualnego modelu (BackpackEquipService pomija cicho)
     BackpackUpgrades = {
-        { Level = 1, Capacity = 10, Cost = 0,    CostType = "Zlotowki", Name = "Reklamówka"     },
-        { Level = 2, Capacity = 25, Cost = 200,  CostType = "Zlotowki", Name = "Plecak szkolny" },
-        { Level = 3, Capacity = 35, Cost = 900,  CostType = "Zlotowki", Name = "Wielki worek"   },
+        { Level = 1, Capacity = 10, Cost = 0,     CostType = "Zlotowki", Name = "Reklamówka"     },
+        { Level = 2, Capacity = 25, Cost = 200,   CostType = "Zlotowki", Name = "Plecak szkolny" },
+        { Level = 3, Capacity = 35, Cost = 900,   CostType = "Zlotowki", Name = "Wielki worek"   },
+        { Level = 4, Capacity = 50, Cost = 10000, CostType = "Zlotowki", Name = "Wózek sklepowy" },
     },
 
     -- Kosz — wagi ilości dropu per rzadkość (Zwykla startuje od 2 — single za słabe po 2s hold + ruletce)
@@ -1442,6 +1452,93 @@ BoostShop = {
 
 ---
 
+## Deski / Skateboardy (DeskaService + DeskaController + DeckShopController)
+
+### Cel
+Gracz kupuje deski (skateboardy) przy gablotach, wyposaża wybraną i jeździ po naciśnięciu **R**. 4 typy o rosnącej prędkości: **Default < Red < Blue < VIP**.
+
+### Config.Decks (tablica = ranking prędkości; ostatnia = najszybsza)
+```lua
+Decks = {
+    { key="Default", name="Deska Default", model="DeskaDefault", Speed=40, CostType="Zlotowki", Cost=1000, gablota=1, color=... },
+    { key="Red",     name="Deska Red",     model="DeskaRed",     Speed=48, CostType="Zlotowki", Cost=3000, gablota=2, color=... },
+    { key="Blue",    name="Deska Blue",    model="DeskaBlue",    Speed=56, CostType="Zlotowki", Cost=5000, gablota=3, color=... },
+    { key="VIP",     name="Deska VIP",     model="DeskaVIP",     Speed=68, CostType="Robux", RobuxProductId=0, RobuxPrice=30, gablota=4, color=... },
+}
+DeckMenuIconId = "rbxassetid://123773463706470"  -- ikona przycisku hoverboard w HUD
+```
+- `model` = nazwa Modelu w `workspace.Deski` (szablon klonowany przy jeździe)
+- `gablota` = numer gabloty w `workspace.Gabloty` która sprzedaje tę deskę
+- **VIP RobuxProductId = 0** — placeholder, wpisz Developer Product ID z dashboardu Roblox
+
+### Persystencja (PlayerData, merge bez bumpu klucza)
+- `data.OwnedDecks = { [deckKey]=true }` — posiadane deski
+- `data.EquippedDeck = ""` — wyposażona deska ("" = brak; R jeździ najlepszą posiadaną)
+
+### Setup w Studio
+- **`workspace.Deski`** — Folder z 4 Modelami: `DeskaDefault`, `DeskaRed`, `DeskaBlue`, `DeskaVIP` (każdy z PrimaryPart). To szablony — DeskaService klonuje je przy jeździe do `workspace.ActiveDecks` (auto-folder)
+- **`workspace.Gabloty`** — Folder z `Gablota1..4` (BasePart lub Model z PrimaryPart). DeskaService auto-dodaje ProximityPrompt, mapuje numer w nazwie → deck przez pole `gablota`
+
+### Przepływ
+1. **Zakup**: ProximityPrompt na gablocie → `OpenDeckShop:FireClient(deckKey)` → panel zakupu (nazwa, prędkość, cena, KUP). Default/Red/Blue za zł (`BuyDeck`), VIP → `MarketplaceService:PromptProductPurchase`. Grant VIP w **BoostShopService.ProcessReceipt** (jedyny ProcessReceipt w grze) → `DeskaService.GrantDeck(player, "VIP")`
+2. **Jazda (R)**: `DeskMount:FireServer(nil)` → serwer klonuje szablon wyposażonej (lub najlepszej posiadanej) deski, weld do HRP, `WalkSpeed = deck.Speed`, `JumpHeight = 0`. Ponowne R = dismount (`DeskDismount`)
+3. **Menu desek**: przycisk hoverboard w HUD (lewa strona, pod MENU) → panel TWOJE DESKI z 4 kartami. Klik karty → detale (prędkość, status) + przycisk **WYPOSAŻ** (`EquipDeck`) → serwer ustawia EquippedDeck + natychmiast wsiada na tę deskę
+- `DeckStatus:FireClient({owned, equipped, riding})` synchronizuje stan (PlayerAdded + każda zmiana)
+
+### Mount/dismount (DeskaController — visuals)
+- DeskMountResult(success, board) → animacja jazdy (`SKATE_ANIM_ID`), gracz bokiem (AutoRotate=false + RenderStepped obraca HRP od kamery), wycisza dźwięki kroków
+- Dismount przywraca `Config.DeckDismountWalkSpeed=16` / `DeckDismountJumpHeight=7.2`
+- Respawn czyści osierocony klon deski (weld ginie z postacią)
+
+### RemoteEvents
+- `DeskMount`/`DeskDismount`/`DeskMountResult`/`QuickMount` — jazda
+- `OpenDeckShop` (server→client) — trigger gabloty
+- `BuyDeck` (client→server) / `BuyDeckResult` (server→client `{success, reason?, deckKey?}`)
+- `EquipDeck` (client→server) — wyposaż + wsiądź
+- `DeckStatus` (server→client) — sync owned/equipped/riding
+
+### Bootstrap
+- `DeskaService` (ModuleScript) wymagany w GameServer **przed BoostShopService** (jego ProcessReceipt grantuje deski VIP)
+
+---
+
+## Parking (ParkingService + ParkingGuiController + wrzuc_do_bramy)
+
+### Cel
+Gracz płaci **500 PLN** za bilet → brama otwiera się **trwale** (per sesja serwera). Następne zakupy w tej samej sesji rzucają `reason="already"`. Po restart serwera bilet się resetuje (nowa sesja, nowy bilet).
+
+### Setup w Studio
+- **`workspace.Parking.bramy`** — Folder/Model:
+  - Dwie sub-Modele: `Gate_2A`, `Gate_2B`
+  - Każda brama ma `MeshPart1..4` — kolejne keyframe'y ścieżki otwarcia (CFrame interpolowany)
+  - `wrzuc_do_bramy.server.luau` jako Script wewnątrz `bramy` (czeka na `ParkingGateEvent` w ServerScriptService)
+- **Kasjer biletów** — Model z ProximityPrompt gdzieś na mapie (ParkingGuiController otwiera GUI po triggerze)
+
+### Komunikacja server↔script
+- `ParkingService` przy starcie tworzy `BindableEvent ParkingGateEvent` w `ServerScriptService`
+- `wrzuc_do_bramy` robi `WaitForChild("ParkingGateEvent", 30)` i nasłuchuje
+- Po zakupie: `gateEvent:Fire(player.UserId)` → script otwiera obie bramy (tween path-based, `ANIM_TIME = 0.45s`, Sine InOut)
+- `parent:SetAttribute("DoorOpen", true)` jako flaga idempotencji (kolejne triggery nie tweenują ponownie)
+
+### RemoteEvents
+- `BuyParkingTicket` (client→server)
+- `ParkingTicketResult` (server→client, `{ success, reason? }` — reason: `"already"` / `"broke"`)
+
+### Persystencja
+- **Brak** — `ticketOwners` in-memory per sesja, `Players.PlayerRemoving` czyści
+
+### Uwaga
+- `ParkingService.server.luau` używa sufiksu `.server.luau` — Rojo rejestruje go jako standalone Script w ServerScriptService (bez wpisu w GameServer). Tak samo `wrzuc_do_bramy.server.luau` (Script wewnątrz `workspace.Parking.bramy`).
+
+---
+
+## Panel admina — dodawanie kodów (AdminService.addCode)
+- Panel admina (F2) ma sekcję **DODAJ KOD PROMOCYJNY**: pole kodu + nagroda zł + DODAJ → `AdminAction({ action="addCode", code, reward })`
+- Serwer mutuje `Config.Codes[code] = { reward }` w pamięci — **żyje do restartu serwera** (CodeService czyta `Config.Codes` server-side na żywo, więc działa od razu)
+- Walidacja: kod uppercase 1-32 znaki, reward 1-1 000 000
+
+---
+
 ## Zmiany od MVP — szybki przegląd
 
 - **Menu ma 5 zakładek** (zmiana z 4): EKWIPUNEK / UMIEJĘTNOŚCI / QUESTY / **SKLEP** / USTAWIENIA. Settings na indeksie 5.
@@ -1512,6 +1609,10 @@ BoostShop = {
 - `OpenHatShop`, `BuyHat`, `BuyHatResult`, `HatStatusUpdate` — sklep czapek
 - `AdminInit`, `AdminAction`, `AdminBroadcast` — panel admina + broadcast HUD dla wszystkich
 - `BoostStatusUpdate`, `PromptBoostPurchase` — Robux boost shop
+- `DeskMount`, `DeskDismount`, `DeskMountResult`, `QuickMount` — jazda na desce
+- `OpenDeckShop`, `BuyDeck`, `BuyDeckResult`, `EquipDeck`, `DeckStatus` — sklep/menu/equip desek
+- `BuyParkingTicket`, `ParkingTicketResult` — parking
+- `SyncInventoryLayout` — klient wysyła per-slot layout ekwipunku do serwera (persystencja splitów)
 
 ## Aktualne `_G` eksporty (cross-controller)
 - `_G["__skillTreeToggle"]` — toggle skill tree (HUD button / klawisz U)
@@ -1542,6 +1643,11 @@ BoostShop = {
 | `workspace.BANK` | Folder/Model z dzieckiem `Bankier` (Model R15 lub BasePart) | BankService |
 | `workspace.BUTELKOMANIACY` | Folder/Model z dzieckiem `Kasjer` (Model R6/R15 lub BasePart) | ShopService (sklep z plecakami) |
 | `workspace.SKLEP2` | Folder/Model z dzieckiem `Cashier` (R6/R15 lub BasePart) | HatShopService |
+| `workspace.Deski` | Folder z 4 Modelami: `DeskaDefault/DeskaRed/DeskaBlue/DeskaVIP` (PrimaryPart) — szablony desek | DeskaService (klonuje) |
+| `workspace.Gabloty` | Folder z `Gablota1..4` (BasePart/Model) — sprzedaż desek przez ProximityPrompt | DeskaService |
+| `workspace.ActiveDecks` | Auto-tworzony — klony desek aktualnie jeżdżących graczy | DeskaService (auto) |
+| `workspace.Parking.bramy` | Folder/Model z dziećmi `Gate_2A`/`Gate_2B` (każde `MeshPart1..4`) + Script `wrzuc_do_bramy` | wrzuc_do_bramy (script wewnątrz) |
+| `ServerScriptService.ParkingGateEvent` | Auto-tworzony BindableEvent — most ParkingService → wrzuc_do_bramy | ParkingService (auto) |
 | `workspace.PVPZone` | BasePart (Anchored, CanCollide=false, Transparency=1) — strefa PvP gdziekolwiek w workspace | PvPService |
 | `ReplicatedStorage.Sword` | Tool — ClassicSword z toolboxa | PvPService (klonuje do plecaka w strefie) |
 | `ReplicatedStorage.Czapka` | Accessory (HatAccessory) — czapka z bonusami | HatShopService |
@@ -1570,5 +1676,6 @@ require(script.Parent.PvPService)
 require(script.Parent.HatShopService)
 require(script.Parent.DeathDropService)
 require(script.Parent.AdminService)
+require(script.Parent.DeskaService)        -- przed BoostShopService (ProcessReceipt grantuje deski VIP)
 require(script.Parent.BoostShopService)
 ```

@@ -30,19 +30,20 @@ bcLabel.Size                   = UDim2.new(0.9, 0, 0, 120)
 bcLabel.AnchorPoint            = Vector2.new(0.5, 0)
 bcLabel.Position               = UDim2.new(0.5, 0, 0, 80)
 bcLabel.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
-bcLabel.BackgroundTransparency = 0.3
+bcLabel.BackgroundTransparency = 0.15            -- ciemniejsze tło dla kontrastu
 bcLabel.BorderSizePixel        = 0
 bcLabel.Text                   = ""
 bcLabel.TextSize               = 36
-bcLabel.Font                   = Enum.Font.Gotham
-bcLabel.TextColor3             = Color3.fromRGB(255, 220, 100)
-bcLabel.TextStrokeTransparency = 1
+bcLabel.Font                   = Enum.Font.GothamBold
+bcLabel.TextColor3             = Color3.fromRGB(255, 255, 255)  -- BIAŁY zamiast gold — wyraźny kontrast z czarnym tłem
+bcLabel.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
+bcLabel.TextStrokeTransparency = 0               -- czarny kontur wokół liter zawsze widoczny
 bcLabel.TextWrapped            = true
 bcLabel.Visible                = false
 bcLabel.Parent                 = bcGui
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 12); c.Parent = bcLabel
-	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(0, 0, 0); s.Thickness = 3; s.Parent = bcLabel
+	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(255, 220, 100); s.Thickness = 3; s.Parent = bcLabel
 end
 
 local bcTask: thread? = nil
@@ -74,7 +75,7 @@ end)
 
 -- ── Panel admina (tylko dla adminów, F2 toggle) ─────────────────────────────
 local PANEL_W = 460
-local PANEL_H = 360
+local PANEL_H = 440  -- powiększony żeby pomieścić sekcję DODAJ KOD
 
 local gui = Instance.new("ScreenGui")
 gui.Name           = "AdminPanel"
@@ -112,10 +113,10 @@ local function mkBtn(parent, size, pos, text, bg)
 	b.BackgroundColor3 = bg or Color3.fromRGB(170, 221, 102)
 	b.BorderSizePixel = 0
 	b.Text = text; b.TextSize = 16; b.Font = Enum.Font.GothamBlack
-	b.TextColor3 = Color3.fromRGB(20, 40, 25); b.AutoButtonColor = false
+	b.TextColor3 = Color3.fromRGB(0, 0, 0); b.AutoButtonColor = false
 	b.Parent = parent
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = b
-	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(5, 25, 20); s.Thickness = 2; s.Parent = b
+	-- UIStroke usunięty — obramówka zlewała się z czarnym tekstem
 	return b
 end
 
@@ -156,9 +157,18 @@ local countInput = mkInput(panel, UDim2.fromOffset(90, 36), UDim2.fromOffset(160
 countInput.Text = "10"
 local bottleBtn = mkBtn(panel, UDim2.fromOffset(96, 36), UDim2.new(1, -112, 0, 228), "DODAJ", Color3.fromRGB(88, 166, 255))
 
+-- Dodaj kod promocyjny section
+mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 278), "DODAJ KOD PROMOCYJNY", 14, Color3.fromRGB(175, 175, 175))
+local codeInput = mkInput(panel, UDim2.fromOffset(140, 36), UDim2.fromOffset(16, 302), "KOD (np. NOWY2026)")
+local rewardInput = mkInput(panel, UDim2.fromOffset(90, 36), UDim2.fromOffset(160, 302), "Nagroda zł")
+rewardInput.Text = "500"
+local codeBtn = mkBtn(panel, UDim2.fromOffset(96, 36), UDim2.new(1, -112, 0, 302), "DODAJ", Color3.fromRGB(255, 220, 100))
+local codeStatus = mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 342),
+	"", 12, Color3.fromRGB(170, 221, 102))
+
 -- Hint
 mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, PANEL_H - 30),
-	"Skróty: F2 = otwórz/zamknij", 12, Color3.fromRGB(175, 175, 175))
+	"Skróty: F2 = otwórz/zamknij. Kody żyją do restartu serwera.", 12, Color3.fromRGB(175, 175, 175))
 
 -- Actions
 bcBtn.MouseButton1Click:Connect(function()
@@ -173,6 +183,16 @@ zlBtn.MouseButton1Click:Connect(function()
 	AdminAction:FireServer({ action = "giveZl", amount = n })
 	zlInput.Text = ""
 end)
+codeBtn.MouseButton1Click:Connect(function()
+	local code = string.upper(codeInput.Text)
+	local reward = tonumber(rewardInput.Text) or 0
+	if #code == 0 or reward <= 0 then return end
+	AdminAction:FireServer({ action = "addCode", code = code, reward = reward })
+	codeStatus.Text = string.format("Dodano: %s = %d zł", code, reward)
+	codeStatus.TextColor3 = Color3.fromRGB(170, 221, 102)
+	codeInput.Text = ""
+end)
+
 bottleBtn.MouseButton1Click:Connect(function()
 	local r = bottleInput.Text
 	local n = tonumber(countInput.Text) or 0

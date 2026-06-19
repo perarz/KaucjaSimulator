@@ -66,6 +66,9 @@
         },
         "ParkingGuiController": {
           "$path": "src/client/controllers/ParkingGuiController.client.luau"
+        },
+        "DeckShopController": {
+          "$path": "src/client/controllers/DeckShopController.client.luau"
         }
       }
     },
@@ -130,7 +133,7 @@
         "$path": "src/server/services/BoostShopService.luau"
       },
       "DeskaService": {
-        "$path": "src/server/services/DeskaService.server.luau"
+        "$path": "src/server/services/DeskaService.luau"
       },
       "ParkingService": {
         "$path": "src/server/services/ParkingService.server.luau"
@@ -193,7 +196,12 @@
         "DeskMountResult":     { "$className": "RemoteEvent" },
         "QuickMount":          { "$className": "RemoteEvent" },
         "BuyParkingTicket":    { "$className": "RemoteEvent" },
-        "ParkingTicketResult": { "$className": "RemoteEvent" }
+        "ParkingTicketResult": { "$className": "RemoteEvent" },
+        "OpenDeckShop":        { "$className": "RemoteEvent" },
+        "BuyDeck":             { "$className": "RemoteEvent" },
+        "BuyDeckResult":       { "$className": "RemoteEvent" },
+        "EquipDeck":           { "$className": "RemoteEvent" },
+        "DeckStatus":          { "$className": "RemoteEvent" }
       }
     },
 
