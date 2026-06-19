@@ -129,10 +129,11 @@ local function mountPlayer(player: Player, deckKey: string)
 	if not hrp or not humanoid then return end
 
 	-- Znajdź szablon w workspace.Deski (fallback ReplicatedStorage.Deski)
+	-- Szablon może być Modelem (z PrimaryPart) ALBO pojedynczym BasePart/Union.
 	local deskiFolder = workspace:FindFirstChild("Deski") or ReplicatedStorage:FindFirstChild("Deski")
 	local template = deskiFolder and deskiFolder:FindFirstChild(deck.model)
-	if not template or not template:IsA("Model") then
-		warn("[DeskaService] Brak modelu deski:", deck.model, "(workspace.Deski)")
+	if not template or not (template:IsA("Model") or template:IsA("BasePart")) then
+		warn("[DeskaService] Brak deski (Model/BasePart):", deck.model, "(workspace.Deski)")
 		return
 	end
 
@@ -140,14 +141,22 @@ local function mountPlayer(player: Player, deckKey: string)
 	board.Name = "ActiveDeck_" .. player.Name
 	board.Parent = getActiveFolder()
 
-	local primary = getPrimaryPart(board)
+	-- PrimaryPart dla Modelu, lub sam part gdy deska to BasePart/Union
+	local primary: BasePart?
+	if board:IsA("Model") then
+		primary = getPrimaryPart(board)
+	elseif board:IsA("BasePart") then
+		primary = board :: BasePart
+	end
 	if not primary then
-		warn("[DeskaService] Model deski nie ma BasePart:", deck.model)
+		warn("[DeskaService] Deska nie ma BasePart:", deck.model)
 		board:Destroy()
 		return
 	end
 
-	for _, part in board:GetDescendants() do
+	-- Ustaw fizyczne właściwości — działa dla Modelu (descendants) i samego BasePart
+	local toSet = board:IsA("BasePart") and { board } or board:GetDescendants()
+	for _, part in toSet do
 		if part:IsA("BasePart") then
 			part.Anchored     = false
 			part.CanCollide   = false
