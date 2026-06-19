@@ -249,29 +249,22 @@ local menuGui = Instance.new("ScreenGui")
 menuGui.Name = "DeckMenuGui"
 menuGui.ResetOnSpawn = false
 menuGui.IgnoreGuiInset = true
-menuGui.DisplayOrder = 44
+menuGui.DisplayOrder = 20  -- pod głównym MENU (MenuController = 30), nad HUD
 menuGui.Parent = playerGui
 
--- Przycisk hoverboard (HUD, lewa strona pod przyciskiem MENU)
+-- Przycisk hoverboard (HUD, lewa strona pod przyciskiem MENU) — sam obrazek, bez tła/ramki
 local hoverBtn = Instance.new("ImageButton")
 hoverBtn.Name = "HoverboardButton"
 hoverBtn.AnchorPoint = Vector2.new(0, 0.5)
 hoverBtn.Position = UDim2.new(0, 16, 0.5, 110)
 hoverBtn.Size = UDim2.fromOffset(90, 90)
-hoverBtn.BackgroundColor3 = C_BG
-hoverBtn.BackgroundTransparency = 0.05
+hoverBtn.BackgroundTransparency = 1
 hoverBtn.BorderSizePixel = 0
 hoverBtn.Image = Config.DeckMenuIconId
 hoverBtn.ScaleType = Enum.ScaleType.Fit
 hoverBtn.AutoButtonColor = false
 hoverBtn.Parent = menuGui
-mkCorner(hoverBtn, 8); mkStroke(hoverBtn, C_BORDER, 4); hoverScale(hoverBtn, 1.06)
-do
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 10); pad.PaddingBottom = UDim.new(0, 10)
-	pad.PaddingLeft = UDim.new(0, 10); pad.PaddingRight = UDim.new(0, 10)
-	pad.Parent = hoverBtn
-end
+hoverScale(hoverBtn, 1.06)
 
 local menuOverlay = Instance.new("TextButton")
 menuOverlay.Size = UDim2.fromScale(1, 1)
