@@ -4,6 +4,17 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
 local RunService        = game:GetService("RunService")
+local SoundService      = game:GetService("SoundService")
+
+local function playSfx(name: string)
+	local folder = workspace:FindFirstChild("SFX")
+	local tmpl = folder and folder:FindFirstChild(name)
+	if not (tmpl and tmpl:IsA("Sound")) then return end
+	local grp = SoundService:FindFirstChild("SfxGroup")
+	if not grp then grp = Instance.new("SoundGroup"); grp.Name = "SfxGroup"; grp.Parent = SoundService end
+	local s = tmpl:Clone(); s.SoundGroup = grp; s.Parent = SoundService; s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+end
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
 local Events            = ReplicatedStorage:WaitForChild("Events")
@@ -486,7 +497,7 @@ do
 	statusLbl.ZIndex                 = 4
 	statusLbl.Parent                 = frame
 	local stC = Instance.new("UICorner"); stC.CornerRadius = UDim.new(0, 8); stC.Parent = statusLbl
-	local stS = Instance.new("UIStroke"); stS.Color = C_BORDER; stS.Thickness = 3; stS.Parent = statusLbl
+	local stS = Instance.new("UIStroke"); stS.Color = C_BORDER; stS.Thickness = 0; stS.Parent = statusLbl  -- bez obramowki — spójnie z daily quest claimBtn
 	grandpaCard.statusLbl = statusLbl
 
 	-- Empty state label (wyświetlany gdy state="none" lub "done")
@@ -507,25 +518,36 @@ do
 	grandpaCard.emptyLbl = emptyLbl
 end
 
+local DZIADEK_SECTION_H = SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP
+
+local function relayoutForGrandpaVisibility(showSection: boolean)
+	local extra = showSection and DZIADEK_SECTION_H or 0
+	-- DZIADEK na górze (gdy widoczna)
+	grandpaLbl.Visible       = showSection
+	grandpaContainer.Visible = showSection
+	-- DAILY label + countdown + cards przesunięte gdy DZIADEK ukryta
+	dailyLbl.Position    = UDim2.fromOffset(PAD,           HEADER_H + PAD + extra)
+	refreshLbl.Position  = UDim2.new(1, -PAD, 0,           HEADER_H + PAD + extra)
+	cardsContainer.Position = UDim2.fromOffset(PAD,        HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP + extra)
+	-- Skróć panel gdy DZIADEK ukryta
+	panel.Size = UDim2.fromOffset(PANEL_W, PANEL_H - DZIADEK_SECTION_H + extra)
+end
+
 local function renderGrandpa()
 	local g = grandpaQuest
 	local active = (g.state == "active")
-	-- Pokazuj content tylko gdy quest aktywny; inaczej empty state
-	grandpaCard.descLbl.Visible     = active
-	grandpaCard.progBarBG.Visible   = active
-	grandpaCard.progLbl.Visible     = active
-	grandpaCard.rewardLbl.Visible   = active
-	grandpaCard.statusLbl.Visible   = active
-	grandpaCard.emptyLbl.Visible    = not active
+	-- Pokazuj sekcję DZIADEK tylko gdy quest jest aktywny (state == "active").
+	-- "none" i "done" → cała sekcja ukryta, daily questy zajmują miejsce.
+	relayoutForGrandpaVisibility(active)
+	if not active then return end
 
-	if not active then
-		if g.state == "done" then
-			grandpaCard.emptyLbl.Text = "Pomogłeś już dziadkowi. Wróć później — może będzie miał coś nowego."
-		else
-			grandpaCard.emptyLbl.Text = "Porozmawiaj z Dziadkiem żeby przyjąć questa."
-		end
-		return
-	end
+	-- Quest aktywny → pokaż content karty
+	grandpaCard.descLbl.Visible     = true
+	grandpaCard.progBarBG.Visible   = true
+	grandpaCard.progLbl.Visible     = true
+	grandpaCard.rewardLbl.Visible   = true
+	grandpaCard.statusLbl.Visible   = true
+	grandpaCard.emptyLbl.Visible    = false
 
 	local prog = g.hasSyrup and 1 or 0
 	grandpaCard.progLbl.Text       = string.format("%d / 1", prog)
@@ -630,8 +652,16 @@ local POS_HIDE = UDim2.new(0.5, 0, 0.55, 0)
 local TI_OPEN  = TweenInfo.new(0.30, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local TI_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
+local questMoveLocked = false
 local function setOpen(open: boolean)
 	isOpen = open
+	if open and not questMoveLocked then
+		questMoveLocked = true
+		if _G["__lockMovement"] then _G["__lockMovement"]() end
+	elseif not open and questMoveLocked then
+		questMoveLocked = false
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+	end
 	if open then
 		gui.Enabled              = true
 		panel.Position           = POS_HIDE
@@ -652,7 +682,7 @@ local function setOpen(open: boolean)
 	end
 end
 
-closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(false) end)
 
 -- Eksport toggle do HUD (przycisk QUESTY)
 -- Eksport panelu dla MenuController — przeniesie go do zakładki 3 (QUESTY)

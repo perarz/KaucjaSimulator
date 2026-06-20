@@ -296,8 +296,11 @@ local function setupGablota(model: Instance)
 end
 
 local function setupGabloty()
-	-- Najpierw folder "Gabloty" bezpośrednio, potem rekurencyjnie (gdy zagnieżdżony w mapie)
-	local folder = workspace:FindFirstChild("Gabloty") or workspace:FindFirstChild("Gabloty", true)
+	-- Lokalizacja: workspace.Parking.Gabloty (preferowane). Fallback: workspace.Gabloty albo rekurencyjnie.
+	local parking = workspace:FindFirstChild("Parking")
+	local folder = (parking and parking:FindFirstChild("Gabloty"))
+		or workspace:FindFirstChild("Gabloty")
+		or workspace:FindFirstChild("Gabloty", true)
 	local searchRoot = folder or workspace
 
 	if folder then

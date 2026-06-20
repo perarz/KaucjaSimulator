@@ -763,10 +763,11 @@ end
 
 buyBtn.MouseButton1Click:Connect(function()
 	if not detailBranch or not detailLevel then return end
+	playSfx("Click")
 	tryBuy(detailBranch, detailLevel)
 end)
 
-detCloseBtn.MouseButton1Click:Connect(hideDetail)
+detCloseBtn.MouseButton1Click:Connect(function() playSfx("Click"); hideDetail() end)
 
 
 -- treeWorld: kontener przesuwany (pan) + skalowany (zoom).
@@ -954,7 +955,7 @@ for _, key in ipairs(NODES_ORDER) do
 		fill    = C_HEX_DARK,
 		stroke  = C_HEX_LOCK,
 		zIndex  = 3,
-		onClick = function() showDetail(n.branch, n.level) end,
+		onClick = function() playSfx("Click"); showDetail(n.branch, n.level) end,
 	})
 
 	-- Ikona na hexie (zindex między fillem a clickButtonem)
@@ -1157,7 +1158,7 @@ _G["__skillTreeReady"] = true
 -- Initial state — placeholder widoczny, content schowany
 clearDetailContent()
 
-closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(false) end)
 
 UserInputService.InputBegan:Connect(function(input, proc)
 	if proc then return end

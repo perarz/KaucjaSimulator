@@ -293,6 +293,7 @@ local function buildCard(level: number, upgrade: any): CardHandle
 	end
 
 	buyBtn.MouseButton1Click:Connect(function()
+		playSfx("Click")
 		BuyBackpack:FireServer(level)
 	end)
 
@@ -367,8 +368,16 @@ local POS_HIDE = UDim2.new(0.5, 0, 0.55, 0)
 local TI_OPEN  = TweenInfo.new(0.30, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local TI_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
+local shopMoveLocked = false
 local function setOpen(open: boolean)
 	isOpen = open
+	if open and not shopMoveLocked then
+		shopMoveLocked = true
+		if _G["__lockMovement"] then _G["__lockMovement"]() end
+	elseif not open and shopMoveLocked then
+		shopMoveLocked = false
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+	end
 	if open then
 		shopGui.Enabled              = true
 		panel.Position               = POS_HIDE
@@ -386,7 +395,7 @@ local function setOpen(open: boolean)
 	end
 end
 
-closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(false) end)
 
 UserInputService.InputBegan:Connect(function(input, proc)
 	if proc then return end

@@ -371,6 +371,7 @@ local function showRoulette(winnerRarity: string, winnerCount: number)
 	local targetY       = -(winnerOffsetY) + (WINDOW_H / 2) - (ITEM_H / 2)
 
 	showPanel()
+	if _G["__lockMovement"] then _G["__lockMovement"]() end
 
 	task.delay(0.25, function()
 		local spin = TweenService:Create(strip,
@@ -405,7 +406,10 @@ local function showRoulette(winnerRarity: string, winnerCount: number)
 					TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 					{ TextTransparency = 1 }):Play()
 			end)
-			task.delay(0.85, hidePanel)
+			task.delay(0.85, function()
+				hidePanel()
+				if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+			end)
 		end)
 	end)
 end

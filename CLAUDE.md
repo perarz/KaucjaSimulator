@@ -51,7 +51,6 @@ src/
       BoostShopController.client.luau       -- sklep Robux: x2 KASA 10 min za 19 R$, portowany do zakładki SKLEP w menu
       DeskaController.client.luau           -- klawisz R wsiada/wysiada z deski, RenderStepped obraca gracza bokiem względem kamery
       DeckShopController.client.luau        -- GUI zakupu deski przy gablocie + przycisk hoverboard → menu TWOJE DESKI (equip)
-      ParkingGuiController.client.luau      -- GUI opłaty 500 PLN za bilet parkingowy (ProximityPrompt na Kasjerze biletów)
   server/
     services/
       BottleService.luau          -- spawn, respawn, rzadkości butelek (tier per obszar), CollectionService tagging
@@ -73,9 +72,6 @@ src/
       AdminService.luau           -- panel admina (Config.Admins, F2), broadcast/giveZl/giveBottles/kick
       BoostShopService.luau       -- Developer Products (Robux), x2 KASA z butelkomatu na 10 min, ProcessReceipt handler (+ grant deski VIP)
       DeskaService.server.luau    -- deski: zakup przy gablotach, owned/equip, jazda po R (clone-per-mount), VIP w Robux (standalone Script)
-      ParkingService.server.luau  -- bilet parkingowy 500 PLN, BindableEvent ParkingGateEvent → otwiera bramę przez wrzuc_do_bramy
-    scripts/
-      wrzuc_do_bramy.server.luau  -- script w workspace.Parking.bramy — tween brama (Gate_2A/2B przez MeshPart1..4) na ParkingGateEvent
   shared/
     Config.luau                   -- wszystkie stałe (ceny, wartości, czasy, questy, drop kosza)
 default.project.json
@@ -236,7 +232,15 @@ return {
         QuestDesc = "Znajdź syrop klonowy dziadka w parku",
     },
 
-    -- v7: rzadkości po polsku + Grandpa quest dodany przez mergeWithDefaults (BEZ bumpu)
+    -- Bank: bazowa pojemność + cena ulepszeń (ULEPSZ w UI banku)
+    -- Każde ulepszenie daje +1 cap. L0 → 10 (cost 1000), L1 → 11 (cost 1500), L2 → 12 (cost 2000), ...
+    Bank = {
+        BaseCapacity   = 10,
+        UpgradeBaseCost = 1000,
+        UpgradeCostStep = 500,
+    },
+
+    -- v7: rzadkości po polsku + Grandpa quest + BankCapLevel + Decks itp. dodane przez mergeWithDefaults (BEZ bumpu)
     DataStoreKey = "PlayerData_v7",
 }
 ```
@@ -274,6 +278,12 @@ local DEFAULT_DATA = {
         syrupLocation = 0,       -- 1|2|3 — losowane przy przyjęciu questa
         hasSyrup      = false,   -- true gdy gracz podniesie syrop (zajmuje 1 slot plecaka)
     },
+    RedeemedCodes = {},      -- [codeKey] = true — kody promocyjne już wykorzystane
+    OwnedDecks    = {},      -- [deckKey] = true — posiadane deski (skateboardy)
+    EquippedDeck  = "",      -- klucz wyposażonej deski ("" = brak; R jeździ najlepszą posiadaną)
+    HatOwned      = false,   -- czapka z HatShop — permanentny zakup, daje +HP +stamina +speed
+    BankCapLevel  = 0,       -- liczba kupionych ulepszeń pojemności skarbca (każde +1 cap, koszt 1000 + N×500)
+    InventoryStacks = {},    -- persystencja split layoutu ekwipunku między sesjami
 }
 ```
 
@@ -538,7 +548,7 @@ makeHex(parent, cx, cy, opts) → { wrap, setColors, setStroke, flash, button, s
 - Czerwony **X** w prawym górnym rogu z hover-animacją `UIScale 1.18`
 - Zawartość: tytuł rzadkości (kolor rzadkości, TextSize 22), `Posiadasz: X sztuk`, separator, **Wartość bazowa**, **Razem (×1)**, **Z mnożnikiem (×N.N)** w `C_ACCENT_GREEN`, separator, opis krótki tekst per rzadkość
 - Multiplier czytany z `_G["__skillTreeState"].data.MultiplierLevel` (z fallbackiem ×1.0)
-- **Toggle**: klik ten sam slot → schowa; X → schowa
+- **Instant switch**: klik dowolnego slotu z itemem → detail natychmiast pokazuje ten item, nawet jeśli ma tę samą rzadkość co poprzednio (zero toggle behavior na klik). Chowanie tylko: czerwony X lub zamknięcie ekwipunku
 - Auto-refresh przy `UpdateHUD`, `CollectBottleResult` i `playDepositEffects` (zmiana count lub mnożnika)
 
 ### Slot z itemem — pomalowany kolorem rzadkości
@@ -949,16 +959,17 @@ Pierwszy quest narracyjny z linią fabularną przenikającą inne systemy: itemy
 - `UpdateHUD` payload rozszerzony o `hasSyrup` — synchronizuje stan klienta z serwerem
 - `playSfx("PickingUp")` przy podniesieniu syropu, `showFloatingText("SYROP DZIADKA", SYRUP_COLOR)` w brązie
 
-### Quest panel (QuestController) — 2 sekcje
-- **DZIADEK** (sekcja na górze, accent kolor `C_SYRUP = Color3.fromRGB(200, 130, 60)`)
+### Quest panel (QuestController) — sekcja DZIADEK warunkowo + ZADANIA DZIENNE
+- **DZIADEK** (sekcja na górze, accent kolor `C_SYRUP = Color3.fromRGB(200, 130, 60)`) — **widoczna tylko gdy `state == "active"`**
   - Pojedyncza karta o tej samej strukturze co quest dzienny (opis, pasek progresu, nagroda, status)
   - Pasek progresu `0/1` (brązowy)
-  - Status: "ZNAJDŹ W PARKU" lub "ODDAJ DZIADKOWI" (gdy `hasSyrup`)
+  - Status: "ZNAJDŹ W PARKU" lub "ODDAJ DZIADKOWI" (gdy `hasSyrup`). UIStroke `Thickness=0` — spójnie z daily quest claimBtn (płaski styl bez ciemnej obramówki)
   - **BEZ przycisku CLAIM** — odbiór nagrody u dziadka, nie w UI
-  - Empty state gdy `state="none"` lub `done`: "Porozmawiaj z Dziadkiem żeby przyjąć questa" / "Pomogłeś już dziadkowi. Wróć później..."
+  - `state == "none"` (nie przyjąłeś) lub `state == "done"` (oddałeś syrop) → sekcja DZIADEK CAŁKOWICIE UKRYTA (grandpaLbl + grandpaContainer Visible=false), ZADANIA DZIENNE + countdown przesunięte do góry, panel skrócony
 - **ZADANIA DZIENNE** (sekcja pod spodem, akcent `C_GREEN`)
-  - 3 questy z `Config.Quests` z countdown odświeżania (jak dotąd)
-- `PANEL_H` przeliczone dla 2 sekcji + headers + paddings
+  - 3 questy z `Config.Quests` z countdown odświeżania
+  - `claimBtn` status "W TRAKCIE" / "ODBIERZ" / "ODEBRANO ✓" — `UIStroke.Thickness = 0` (no border, czyściej)
+- `relayoutForGrandpaVisibility(showSection)` przelicza pozycje dailyLbl/refreshLbl/cardsContainer i resize panel.Size co render
 - Listener `GrandpaState` (RemoteEvent) odświeża kartę dziadka — server fire'uje na PlayerAdded (sync) + każdej tranzycji + pickup syropu
 
 ### Visual-novel dialog box (GrandpaController)
@@ -989,7 +1000,7 @@ Pierwszy quest narracyjny z linią fabularną przenikającą inne systemy: itemy
 ## Bank (BankService + BankController)
 
 ### Cel
-Skarbiec na butelki — gracz może odłożyć butelki na boku zamiast trzymać je w plecaku. Skarbiec nie ma limitu pojemności (per-rzadkość liczniki bez capa), plecak ma limit z `BackpackUpgrades`. Operacja transferu jest atomowa: gracz przesuwa sloty drag-and-drop w UI, klika POTWIERDŹ, serwer waliduje conservation + capacity i zapisuje.
+Skarbiec na butelki — gracz może odłożyć butelki na boku zamiast trzymać je w plecaku. Pojemność skarbca **dynamiczna** (`BaseCapacity=10` + każde ulepszenie +1), plecak ma limit z `BackpackUpgrades`. Operacja transferu jest atomowa: gracz przesuwa sloty drag-and-drop w UI, klika POTWIERDŹ, serwer waliduje conservation + capacity i zapisuje.
 
 ### Setup w Studio
 - **`workspace.BANK`** — Folder/Model zawierający dziecko **`Bankier`** (Model R15 lub BasePart)
@@ -999,38 +1010,56 @@ Skarbiec na butelki — gracz może odłożyć butelki na boku zamiast trzymać 
 ### Persystencja (osobny DataStore)
 - **`DataStoreService:GetDataStore("BankData_v1")`** — separate od PlayerData (saldo Zlotowki, upgrady itd.)
 - Klucz: `"BankData_v1_" .. player.UserId`
-- Wartość: `{ Zwykla=N, Rzadka=N, Epicka=N, Legendarna=N }` (tylko integery)
+- Wartość: `{ Zwykla=N, Rzadka=N, Epicka=N, Legendarna=N, Mityczny=N }` (tylko integery)
+- `data.BankCapLevel` (PlayerData) — liczba ulepszeń pojemności skarbca (każde +1 cap)
 - Cache w pamięci serwera: `cache[player] = data`
 - Auto-save co 60s + `PlayerRemoving` + `BindToClose`
+
+### Pojemność skarbca i ulepszenia
+- `getBankCapacity(pData) = Config.Bank.BaseCapacity + pData.BankCapLevel` (L0 → 10, L1 → 11, L2 → 12...)
+- `nextUpgradeCost(pData) = Config.Bank.UpgradeBaseCost + BankCapLevel × Config.Bank.UpgradeCostStep` (L0 → 1000, L1 → 1500, L2 → 2000...)
+- `Config.Bank = { BaseCapacity = 10, UpgradeBaseCost = 1000, UpgradeCostStep = 500 }`
 
 ### Walidacja transferu (server-side, `handleTransfer`)
 1. **Conservation check** per rzadkość: `oldBackpack[r] + oldBank[r] == newBackpack[r] + newBank[r]` — gracz nie może wygenerować butelek z powietrza ani ich zgubić
 2. **Capacity check**: `sum(newBackpack) + (hasSyrup and 1 or 0) <= BackpackUpgrades[BackpackLevel].Capacity` — syrop dziadka też liczy się do pojemności plecaka
-3. Sukces → zapis do `pData.BackpackContents` + `cache[player]` (bank), `SaveData` + `saveBank`, fire `UpdateHUD` + `BankResult`
-4. Błąd → `BankResult` z `reason`: `"invalid"`, `"conservation"`, `"overCapacity"`
+3. **Bank capacity check**: `sum(newBank) <= getBankCapacity(pData)` — fail z `reason="bankFull"`
+4. Sukces → zapis do `pData.BackpackContents` + `cache[player]` (bank), `SaveData` + `saveBank`, fire `UpdateHUD` + `BankResult` (z aktualną `bankCapacity`)
+5. Błąd → `BankResult` z `reason`: `"invalid"`, `"conservation"`, `"overCapacity"`, `"bankFull"`, `"locked"`
 
 ### Otwarcie banku
-- `prompt.Triggered` → server fire `BankInit:FireClient` z payloadem `{ bankContents, backpackContents, backpackCapacity, hasSyrup }`
-- Klient odbiera, buduje sloty (capacity slotów per panel), staguje zawartość, pokazuje split-view
+- `prompt.Triggered` → server fire `BankInit:FireClient` z payloadem `{ bankContents, backpackContents, backpackCapacity, bankCapacity, bankUpgradeLevel, bankUpgradeCost, zlotowki, hasSyrup }`
+- Klient odbiera, buduje sloty (15 na sztywno per panel), staguje zawartość z cache layoutu, pokazuje split-view
 
 ### UI (BankController) — split-view SKARBIEC ⇌ EKWIPUNEK
 - Standalone `ScreenGui` `BankGui` (`DisplayOrder=50`), NIE port do MenuController — otwierane wyłącznie przez ProximityPrompt
 - Panel `TR_W × TR_H` (centered), pop-in animacja (slide Y 0.55 → 0.5, Quint 0.28s) + dim overlay 0.35
-- Header `BANK KAUCYJNY` z czerwonym X (zamknij)
+- Header `BANK KAUCYJNY` z czerwonym X (zamknij). Counter `X/N` w headerze SKARBIEC (czerwony gdy przekroczony)
 - **Lewy panel SKARBIEC** + **Prawy panel EKWIPUNEK** rozdzielone separatorem `⇌` (DIV_W=60)
-- Każdy panel: `ScrollingFrame` z siatką 4 kolumny × dynamiczne wiersze (`SLOT_B=78`, `GAP_B=14`, max widoczne `MAX_VIS_ROWS=4`, scrollbar dla większych pojemności)
+- **Każdy panel: 15 slotów na sztywno (5 kolumn × 3 rzędy)** — `SLOT_COUNT_B=15`, `SLOT_B=78`, `GAP_B=14`, `COLS_B=5`, `MAX_VIS_ROWS=3`. Identyczne wymiary z głównym ekwipunkiem — split layout per slot index 1:1
 - Sloty stylem inventory: `darken(rarityColor, 0.45)` tło + pełny rarityColor stroke + biały tekst z TextStroke
-- **VFX Legendarnej** (jak w EQ): rotujący gold UIGradient + pulsujący stroke (Heartbeat sin 4.5 Hz)
-- Dolny pasek: przyciski **ZAMKNIJ** (lewo) + **POTWIERDŹ** (prawo, `C_CONFIRM = (28,115,58)` zielony)
-- Brak menu zewnętrznego — tylko ZAMKNIJ / X / ESC
+- **VFX Legendarnej / Mitycznej** (jak w EQ): rotujący gold/fioletowy UIGradient + pulsujący stroke (Heartbeat sin 4.5 Hz)
+- Dolny pasek (wyśrodkowany layout, AnchorPoint=(0.5,0.5), 24px gaps):
+  - **[ZAMKNIJ 130w]** center=-199
+  - **[POTWIERDŹ 220w]** center=0 (środek paska)
+  - **[ULEPSZ 220w]** center=+244 — amber/gold (`Color3.fromRGB(195,145,55)`)
+- Movement-lock przez `_G["__lockMovement"]` przy `BankInit`, `_G["__unlockMovement"]` przy `closeBank`
+- SFX `Click` na X-close, ZAMKNIJ, ULEPSZ, klik slotów
+
+### Persystencja split layoutu (1:1 sloty, zero auto-sortowania)
+- **Bank side**: `_G["__bankLayoutCache"]` — map `[slotIdx] = { rarity, count }`. Zapisywany w `closeBank` i po sukcesie POTWIERDŹ. Przy re-open: jeśli sumy z cache == server bankContents → restore split per slot; mismatch → fallback flat
+- **Inv side**: używa `_G["__inventoryGetLayout"]` / `_G["__inventorySetLayout"]` (position-keyed API z CollectController) — splity ekwipunku zachowane między bankiem a głównym EQ
+- Po POTWIERDŹ `smartResyncArr` aplikuje delta z server response zachowując pozycje (dodaje do pierwszego stack tej rzadkości / lub pierwszego wolnego slotu na +diff; usuwa z ostatniego na -diff)
+- Jedyny wyjątek od "1:1": pickup butelki podczas otwartego banku → stackuje z istniejącym slotem tej rzadkości (UpdateHUD)
 
 ### Drag & drop między panelami
 - LPM na slocie → `startDrag` ustawia ghost (klon slota), `drag.startPos` = pozycja myszy
 - `DRAG_THR = 5` px — poniżej traktowane jako klik (no-op, brak detail panelu)
+- RMB na slocie → `splitSlot` dzieli stack na pół (drag drugiej połowy)
 - `MouseEnter` na innym slocie podczas dragu → `C_SLOT_HOV` highlight + zapamiętuje `hovPanel/hovSlotIdx`
 - `InputEnded` (LPM up) → `endDrag`:
   - Ten sam panel, różne sloty → swap
-  - Różne panele → `performTransfer(fromP, toP, fromIdx, toIdx)`: jeśli `tgt.rarity == src.rarity` → merge (sumuj count, wyczyść źródło), inaczej → swap
+  - Różne panele → `performTransfer(fromP, toP, fromIdx, toIdx)`: jeśli `tgt.rarity == src.rarity` → merge, inaczej → swap
 - **Capacity check przed transferem** (`invTotalAfter()`) — jeśli wynik przekracza `currentCapacity - (hasSyrup and 1 or 0)`, pokazuje `"ZA MAŁO MIEJSCA W PLECAKU!"` (czerwony toast nad przyciskami, fade po 1.8s)
 - Staging tylko client-side — serwer dostaje finalny stan dopiero po POTWIERDŹ
 
@@ -1040,11 +1069,18 @@ Skarbiec na butelki — gracz może odłożyć butelki na boku zamiast trzymać 
 - UI w stanie "ZAPISYWANIE..." (przyciemniony zielony) do czasu `BankResult`
 - Sukces → re-stage z `result.bankContents/backpackContents`, render. Fail → `showCapacityError`
 
+### ULEPSZ
+- Przycisk wysyła `UpgradeBank:FireServer()` (no payload)
+- Server: waliduje BaseLevel ≥ 1, sprawdza `zlotowki >= nextUpgradeCost(pData)`, deductuje koszt, `BankCapLevel += 1`, `UpdateLeaderstats`, `SaveData`, fire `BankResult` z `{ success=true, bankCapacity, bankUpgradeCost, upgraded=true }`
+- Klient aktualizuje tekst przycisku na nowy koszt + counter X/N pokazuje nową pojemność
+- Fail: `reason="broke"` → "ZA MAŁO ZŁ NA ULEPSZENIE", `reason="locked"` → "BANK ZABLOKOWANY"
+
 ### RemoteEvents
-- `BankInit` (server → client) — payload `{ bankContents, backpackContents, backpackCapacity, hasSyrup }` — trigger przez ProximityPrompt
+- `BankInit` (server → client) — payload `{ bankContents, backpackContents, backpackCapacity, bankCapacity, bankUpgradeLevel, bankUpgradeCost, zlotowki, hasSyrup, locked? }`
 - `BankDeposit` (client → server) — payload `{ newBackpackContents, newBankContents }` — używany przez POTWIERDŹ
 - `BankWithdraw` (client → server) — zarezerwowany alias, server obsługuje go tym samym `handleTransfer` (niewykorzystywany w obecnym kliencie)
-- `BankResult` (server → client) — `{ success=true, bankContents, backpackContents, backpackCapacity }` lub `{ success=false, reason }`
+- `BankResult` (server → client) — `{ success=true, bankContents, backpackContents, backpackCapacity, bankCapacity, bankUpgradeCost?, upgraded? }` lub `{ success=false, reason }`
+- `UpgradeBank` (client → server) — pusty, trigger zakupu ulepszenia pojemności
 
 ### Bootstrap order
 - `BankService` wymagany **po wszystkich innych** w `GameServer.server.luau` (zależy tylko od `PlayerDataService`)
@@ -1052,8 +1088,31 @@ Skarbiec na butelki — gracz może odłożyć butelki na boku zamiast trzymać 
 ### Co bank NIE robi
 - Nie trzyma złotówek — to wciąż `data.Zlotowki` w PlayerData
 - Nie ma przelewów między graczami — skarbiec osobisty per UserId
-- Brak capa po stronie banku (jedyny limit to pojemność plecaka przy wyjmowaniu)
-- Brak odsetek / interestu — czysty storage
+- Brak odsetek / interestu — czysty storage z capem
+
+---
+
+## Movement lock (UI blokuje ruch)
+
+### Cel
+Gdy gracz jest w UI sklep/bank/quest/menu desek lub podczas spinu roulette kosza — postać nie chodzi. Zapobiega głupim zakupom przy spadaniu z mapy i pozwala spokojnie kliknąć POTWIERDŹ bez przemieszczenia się przy WASD.
+
+### Helper (ref-counted, `_G`)
+- Definiowany pierwszy raz w `BankController` (guard `if not _G["__lockMovement"]`):
+  ```lua
+  _G["__moveLockCount"]   -- licznik aktywnych blokad
+  _G["__lockMovement"]()  -- inc + Controls:Disable() jeśli count == 1
+  _G["__unlockMovement"]()  -- dec + Controls:Enable() jeśli count == 0
+  ```
+- Używa `PlayerScripts.PlayerModule:GetControls():Disable()` — standardowy Roblox API, kamera dalej działa
+- Ref-count pozwala na zagnieżdżone UI (np. otwarte menu + roulette w trakcie)
+
+### Wywoływane przez
+- **BankController** — lock w `BankInit`, unlock w `closeBank`
+- **ShopController** — lock/unlock w `setOpen(true/false)`
+- **QuestController** — lock/unlock w `setOpen(true/false)`
+- **DeckShopController** — lock w `setBuyOpen(true)` / `openMenu()`, unlock w X-close / `closeMenu()` / WYPOSAŻ
+- **KoszController** — lock w `showRoulette` start, unlock w `hidePanel` (po 0.85s od końca spinu)
 
 ---
 
@@ -1067,6 +1126,8 @@ Skarbiec na butelki — gracz może odłożyć butelki na boku zamiast trzymać 
   - `Money` — odtwarzane gdy butelkomat przyjmie butelki (CollectController, w `EmptyBackpackResult.success`)
   - `Buy` — odtwarzane przy udanym zakupie plecaka (ShopController) i przy zakupie węzła drzewka (SkillTreeController)
   - `LevelUp` — odtwarzane razem z `Buy` przy zakupie ulepszenia w drzewku (SkillTreeController)
+  - `Click` — kliknięcia UI: X-close we wszystkich panelach, przyciski KUP/POTWIERDŹ/ULEPSZ, klik slotu w ekwipunku (otwarcie detail), klik węzła drzewka, klik zakładki menu, hoverboard, karty desek
+  - `Equip` — wyposażenie deski (DeckShop menu TWOJE DESKI → WYPOSAŻ)
 
 ### SoundGroup
 - Wszystkie SFX podpinane do `SoundService.SfxGroup` (auto-utworzone idempotentnie w każdym kontrolerze)
@@ -1502,36 +1563,6 @@ DeckMenuIconId = "rbxassetid://123773463706470"  -- ikona przycisku hoverboard w
 
 ---
 
-## Parking (ParkingService + ParkingGuiController + wrzuc_do_bramy)
-
-### Cel
-Gracz płaci **500 PLN** za bilet → brama otwiera się **trwale** (per sesja serwera). Następne zakupy w tej samej sesji rzucają `reason="already"`. Po restart serwera bilet się resetuje (nowa sesja, nowy bilet).
-
-### Setup w Studio
-- **`workspace.Parking.bramy`** — Folder/Model:
-  - Dwie sub-Modele: `Gate_2A`, `Gate_2B`
-  - Każda brama ma `MeshPart1..4` — kolejne keyframe'y ścieżki otwarcia (CFrame interpolowany)
-  - `wrzuc_do_bramy.server.luau` jako Script wewnątrz `bramy` (czeka na `ParkingGateEvent` w ServerScriptService)
-- **Kasjer biletów** — Model z ProximityPrompt gdzieś na mapie (ParkingGuiController otwiera GUI po triggerze)
-
-### Komunikacja server↔script
-- `ParkingService` przy starcie tworzy `BindableEvent ParkingGateEvent` w `ServerScriptService`
-- `wrzuc_do_bramy` robi `WaitForChild("ParkingGateEvent", 30)` i nasłuchuje
-- Po zakupie: `gateEvent:Fire(player.UserId)` → script otwiera obie bramy (tween path-based, `ANIM_TIME = 0.45s`, Sine InOut)
-- `parent:SetAttribute("DoorOpen", true)` jako flaga idempotencji (kolejne triggery nie tweenują ponownie)
-
-### RemoteEvents
-- `BuyParkingTicket` (client→server)
-- `ParkingTicketResult` (server→client, `{ success, reason? }` — reason: `"already"` / `"broke"`)
-
-### Persystencja
-- **Brak** — `ticketOwners` in-memory per sesja, `Players.PlayerRemoving` czyści
-
-### Uwaga
-- `ParkingService.server.luau` używa sufiksu `.server.luau` — Rojo rejestruje go jako standalone Script w ServerScriptService (bez wpisu w GameServer). Tak samo `wrzuc_do_bramy.server.luau` (Script wewnątrz `workspace.Parking.bramy`).
-
----
-
 ## Panel admina — dodawanie kodów (AdminService.addCode)
 - Panel admina (F2) ma sekcję **DODAJ KOD PROMOCYJNY**: pole kodu + nagroda zł + DODAJ → `AdminAction({ action="addCode", code, reward })`
 - Serwer mutuje `Config.Codes[code] = { reward }` w pamięci — **żyje do restartu serwera** (CodeService czyta `Config.Codes` server-side na żywo, więc działa od razu)
@@ -1546,9 +1577,14 @@ Gracz płaci **500 PLN** za bilet → brama otwiera się **trwale** (per sesja s
 - **Fundament w drzewku** odblokowuje teraz: gałęzie Speed/Mult + BANK (locked panel jeśli BaseLevel<1) + SPRINT (Shift, cienki biały pasek staminy)
 - **Mityczny rarity** + **tier 5 strefy** — model w `ReplicatedStorage.Mityczny` (BottleService ma fallback dla modeli poza folderem `BottleModels`), wartość 50 zł, fioletowy z czarnym gradientem VFX
 - **Inventory detail panel** ma przycisk **UPUŚĆ** (czerwony) — wyrzuca 1 sztukę przed gracza, bez cooldownu
-- **Bank capacity 10** — server `BankService.BANK_CAPACITY = 10`, counter `X/10` w headerze SKARBIEC (czerwony gdy przekroczony), POTWIERDŹ odrzuca z `reason="bankFull"`
-- **Right-click split** — w bank slotach i inventory slotach RMB dzieli stack na pół (floor(count/2)), druga połowa idzie na pierwszy pusty slot. Syrop nie dzieli się.
-- **DataStoreKey** wciąż `PlayerData_v7` — nie bumpowane, bo `mergeWithDefaults` ogarnia nowe pola (HatOwned, RedeemedCodes, Grandpa)
+- **Bank capacity dynamiczna** — `Config.Bank.BaseCapacity=10` + ulepszenia z przycisku **ULEPSZ** (każde +1 cap, koszt 1000 → 1500 → 2000...). Counter `X/N` w headerze SKARBIEC (czerwony gdy przekroczony), POTWIERDŹ odrzuca z `reason="bankFull"`
+- **Bank UI = 15 slotów na sztywno** (5×3) — identycznie z głównym EQ. Split layout 1:1 per slot index, zachowany między sesjami (cache `_G["__bankLayoutCache"]`, inv side przez `__inventoryGetLayout`/`__inventorySetLayout`). Zero auto-sortowania/stackowania (wyjątek: pickup butelki podczas otwartego banku)
+- **Right-click split** — w bank slotach i inventory slotach RMB dzieli stack na pół (floor(count/2)). Syrop nie dzieli się
+- **Parking USUNIĘTY** — feature zakupu biletu parkingowego (500 PLN) wycofany. Deski nie wymagały biletu — sprzedaż przez gabloty działa niezależnie. Folder `workspace.Parking.Gabloty` nadal może być używany jako lokalizacja gablot (DeskaService ma fallback do `workspace.Gabloty`)
+- **Movement-lock w UI** — `_G["__lockMovement"]`/`__unlockMovement` (ref-counted, `PlayerModule:GetControls():Disable()`) wywoływane w: bank, shop, quest, deck shop/menu, kosz roulette
+- **SFX `Click` + `Equip`** — dodane do workspace.SFX. Click: X-close, KUP, POTWIERDŹ, ULEPSZ, klik slotu/węzła/zakładki menu. Equip: WYPOSAŻ deski
+- **Detail panel ekwipunku — instant switch** — klik dowolnego slotu natychmiast zmienia content detail panelu (zero toggle behavior na klik). Chowanie tylko: czerwony X lub zamknięcie EQ
+- **DataStoreKey** wciąż `PlayerData_v7` — nie bumpowane, bo `mergeWithDefaults` ogarnia nowe pola (HatOwned, RedeemedCodes, Grandpa, Decks, BankCapLevel)
 
 ---
 
@@ -1611,8 +1647,8 @@ Gracz płaci **500 PLN** za bilet → brama otwiera się **trwale** (per sesja s
 - `BoostStatusUpdate`, `PromptBoostPurchase` — Robux boost shop
 - `DeskMount`, `DeskDismount`, `DeskMountResult`, `QuickMount` — jazda na desce
 - `OpenDeckShop`, `BuyDeck`, `BuyDeckResult`, `EquipDeck`, `DeckStatus` — sklep/menu/equip desek
-- `BuyParkingTicket`, `ParkingTicketResult` — parking
 - `SyncInventoryLayout` — klient wysyła per-slot layout ekwipunku do serwera (persystencja splitów)
+- `UpgradeBank` — klient prosi o zakup ulepszenia pojemności skarbca (+1 cap, koszt rośnie liniowo)
 
 ## Aktualne `_G` eksporty (cross-controller)
 - `_G["__skillTreeToggle"]` — toggle skill tree (HUD button / klawisz U)
@@ -1644,10 +1680,8 @@ Gracz płaci **500 PLN** za bilet → brama otwiera się **trwale** (per sesja s
 | `workspace.BUTELKOMANIACY` | Folder/Model z dzieckiem `Kasjer` (Model R6/R15 lub BasePart) | ShopService (sklep z plecakami) |
 | `workspace.SKLEP2` | Folder/Model z dzieckiem `Cashier` (R6/R15 lub BasePart) | HatShopService |
 | `workspace.Deski` | Folder z 4 Modelami: `DeskaDefault/DeskaRed/DeskaBlue/DeskaVIP` (PrimaryPart) — szablony desek | DeskaService (klonuje) |
-| `workspace.Gabloty` | Folder z `Gablota1..4` (BasePart/Model) — sprzedaż desek przez ProximityPrompt | DeskaService |
+| `workspace.Parking.Gabloty` / `workspace.Gabloty` | Folder z `Gablota1..4` (BasePart/Model) — sprzedaż desek przez ProximityPrompt. DeskaService szuka najpierw `Parking.Gabloty`, fallback `workspace.Gabloty` lub rekurencyjnie | DeskaService |
 | `workspace.ActiveDecks` | Auto-tworzony — klony desek aktualnie jeżdżących graczy | DeskaService (auto) |
-| `workspace.Parking.bramy` | Folder/Model z dziećmi `Gate_2A`/`Gate_2B` (każde `MeshPart1..4`) + Script `wrzuc_do_bramy` | wrzuc_do_bramy (script wewnątrz) |
-| `ServerScriptService.ParkingGateEvent` | Auto-tworzony BindableEvent — most ParkingService → wrzuc_do_bramy | ParkingService (auto) |
 | `workspace.PVPZone` | BasePart (Anchored, CanCollide=false, Transparency=1) — strefa PvP gdziekolwiek w workspace | PvPService |
 | `ReplicatedStorage.Sword` | Tool — ClassicSword z toolboxa | PvPService (klonuje do plecaka w strefie) |
 | `ReplicatedStorage.Czapka` | Accessory (HatAccessory) — czapka z bonusami | HatShopService |
@@ -1676,6 +1710,8 @@ require(script.Parent.PvPService)
 require(script.Parent.HatShopService)
 require(script.Parent.DeathDropService)
 require(script.Parent.AdminService)
-require(script.Parent.DeskaService)        -- przed BoostShopService (ProcessReceipt grantuje deski VIP)
 require(script.Parent.BoostShopService)
+-- DeskaService to standalone Script (.server.luau) — uruchamia się sam, NIE wymagaj go tutaj
+-- (Rojo rejestruje plik z sufiksem .server.luau jako Script w ServerScriptService, require na Script rzuca błąd)
+-- VIP (Robux) grantowany przez BoostShopService.ProcessReceipt → BindableEvent ServerScriptService.GrantDeckEvent
 ```

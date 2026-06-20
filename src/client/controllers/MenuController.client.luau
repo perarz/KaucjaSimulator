@@ -8,6 +8,19 @@
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local SoundService     = game:GetService("SoundService")
+
+local sfxGroup = SoundService:FindFirstChild("SfxGroup")
+if not sfxGroup then
+	sfxGroup = Instance.new("SoundGroup"); sfxGroup.Name = "SfxGroup"; sfxGroup.Parent = SoundService
+end
+local function playSfx(name: string)
+	local sfxFolder = workspace:FindFirstChild("SFX")
+	local tmpl = sfxFolder and sfxFolder:FindFirstChild(name)
+	if not (tmpl and tmpl:IsA("Sound")) then return end
+	local s = tmpl:Clone(); s.SoundGroup = sfxGroup; s.Parent = SoundService; s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+end
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -327,7 +340,7 @@ end
 
 for i, btn in ipairs(tabButtons) do
 	local idx = i
-	btn.MouseButton1Click:Connect(function() setActiveTab(idx, true) end)
+	btn.MouseButton1Click:Connect(function() playSfx("Click"); setActiveTab(idx, true) end)
 end
 
 -- ── Open / Close ──────────────────────────────────────────────────────────
@@ -363,8 +376,8 @@ local function setMenuOpen(open: boolean)
 	end
 end
 
-menuBtn.MouseButton1Click:Connect(function() setMenuOpen(not isMenuOpen) end)
-closeBtn.MouseButton1Click:Connect(function() setMenuOpen(false) end)
+menuBtn.MouseButton1Click:Connect(function() playSfx("Click"); setMenuOpen(not isMenuOpen) end)
+closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setMenuOpen(false) end)
 -- Klik w overlay (tło) NIE zamyka menu — zamykanie wyłącznie przyciskiem X lub ESC
 
 UserInputService.InputBegan:Connect(function(input, processed)

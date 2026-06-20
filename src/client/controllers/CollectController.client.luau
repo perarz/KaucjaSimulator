@@ -690,13 +690,8 @@ local function setInvDetailContentVisible(visible: boolean)
 end
 
 local function showInvDetail(rarity: string)
-	-- Toggle: ta sama rzadkość → schowaj
-	if invDetVisible and invDetCurrentRarity == rarity then
-		invDetVisible = false
-		invDetCurrentRarity = nil
-		setInvDetailContentVisible(false)
-		return
-	end
+	-- Zawsze pokazuj detale klikniętego itemu (bez toggle na tej samej rzadkości).
+	-- Chowanie: tylko X w detail panelu albo zamknięcie ekwipunku.
 	invDetCurrentRarity = rarity
 	refreshInvDetail()
 	setInvDetailContentVisible(true)
@@ -710,7 +705,7 @@ local function hideInvDetail()
 	setInvDetailContentVisible(false)
 end
 
-invDetCloseBtn.MouseButton1Click:Connect(hideInvDetail)
+invDetCloseBtn.MouseButton1Click:Connect(function() playSfx("Click"); hideInvDetail() end)
 
 -- Initial state — placeholder widoczny, X i content schowane
 setInvDetailContentVisible(false)
@@ -1237,8 +1232,10 @@ local function endDrag()
 		local slotData = slots[fromIdx]
 		if slotData then
 			if string.sub(slotData.id, 1, 7) == "Bottle_" then
+				playSfx("Click")
 				showInvDetail(slotData.name)  -- np. "Zwykla"
 			elseif slotData.id == SYRUP_ID then
+				playSfx("Click")
 				showInvDetail(SYRUP_ID)
 			end
 		end

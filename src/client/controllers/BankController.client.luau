@@ -5,6 +5,41 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
 local RunService        = game:GetService("RunService")
+local SoundService      = game:GetService("SoundService")
+
+local sfxGroup = SoundService:FindFirstChild("SfxGroup")
+if not sfxGroup then
+	sfxGroup = Instance.new("SoundGroup"); sfxGroup.Name = "SfxGroup"; sfxGroup.Parent = SoundService
+end
+local function playSfx(name: string)
+	local sfxFolder = workspace:FindFirstChild("SFX")
+	local tmpl = sfxFolder and sfxFolder:FindFirstChild(name)
+	if not (tmpl and tmpl:IsA("Sound")) then return end
+	local s = tmpl:Clone(); s.SoundGroup = sfxGroup; s.Parent = SoundService; s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+end
+
+-- Movement lock — ref-counted, współdzielony między UI (Bank/Shop/Quest/DeckShop/Kosz).
+-- Pierwszy ładujący się kontroler definiuje, reszta tylko wywołuje.
+if not _G["__lockMovement"] then
+	local controls
+	task.spawn(function()
+		local lp = Players.LocalPlayer
+		local ok, pm = pcall(function()
+			return require(lp:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
+		end)
+		if ok and pm then controls = pm:GetControls() end
+	end)
+	_G["__moveLockCount"] = 0
+	_G["__lockMovement"] = function()
+		_G["__moveLockCount"] = (_G["__moveLockCount"] or 0) + 1
+		if controls then controls:Disable() end
+	end
+	_G["__unlockMovement"] = function()
+		_G["__moveLockCount"] = math.max(0, (_G["__moveLockCount"] or 0) - 1)
+		if controls and _G["__moveLockCount"] == 0 then controls:Enable() end
+	end
+end
 
 local Config      = require(ReplicatedStorage:WaitForChild("Config"))
 local Events      = ReplicatedStorage:WaitForChild("Events")
@@ -40,7 +75,8 @@ local RARITY_COLORS = Config.BottleColors
 local SLOT_B       = 78
 local GAP_B        = 14
 local COLS_B       = 5     -- 5 kolumn (jak główny ekwipunek)
-local MAX_VIS_ROWS = 4     -- 4 rzędy widoczne (3 nigdy nie ucięte)
+local SLOT_COUNT_B = 15    -- 15 slotów na sztywno (jak ekwipunek) — split layout nie ginie
+local MAX_VIS_ROWS = 3     -- 3 rzędy widoczne (jak ekwipunek)
 local SLOTS_W_B    = COLS_B * SLOT_B + (COLS_B - 1) * GAP_B
 local VIS_H_B      = MAX_VIS_ROWS * SLOT_B + (MAX_VIS_ROWS - 1) * GAP_B
 local INNER_PAD    = 16
@@ -170,7 +206,7 @@ do
 	xBtn.MouseLeave:Connect(function()
 		TweenService:Create(sc, TI_HOVER, { Scale = 1 }):Play(); xBtn.TextColor3 = X_RED
 	end)
-	xBtn.MouseButton1Click:Connect(function() if closeBank then closeBank() end end)
+	xBtn.MouseButton1Click:Connect(function() playSfx("Click"); if closeBank then closeBank() end end)
 end
 
 -- Panel SKARBIEC (lewy)
@@ -242,11 +278,16 @@ local bottomBar = mkFrame(trPanel,
 bottomBar.ZIndex = 3
 mkFrame(bottomBar, UDim2.new(1, 0, 0, 2), UDim2.fromOffset(0, 0), C_BORDER, 0).ZIndex = 4
 
--- POTWIERDŹ — węższa, wycentrowana lekko w lewo
+-- Bottom bar layout (AnchorPoint=(0.5,0.5), więc Position = ŚRODEK przycisku):
+--   [ZAMKNIJ 130w]  ←24px gap→  [POTWIERDŹ 220w]  ←24px gap→  [ULEPSZ 220w]
+--   center=-199                 center=0                       center=+244
+-- POTWIERDŹ dokładnie na środku paska. ZAMKNIJ i ULEPSZ symetrycznie po bokach.
+
+-- POTWIERDŹ — środek paska
 local confirmBtn = Instance.new("TextButton")
 confirmBtn.Size             = UDim2.fromOffset(220, 52)
 confirmBtn.AnchorPoint      = Vector2.new(0.5, 0.5)
-confirmBtn.Position         = UDim2.new(0.5, 60, 0.5, 0)
+confirmBtn.Position         = UDim2.new(0.5, 0, 0.5, 0)
 confirmBtn.BackgroundColor3 = C_CONFIRM; confirmBtn.BackgroundTransparency = 0.05
 confirmBtn.BorderSizePixel  = 0; confirmBtn.Text = "POTWIERDŹ"
 confirmBtn.TextSize         = 20; confirmBtn.Font = FONT_MAIN
@@ -254,18 +295,37 @@ confirmBtn.TextColor3       = C_WHITE; confirmBtn.AutoButtonColor = false
 confirmBtn.ZIndex           = 4; confirmBtn.Parent = bottomBar
 mkStroke(confirmBtn, C_BORDER, 4); mkCorner(confirmBtn, 8); attachHover(confirmBtn, 1.05)
 
--- ZAMKNIJ — zastępuje WRÓĆ (bo nie ma menu do którego wracać)
+-- ZAMKNIJ — lewo od POTWIERDŹ (right edge POTWIERDŹ = -110, gap 24, ZAMKNIJ right edge = -134, center = -199)
 local closeBtn2 = Instance.new("TextButton")
 closeBtn2.Size             = UDim2.fromOffset(130, 52)
 closeBtn2.AnchorPoint      = Vector2.new(0.5, 0.5)
-closeBtn2.Position         = UDim2.new(0.5, -145, 0.5, 0)
+closeBtn2.Position         = UDim2.new(0.5, -199, 0.5, 0)
 closeBtn2.BackgroundColor3 = C_BG; closeBtn2.BackgroundTransparency = 0.05
 closeBtn2.BorderSizePixel  = 0; closeBtn2.Text = "ZAMKNIJ"
 closeBtn2.TextSize         = 18; closeBtn2.Font = FONT_MAIN
 closeBtn2.TextColor3       = C_WHITE; closeBtn2.AutoButtonColor = false
 closeBtn2.ZIndex           = 4; closeBtn2.Parent = bottomBar
 mkStroke(closeBtn2, C_BORDER, 4); mkCorner(closeBtn2, 8); attachHover(closeBtn2, 1.05)
-closeBtn2.MouseButton1Click:Connect(function() if closeBank then closeBank() end end)
+closeBtn2.MouseButton1Click:Connect(function() playSfx("Click"); if closeBank then closeBank() end end)
+
+-- ULEPSZ — prawo od POTWIERDŹ (left edge POTWIERDŹ = +110, gap 24, ULEPSZ left edge = +134, center = +244)
+local C_UPG = Color3.fromRGB(195, 145, 55)  -- amber/muted gold (jak Multiplier accent)
+local upgradeBtn = Instance.new("TextButton")
+upgradeBtn.Size             = UDim2.fromOffset(220, 52)
+upgradeBtn.AnchorPoint      = Vector2.new(0.5, 0.5)
+upgradeBtn.Position         = UDim2.new(0.5, 244, 0.5, 0)
+upgradeBtn.BackgroundColor3 = C_UPG; upgradeBtn.BackgroundTransparency = 0.05
+upgradeBtn.BorderSizePixel  = 0; upgradeBtn.Text = "ULEPSZ — 1000 zł"
+upgradeBtn.TextSize         = 18; upgradeBtn.Font = FONT_MAIN
+upgradeBtn.TextColor3       = C_WHITE; upgradeBtn.AutoButtonColor = false
+upgradeBtn.ZIndex           = 4; upgradeBtn.Parent = bottomBar
+mkStroke(upgradeBtn, C_BORDER, 4); mkCorner(upgradeBtn, 8); attachHover(upgradeBtn, 1.05)
+local UpgradeBank = Events:WaitForChild("UpgradeBank")
+local currentUpgCost = 1000
+upgradeBtn.MouseButton1Click:Connect(function()
+	playSfx("Click")
+	UpgradeBank:FireServer()
+end)
 
 -- ── Stan gry ──────────────────────────────────────────────────────────────────
 local currentCapacity = 10
@@ -349,7 +409,7 @@ local function invTotalCount(): number
 end
 
 local function renderAll()
-	for i = 1, currentCapacity do
+	for i = 1, SLOT_COUNT_B do
 		renderSlot("bank", i)
 		renderSlot("inv",  i)
 	end
@@ -770,7 +830,7 @@ end)
 -- ── VFX Legendarnej / Mityczny (Heartbeat) ────────────────────────────────────
 RunService.Heartbeat:Connect(function(dt)
 	local t = tick()
-	for i = 1, currentCapacity do
+	for i = 1, SLOT_COUNT_B do
 		for _, p in ipairs({ "bank", "inv" }) do
 			local data = slotArr(p)[i]
 			if data and data.rarity == "Legendarna" then
@@ -798,21 +858,42 @@ end)
 local TW_OPEN  = TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local TW_CLOSE = TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
--- Helper: zapisz aktualny layout invSlotArr do shared inventory stacks (CollectController)
+-- Helper: zapisz aktualny layout invSlotArr do shared inventory layout (CollectController) — Z POZYCJAMI
 local function syncInvLayoutToShared()
-	if not _G["__inventorySetStacks"] then return end
-	local stacks = {}
-	for i = 1, currentCapacity do
+	if not _G["__inventorySetLayout"] then return end
+	local layout = {}
+	for i = 1, SLOT_COUNT_B do
 		if invSlotArr[i] then
-			table.insert(stacks, { rarity = invSlotArr[i].rarity, count = invSlotArr[i].count })
+			layout[i] = { rarity = invSlotArr[i].rarity, count = invSlotArr[i].count }
 		end
 	end
-	_G["__inventorySetStacks"](stacks)
+	_G["__inventorySetLayout"](layout)
+end
+
+-- Cache split layout banku w session (przeżywa close → open)
+local function saveBankLayoutToCache()
+	local cache = {}
+	for i = 1, SLOT_COUNT_B do
+		if bankSlotArr[i] then
+			cache[i] = { rarity = bankSlotArr[i].rarity, count = bankSlotArr[i].count }
+		end
+	end
+	_G["__bankLayoutCache"] = cache
+end
+
+local bankMoveLocked = false
+local function bankUnlockMove()
+	if bankMoveLocked then bankMoveLocked = false; _G["__unlockMovement"]() end
+end
+local function bankLockMove()
+	if not bankMoveLocked then bankMoveLocked = true; _G["__lockMovement"]() end
 end
 
 closeBank = function()
+	bankUnlockMove()
 	if drag.active then endDrag() end
 	syncInvLayoutToShared()  -- zapisz split layout do głównego ekwipunku
+	saveBankLayoutToCache()  -- zapisz split layout banku do session cache
 	TweenService:Create(trPanel, TW_CLOSE,
 		{ Position = UDim2.new(0.5, 0, 0.55, 0), BackgroundTransparency = 1 }):Play()
 	if lockedPanel and lockedPanel.Visible then
@@ -844,8 +925,8 @@ end)
 
 -- ── POTWIERDŹ ─────────────────────────────────────────────────────────────────
 confirmBtn.MouseButton1Click:Connect(function()
-	local newBp = arrayToContents(invSlotArr,  currentCapacity)
-	local newBk = arrayToContents(bankSlotArr, currentCapacity)
+	local newBp = arrayToContents(invSlotArr,  SLOT_COUNT_B)
+	local newBk = arrayToContents(bankSlotArr, SLOT_COUNT_B)
 	-- Wyślij jako deposit (serwer sam oblicza co się zmieniło — conservation check)
 	BankDeposit:FireServer({ newBackpackContents = newBp, newBankContents = newBk })
 	confirmBtn.Text             = "ZAPISYWANIE..."
@@ -879,7 +960,7 @@ do
 	xBtn.BackgroundTransparency = 1; xBtn.BorderSizePixel = 0
 	xBtn.Text = "X"; xBtn.TextSize = 22; xBtn.Font = FONT_MAIN
 	xBtn.TextColor3 = X_RED; xBtn.AutoButtonColor = false; xBtn.ZIndex = 6; xBtn.Parent = hdr
-	xBtn.MouseButton1Click:Connect(function() if closeBank then closeBank() end end)
+	xBtn.MouseButton1Click:Connect(function() playSfx("Click"); if closeBank then closeBank() end end)
 end
 
 mkLabel(lockedPanel,
@@ -889,6 +970,7 @@ mkLabel(lockedPanel,
 	17, C_WHITE, Enum.TextXAlignment.Center).TextYAlignment = Enum.TextYAlignment.Center
 
 BankInit.OnClientEvent:Connect(function(data)
+	bankLockMove()
 	-- Locked: gracz nie ma BaseLevel >= 1
 	if data and data.locked then
 		bankGui.Enabled  = true
@@ -906,29 +988,59 @@ BankInit.OnClientEvent:Connect(function(data)
 	currentCapacity  = data.backpackCapacity
 	currentBankCap   = tonumber(data.bankCapacity) or 10
 	currentHasSyrup  = data.hasSyrup or false
-	buildSlotFrames(currentCapacity)
+	currentUpgCost   = tonumber(data.bankUpgradeCost) or currentUpgCost
+	upgradeBtn.Text  = string.format("ULEPSZ — %d zł", currentUpgCost)
+	buildSlotFrames(SLOT_COUNT_B)
 
-	-- Bank side: ze snapshotu serwera (skarbiec NIE jest współdzielony z innym UI)
-	for i = 1, currentCapacity do bankSlotArr[i] = nil end
-	local bi = 1
-	for _, r in ipairs(RARITY_ORDER) do
-		if (data.bankContents[r] or 0) > 0 and bi <= currentCapacity then
-			bankSlotArr[bi] = { rarity = r, count = data.bankContents[r] }; bi += 1
+	-- Bank side: prefer in-session split layout (jeśli totals się zgadzają z serwerem), fallback do flat contents
+	for i = 1, SLOT_COUNT_B do bankSlotArr[i] = nil end
+	local bankLayout = _G["__bankLayoutCache"]
+	local layoutOk = false
+	if type(bankLayout) == "table" then
+		local layoutTotals: { [string]: number } = {}
+		for _, v in pairs(bankLayout) do
+			layoutTotals[v.rarity] = (layoutTotals[v.rarity] or 0) + v.count
+		end
+		layoutOk = true
+		for _, r in ipairs(RARITY_ORDER) do
+			if (layoutTotals[r] or 0) ~= (data.bankContents[r] or 0) then layoutOk = false; break end
+		end
+	end
+	if layoutOk then
+		for slotIdx, v in pairs(bankLayout) do
+			local i = tonumber(slotIdx)
+			if i and i >= 1 and i <= SLOT_COUNT_B then
+				bankSlotArr[i] = { rarity = v.rarity, count = v.count }
+			end
+		end
+	else
+		local bi = 1
+		for _, r in ipairs(RARITY_ORDER) do
+			if (data.bankContents[r] or 0) > 0 and bi <= SLOT_COUNT_B then
+				bankSlotArr[bi] = { rarity = r, count = data.bankContents[r] }; bi += 1
+			end
 		end
 	end
 
-	-- Inv side: PREFER shared layout z głównego ekwipunku (split spójny z menu)
-	for i = 1, currentCapacity do invSlotArr[i] = nil end
-	local sharedStacks = _G["__inventoryGetStacks"] and _G["__inventoryGetStacks"]()
-	if sharedStacks and #sharedStacks > 0 then
-		for i, s in ipairs(sharedStacks) do
-			if i <= currentCapacity then invSlotArr[i] = { rarity = s.rarity, count = s.count } end
+	-- Inv side: PREFER shared layout z głównego ekwipunku (Z POZYCJAMI — 1:1 mapping)
+	for i = 1, SLOT_COUNT_B do invSlotArr[i] = nil end
+	local sharedLayout = _G["__inventoryGetLayout"] and _G["__inventoryGetLayout"]()
+	local hasShared = false
+	if type(sharedLayout) == "table" then
+		for _, _ in pairs(sharedLayout) do hasShared = true; break end
+	end
+	if hasShared then
+		for slotIdx, s in pairs(sharedLayout) do
+			local i = tonumber(slotIdx)
+			if i and i >= 1 and i <= SLOT_COUNT_B then
+				invSlotArr[i] = { rarity = s.rarity, count = s.count }
+			end
 		end
 	else
-		-- Fallback: build z flat contents
+		-- Fallback: build z flat contents (pierwsze wejście, brak layoutu)
 		local ii = 1
 		for _, r in ipairs(RARITY_ORDER) do
-			if (data.backpackContents[r] or 0) > 0 and ii <= currentCapacity then
+			if (data.backpackContents[r] or 0) > 0 and ii <= SLOT_COUNT_B then
 				invSlotArr[ii] = { rarity = r, count = data.backpackContents[r] }; ii += 1
 			end
 		end
@@ -953,7 +1065,7 @@ UpdateHUD.OnClientEvent:Connect(function(data)
 	if drag.active then return end  -- nie ruszamy podczas dragowania
 	currentCapacity = tonumber(data.backpackCapacity) or currentCapacity
 	currentHasSyrup = data.hasSyrup or false
-	smartResyncInv(data.backpackContents, currentCapacity)
+	smartResyncInv(data.backpackContents, SLOT_COUNT_B)
 	renderAll()
 end)
 
@@ -963,15 +1075,22 @@ BankResult.OnClientEvent:Connect(function(result)
 	if result.success then
 		-- Smart resync — zachowuje split layout który gracz ustawił (np. 10 → 5+5)
 		currentCapacity = tonumber(result.backpackCapacity) or currentCapacity
-		smartResyncArr(bankSlotArr, result.bankContents, currentCapacity)
-		smartResyncArr(invSlotArr,  result.backpackContents, currentCapacity)
+		if result.bankCapacity then currentBankCap = tonumber(result.bankCapacity) or currentBankCap end
+		if result.bankUpgradeCost then
+			currentUpgCost  = tonumber(result.bankUpgradeCost) or currentUpgCost
+			upgradeBtn.Text = string.format("ULEPSZ — %d zł", currentUpgCost)
+		end
+		smartResyncArr(bankSlotArr, result.bankContents, SLOT_COUNT_B)
+		smartResyncArr(invSlotArr,  result.backpackContents, SLOT_COUNT_B)
 		syncInvLayoutToShared()  -- po confirm zapisz nowy layout do głównego ekwipunku
+		saveBankLayoutToCache()  -- też zaktualizuj cache banku
 		renderAll()
 	else
 		local msg = "BŁĄD ZAPISU"
 		if result.reason == "overCapacity" then msg = "ZA MAŁO MIEJSCA W PLECAKU!"
 		elseif result.reason == "bankFull" then msg = "SKARBIEC PEŁNY! (MAX " .. currentBankCap .. ")"
 		elseif result.reason == "locked" then msg = "BANK ZABLOKOWANY — KUP FUNDAMENT"
+		elseif result.reason == "broke" then msg = "ZA MAŁO ZŁ NA ULEPSZENIE"
 		end
 		showCapacityError(msg)
 	end

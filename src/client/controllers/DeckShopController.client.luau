@@ -56,6 +56,15 @@ local function hoverScale(btn: GuiObject, to: number)
 	btn.MouseEnter:Connect(function() TweenService:Create(sc, TI, { Scale = to }):Play() end)
 	btn.MouseLeave:Connect(function() TweenService:Create(sc, TI, { Scale = 1 }):Play() end)
 end
+local function playSfx(name: string)
+	local folder = workspace:FindFirstChild("SFX")
+	local tmpl = folder and folder:FindFirstChild(name)
+	if not tmpl then return end
+	local grp = SoundService:FindFirstChild("SfxGroup")
+	if not grp then grp = Instance.new("SoundGroup"); grp.Name = "SfxGroup"; grp.Volume = 1; grp.Parent = SoundService end
+	local s = tmpl:Clone(); s.SoundGroup = grp; s.Parent = SoundService; s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+end
 local function makeXButton(parent: GuiObject, onClick: () -> ())
 	local x = Instance.new("TextButton")
 	x.AnchorPoint = Vector2.new(1, 0)
@@ -68,17 +77,8 @@ local function makeXButton(parent: GuiObject, onClick: () -> ())
 	local sc = Instance.new("UIScale"); sc.Parent = x
 	x.MouseEnter:Connect(function() x.TextColor3 = X_RED_HOVER; TweenService:Create(sc, TI, { Scale = 1.18 }):Play() end)
 	x.MouseLeave:Connect(function() x.TextColor3 = X_RED; TweenService:Create(sc, TI, { Scale = 1 }):Play() end)
-	x.MouseButton1Click:Connect(onClick)
+	x.MouseButton1Click:Connect(function() playSfx("Click"); onClick() end)
 	return x
-end
-local function playSfx(name: string)
-	local folder = workspace:FindFirstChild("SFX")
-	local tmpl = folder and folder:FindFirstChild(name)
-	if not tmpl then return end
-	local grp = SoundService:FindFirstChild("SfxGroup")
-	if not grp then grp = Instance.new("SoundGroup"); grp.Name = "SfxGroup"; grp.Volume = 1; grp.Parent = SoundService end
-	local s = tmpl:Clone(); s.SoundGroup = grp; s.Parent = SoundService; s:Play()
-	s.Ended:Connect(function() s:Destroy() end)
 end
 
 local function deckByKey(key: string)
@@ -142,7 +142,18 @@ buyTitle.TextXAlignment = Enum.TextXAlignment.Left
 buyTitle.Font = FONT_MAIN; buyTitle.TextSize = 26; buyTitle.TextColor3 = C_WHITE
 buyTitle.Text = "SKLEP — DESKA"
 buyTitle.Parent = buyHeader
-makeXButton(buyHeader, function() buyGui.Enabled = false end)
+local buyLocked = false
+local function setBuyOpen(open: boolean)
+	buyGui.Enabled = open
+	if open and not buyLocked then
+		buyLocked = true
+		if _G["__lockMovement"] then _G["__lockMovement"]() end
+	elseif not open and buyLocked then
+		buyLocked = false
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+	end
+end
+makeXButton(buyHeader, function() setBuyOpen(false) end)
 buyOverlay.MouseButton1Click:Connect(function() end)  -- klik w tło nie zamyka
 
 -- Swatch (kolor deski)
@@ -231,6 +242,7 @@ end
 buyBtn.MouseButton1Click:Connect(function()
 	local deck = deckByKey(currentBuyKey)
 	if not deck or ownedDecks[deck.key] then return end
+	playSfx("Click")
 	BuyDeck:FireServer(deck.key)
 	buyStatus.Text = "Przetwarzanie..."
 	buyStatus.TextColor3 = C_DIMTEXT
@@ -239,7 +251,7 @@ end)
 OpenDeckShop.OnClientEvent:Connect(function(deckKey: string)
 	currentBuyKey = deckKey
 	refreshBuyPanel()
-	buyGui.Enabled = true
+	setBuyOpen(true)
 end)
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -488,6 +500,7 @@ local function makeCard(deck, order: number)
 	badge.Parent = card
 
 	card.MouseButton1Click:Connect(function()
+		if selectedKey ~= deck.key then playSfx("Click") end
 		selectedKey = deck.key
 		refreshDetail()
 		refreshCards()
@@ -500,13 +513,18 @@ for i, deck in ipairs(Config.Decks) do
 	makeCard(deck, i)
 end
 
+local deckMenuLocked = false
 equipBtn.MouseButton1Click:Connect(function()
 	local deck = deckByKey(selectedKey)
 	if not deck or not ownedDecks[deck.key] or equippedKey == deck.key then return end
 	EquipDeck:FireServer(deck.key)
-	playSfx("Buy")
+	playSfx("Equip")
 	menuOverlay.Visible = false
 	menuPanel.Visible = false
+	if deckMenuLocked then
+		deckMenuLocked = false
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+	end
 end)
 
 local function openMenu()
@@ -520,13 +538,22 @@ local function openMenu()
 	refreshDetail(); refreshCards()
 	menuOverlay.Visible = true
 	menuPanel.Visible = true
+	if not deckMenuLocked then
+		deckMenuLocked = true
+		if _G["__lockMovement"] then _G["__lockMovement"]() end
+	end
 end
 local function closeMenu()
 	menuOverlay.Visible = false
 	menuPanel.Visible = false
+	if deckMenuLocked then
+		deckMenuLocked = false
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+	end
 end
 
 hoverBtn.MouseButton1Click:Connect(function()
+	playSfx("Click")
 	if menuPanel.Visible then closeMenu() else openMenu() end
 end)
 makeXButton(menuHeader, closeMenu)
