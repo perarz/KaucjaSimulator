@@ -63,16 +63,23 @@ local function pickAnchor(rig: Instance): BasePart?
 end
 
 local function setupKasjer()
-	local rig = workspace:WaitForChild(Config.PvPEntry.KasjerName, 30)
-		or workspace:FindFirstChild(Config.PvPEntry.KasjerName, true)
+	local name = Config.PvPEntry.KasjerName
+	-- Szukaj riga gdziekolwiek w workspace (nie tylko bezpośrednie dziecko), z retry do ~30s
+	local rig
+	for _ = 1, 30 do
+		rig = workspace:FindFirstChild(name, true)
+		if rig then break end
+		task.wait(1)
+	end
 	if not rig then
-		warn("[PvPEntryService] Nie znaleziono", Config.PvPEntry.KasjerName, "w workspace — prompt nie powstał")
+		warn("[PvPEntryService] Nie znaleziono '" .. name .. "' nigdzie w workspace — prompt nie powstał")
 		return
 	end
+	print("[PvPEntryService] Znaleziono riga →", rig:GetFullName(), "(", rig.ClassName, ")")
 
 	local anchor = pickAnchor(rig)
 	if not anchor then
-		warn("[PvPEntryService] KasjerPVP nie ma BasePart na prompt")
+		warn("[PvPEntryService] '" .. name .. "' nie ma BasePart (Head/HRP/PrimaryPart) na prompt")
 		return
 	end
 
@@ -95,8 +102,9 @@ local function setupKasjer()
 	print("[PvPEntryService] Kasjer gotowy → prompt na", anchor:GetFullName())
 end
 
-Players.PlayerRemoving:Connect(function(p) lastAction[p] = nil end)
+-- Nie blokuj reszty skryptu — szukanie riga w osobnym wątku
+task.spawn(setupKasjer)
 
-setupKasjer()
+Players.PlayerRemoving:Connect(function(p) lastAction[p] = nil end)
 
 print("[PvPEntryService] Gotowy — wstęp:", COST, "PLN (za każdym razem)")
