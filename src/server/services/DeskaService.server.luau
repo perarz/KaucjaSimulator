@@ -114,6 +114,30 @@ local function dismountPlayer(player: Player)
 	DeskMountResult:FireClient(player, false, nil)
 end
 
+-- Sprawdza czy gracz jest aktualnie w workspace.PVPZone lub workspace.SAFEZONE.
+-- Zakaz wsiadania na deskę w obu strefach.
+local function isInBlockedZone(player: Player): boolean
+	local char = player.Character
+	if not char then return false end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	local pos = (hrp :: BasePart).Position
+
+	for _, name in ipairs({ "PVPZone", "SAFEZONE" }) do
+		local zone = workspace:FindFirstChild(name, true)
+		if zone and zone:IsA("BasePart") then
+			local localPos = zone.CFrame:PointToObjectSpace(pos)
+			local half = zone.Size / 2
+			if  math.abs(localPos.X) <= half.X
+			and math.abs(localPos.Y) <= half.Y
+			and math.abs(localPos.Z) <= half.Z then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local function mountPlayer(player: Player, deckKey: string)
 	if mountedData[player] then return end
 
@@ -122,6 +146,12 @@ local function mountPlayer(player: Player, deckKey: string)
 
 	local data = PlayerDataService.GetData(player)
 	if not (data.OwnedDecks and data.OwnedDecks[deckKey]) then return end  -- anti-cheat: musi posiadać
+
+	-- Zakaz jazdy w strefie PvP i SAFEZONE
+	if isInBlockedZone(player) then
+		DeskMountResult:FireClient(player, false, nil)
+		return
+	end
 
 	local char     = player.Character
 	local hrp      = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
@@ -358,6 +388,18 @@ end
 grantDeckEvent.Event:Connect(function(player: Player, key: string)
 	if typeof(player) ~= "Instance" or type(key) ~= "string" then return end
 	grantDeck(player, key)
+end)
+
+-- ── BindableEvent force dismount (PvPService fire'uje gdy gracz wejdzie w PVPZone/SAFEZONE) ──
+local forceDismountEvent = ServerScriptService:FindFirstChild("ForceDeskDismountEvent")
+if not forceDismountEvent then
+	forceDismountEvent = Instance.new("BindableEvent")
+	forceDismountEvent.Name = "ForceDeskDismountEvent"
+	forceDismountEvent.Parent = ServerScriptService
+end
+forceDismountEvent.Event:Connect(function(player: Player)
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then return end
+	dismountPlayer(player)  -- idempotent: jeśli nie na desce, no-op
 end)
 
 -- ── Eventy ─────────────────────────────────────────────────────────────────────

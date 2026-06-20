@@ -73,30 +73,32 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder   = 30
 gui.Parent         = playerGui
 
--- ── Przycisk MENU (po lewej, środek pionowo) ──────────────────────────────
-local menuBtn = Instance.new("TextButton")
-menuBtn.Name             = "MenuButton"
-menuBtn.AnchorPoint      = Vector2.new(0, 0.5)
-menuBtn.Position         = UDim2.new(0, 16, 0.5, 0)
-menuBtn.Size             = UDim2.fromOffset(200, 90)
-menuBtn.BackgroundColor3 = C_BG
-menuBtn.BackgroundTransparency = 0.05
-menuBtn.BorderSizePixel  = 0
-menuBtn.Text             = "MENU"
-menuBtn.Font             = FONT_MAIN
-menuBtn.TextSize         = 32
-menuBtn.TextColor3       = C_WHITE
-menuBtn.AutoButtonColor  = false
-menuBtn.Parent           = gui
-mkCorner(menuBtn, 8)
-mkStroke(menuBtn, C_BORDER, 4)
+-- ── Przycisk MENU (po lewej, środek pionowo) — ImageButton z ikoną ──────────
+local menuBtn = Instance.new("ImageButton")
+menuBtn.Name                   = "MenuButton"
+menuBtn.AnchorPoint            = Vector2.new(0, 0.5)
+menuBtn.Position               = UDim2.new(0, 16, 0.35, 0)
+menuBtn.Size                   = UDim2.fromOffset(135, 90)
+menuBtn.BackgroundTransparency = 1
+menuBtn.BorderSizePixel        = 0
+menuBtn.Image                  = "rbxassetid://99401921944526"
+menuBtn.ScaleType              = Enum.ScaleType.Fit
+menuBtn.AutoButtonColor        = false
+menuBtn.Parent                 = gui
 
+-- Hover: powiększenie + leciutki obrót
 do
 	local sc = Instance.new("UIScale")
 	sc.Parent = menuBtn
-	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	menuBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.06 }):Play() end)
-	menuBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.0 }):Play() end)
+	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	menuBtn.MouseEnter:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
+		TweenService:Create(menuBtn, ti, { Rotation = 6 }):Play()
+	end)
+	menuBtn.MouseLeave:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
+		TweenService:Create(menuBtn, ti, { Rotation = 0 }):Play()
+	end)
 end
 
 -- ── Overlay (przyciemnienie tła gdy menu otwarte) ──────────────────────────

@@ -70,7 +70,7 @@ return {
 	DeckDismountWalkSpeed = 16,
 	DeckDismountJumpHeight = 7.2,
 	-- Ikona przycisku hoverboard (HUD) — otwiera menu desek
-	DeckMenuIconId = "rbxassetid://123773463706470",
+	DeckMenuIconId = "rbxassetid://71645152463222",
 
 	-- Bank: bazowa pojemność + cena ulepszeń (przycisk ULEPSZ w UI banku).
 	-- Każde ulepszenie daje +1 cap. Pierwsze kosztuje BaseCost, każde następne +CostStep.
@@ -330,11 +330,13 @@ return {
 	MinEpickaOnMap     = 3,
 
 	-- Wstęp do strefy PvP — opłata 300 PLN ZA KAŻDYM RAZEM (bez persystencji).
-	-- KasjerPVP (rig z ProximityPrompt) stoi przed bramą; po zapłacie brama się otwiera,
-	-- a Sensor zamyka ją po drugim przejściu gracza (pierwsze ignorowane).
+	-- Dwa sposoby zakupu:
+	--   1) Auto-trigger: gracz wchodzi do workspace.PVPZone → wypychanie + GUI płatności
+	--   2) KasjerPVP (opcjonalny rig z ProximityPrompt) — preventive zakup zanim wejdziesz
+	-- Po opłacie: konsumpcja biletu przy wejściu do strefy + 3s grace (ForceField + miecz disabled)
 	PvPEntry = {
 		Cost          = 300,
-		KasjerName    = "KasjerPVP",      -- nazwa riga w workspace (szukane rekurencyjnie)
+		KasjerName    = "KasjerPVP",      -- opcjonalny rig, jeśli nie istnieje to OK
 		PromptText    = "Zapłać za wstęp",
 		PromptObject  = "Wstęp do PvP",
 	},

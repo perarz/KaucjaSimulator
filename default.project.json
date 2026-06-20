@@ -6,7 +6,8 @@
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "$properties": {
-        "EnableMouseLockOption": false
+        "EnableMouseLockOption": false,
+        "DevTouchMovementMode": "Thumbstick"
       },
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
@@ -66,6 +67,9 @@
         },
         "DeckShopController": {
           "$path": "src/client/controllers/DeckShopController.client.luau"
+        },
+        "MobileControlsController": {
+          "$path": "src/client/controllers/MobileControlsController.client.luau"
         },
         "PvPEntryGuiController": {
           "$path": "src/client/controllers/PvPEntryGuiController.client.luau"
@@ -203,6 +207,7 @@
         "EquipDeck":           { "$className": "RemoteEvent" },
         "DeckStatus":          { "$className": "RemoteEvent" },
         "OpenPvPEntry":        { "$className": "RemoteEvent" },
+        "ClosePvPEntry":       { "$className": "RemoteEvent" },
         "BuyPvPEntry":         { "$className": "RemoteEvent" },
         "PvPEntryResult":      { "$className": "RemoteEvent" }
       }

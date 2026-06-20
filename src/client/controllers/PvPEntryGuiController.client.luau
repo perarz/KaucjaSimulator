@@ -49,6 +49,7 @@ end
 -- ── Remote events ─────────────────────────────────────────────────────────────
 local Events         = ReplicatedStorage:WaitForChild("Events")
 local OpenPvPEntry   = Events:WaitForChild("OpenPvPEntry")
+local ClosePvPEntry  = Events:WaitForChild("ClosePvPEntry")
 local BuyPvPEntry    = Events:WaitForChild("BuyPvPEntry")
 local PvPEntryResult = Events:WaitForChild("PvPEntryResult")
 
@@ -252,7 +253,7 @@ local function makeBtn(name, text, bgColor, txtColor, posX)
 	btn.ZIndex = 4
 	btn.Parent = content
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = btn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 4; s.Parent = btn
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 0; s.Parent = btn  -- bez ciemnej obramowki — czytelność tekstu
 	local sc = Instance.new("UIScale"); sc.Parent = btn
 	btn.MouseEnter:Connect(function()
 		TweenService:Create(sc, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = 1.06 }):Play()
@@ -263,7 +264,7 @@ local function makeBtn(name, text, bgColor, txtColor, posX)
 	return btn
 end
 
-local buyBtn   = makeBtn("BuyBtn", "ZAPŁAĆ " .. COST .. " PLN", C_ACCENT_GREEN, Color3.fromRGB(10, 30, 20), 0)
+local buyBtn   = makeBtn("BuyBtn", "ZAPŁAĆ " .. COST .. " PLN", C_ACCENT_GREEN, Color3.fromRGB(0, 0, 0), 0)
 local closeBtn = makeBtn("CloseBtn", "ZAMKNIJ", C_BG, C_WHITE, BTN_W + BTN_GAP)
 
 -- ── Otwieranie / zamykanie ────────────────────────────────────────────────────
@@ -337,5 +338,8 @@ end)
 
 -- ── Trigger z serwera (ProximityPrompt na KasjerPVP) ─────────────────────────
 OpenPvPEntry.OnClientEvent:Connect(openGui)
+ClosePvPEntry.OnClientEvent:Connect(function()
+	if gui.Enabled then closeGui() end
+end)
 
 print("[PvPEntryGuiController] Gotowy — czekam na OpenPvPEntry")

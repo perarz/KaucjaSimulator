@@ -32,6 +32,7 @@ DeskMountResult.OnClientEvent:Connect(function(success: boolean, board: Model?)
 	if success and board then
 		mounted      = true
 		currentBoard = board
+		_G["__deskaMounted"] = true  -- SprintController to czyta i blokuje sprint
 
 		if currentPrompt then currentPrompt.Enabled = false end
 
@@ -95,6 +96,7 @@ DeskMountResult.OnClientEvent:Connect(function(success: boolean, board: Model?)
 	else
 		mounted      = false
 		currentBoard = nil
+		_G["__deskaMounted"] = false  -- sprint znowu dostępny
 
 		if currentPrompt then currentPrompt.Enabled = true end
 
@@ -117,14 +119,22 @@ DeskMountResult.OnClientEvent:Connect(function(success: boolean, board: Model?)
 	end
 end)
 
+-- Wspólny handler R / przycisk mobile
+local function toggleDeska()
+	if mounted then
+		requestDismount()
+	else
+		DeskMount:FireServer(nil)
+	end
+end
+
 -- R — wsiada / wysiada
 UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
 	if processed then return end
 	if input.KeyCode == Enum.KeyCode.R then
-		if mounted then
-			requestDismount()
-		else
-			DeskMount:FireServer(nil)
-		end
+		toggleDeska()
 	end
 end)
+
+-- API dla MobileControlsController (przycisk DESKA na ekranie)
+_G["__deskaToggle"] = toggleDeska

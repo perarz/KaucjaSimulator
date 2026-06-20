@@ -102,8 +102,21 @@ UserInputService.InputEnded:Connect(function(input)
 	end
 end)
 
+-- API dla MobileControlsController (przycisk SPRINT na ekranie)
+_G["__sprintStart"] = function() shiftHeld = true end
+_G["__sprintEnd"]   = function() shiftHeld = false end
+
 -- ── Update loop ────────────────────────────────────────────────────────────
 RunService.Heartbeat:Connect(function(dt)
+	-- Gate: jeździsz na desce — sprint NIE działa, nie dotykamy WalkSpeed
+	-- (deska sama ustawia swoją prędkość; sprint by ją nadpisywał lub kasował)
+	if _G["__deskaMounted"] == true then
+		if sprinting then sprinting = false end
+		shiftHeld = false
+		container.Visible = false
+		return
+	end
+
 	-- Gate: brak Fundamentu → sprint wyłączony, pasek schowany
 	if baseLevel < 1 then
 		if sprinting then

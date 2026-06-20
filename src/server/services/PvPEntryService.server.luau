@@ -1,11 +1,20 @@
 -- PvPEntryService.server.luau
--- Wrzuć do: ServerScriptService (Rojo mapuje automatycznie)
--- Opłata 300 PLN ZA KAŻDYM RAZEM za wstęp do strefy PvP.
--- KasjerPVP (rig) dostaje ProximityPrompt → klient pokazuje GUI → BuyPvPEntry.
--- Po udanej płatności odpala BindableEvent PvPGateEvent → skrypt bramy (brama_pvp) otwiera bramę.
+-- Płatność 300 PLN za wstęp do strefy PvP. Wstęp jednorazowy (per session) — po skonsumowaniu
+-- przez PvPService trzeba znowu zapłacić następnym razem.
+--
+-- Flow:
+--   1. Gracz wchodzi do strefy PVPZone (detekcja w PvPService)
+--   2. PvPService sprawdza `player:GetAttribute("PvPAccess")`:
+--      - true → konsumuje (= false), daje miecz + 3s grace (ForceField + tool disabled)
+--      - false → fire OpenPvPEntry → klient pokazuje GUI płatności
+--   3. Gracz klika ZAPŁAĆ → BuyPvPEntry → server ten serwis:
+--      - pobiera 300 zł
+--      - ustawia `player:SetAttribute("PvPAccess", true)`
+--      - PvPService na następnym poll tickcie (≤0.25s) wpuści gracza
+--   4. Gracz wychodzi ze strefy → PvPService usuwa miecz, gracz musi zapłacić znów
 
-local Players             = game:GetService("Players")
-local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
@@ -13,24 +22,24 @@ local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataSe
 
 local COST = Config.PvPEntry.Cost
 
--- BindableEvent — most do skryptu bramy (brama_pvp nasłuchuje przez WaitForChild)
-local gateEvent  = Instance.new("BindableEvent")
-gateEvent.Name   = "PvPGateEvent"
-gateEvent.Parent = ServerScriptService
-
 local Events         = ReplicatedStorage:WaitForChild("Events")
-local OpenPvPEntry   = Events:WaitForChild("OpenPvPEntry")
 local BuyPvPEntry    = Events:WaitForChild("BuyPvPEntry")
 local PvPEntryResult = Events:WaitForChild("PvPEntryResult")
+local OpenPvPEntry   = Events:WaitForChild("OpenPvPEntry")
 
 -- Throttle anty-spam (0.5s na gracza)
 local lastAction: { [Player]: number } = {}
 
--- ── Płatność ────────────────────────────────────────────────────────────────
 BuyPvPEntry.OnServerEvent:Connect(function(player: Player)
 	local now = os.clock()
 	if lastAction[player] and now - lastAction[player] < 0.5 then return end
 	lastAction[player] = now
+
+	-- Już opłacony (nie skonsumował jeszcze) — odrzuć, żeby nie wziąć podwójnie kasy
+	if player:GetAttribute("PvPAccess") == true then
+		PvPEntryResult:FireClient(player, { success = false, reason = "already" })
+		return
+	end
 
 	local data = PlayerDataService.GetData(player)
 	if data.Zlotowki < COST then
@@ -42,15 +51,19 @@ BuyPvPEntry.OnServerEvent:Connect(function(player: Player)
 	PlayerDataService.UpdateLeaderstats(player)
 	PlayerDataService.SaveData(player)
 
-	-- Otwórz bramę (skrypt bramy resetuje licznik przejść Sensora)
-	gateEvent:Fire(player.UserId)
+	-- Ustaw flagę dostępu. PvPService na poll tickcie zobaczy i wpuści gracza
+	-- (jeśli jest jeszcze w strefie) z mieczem + 3s grace.
+	player:SetAttribute("PvPAccess", true)
 
 	PvPEntryResult:FireClient(player, { success = true })
 	print(string.format("[PvPEntryService] %s zapłacił %d PLN za wstęp — pozostało %s",
 		player.Name, COST, tostring(data.Zlotowki)))
 end)
 
--- ── ProximityPrompt na KasjerPVP ──────────────────────────────────────────────
+Players.PlayerRemoving:Connect(function(p) lastAction[p] = nil end)
+
+-- ── Opcjonalny ProximityPrompt na KasjerPVP (alternative entry punkt) ────────
+-- Gracz może kupić bilet u NPC przed wejściem do strefy, nie musi wpaść by zobaczyć GUI.
 local function pickAnchor(rig: Instance): BasePart?
 	if rig:IsA("BasePart") then return rig :: BasePart end
 	if rig:IsA("Model") then
@@ -62,49 +75,56 @@ local function pickAnchor(rig: Instance): BasePart?
 	return nil
 end
 
-local function setupKasjer()
-	local name = Config.PvPEntry.KasjerName
-	-- Szukaj riga gdziekolwiek w workspace (nie tylko bezpośrednie dziecko), z retry do ~30s
-	local rig
-	for _ = 1, 30 do
-		rig = workspace:FindFirstChild(name, true)
-		if rig then break end
-		task.wait(1)
-	end
-	if not rig then
-		warn("[PvPEntryService] Nie znaleziono '" .. name .. "' nigdzie w workspace — prompt nie powstał")
-		return
-	end
-	print("[PvPEntryService] Znaleziono riga →", rig:GetFullName(), "(", rig.ClassName, ")")
-
+local kasjerHooked = false
+local function attachKasjer(rig: Instance)
+	if kasjerHooked then return end
 	local anchor = pickAnchor(rig)
-	if not anchor then
-		warn("[PvPEntryService] '" .. name .. "' nie ma BasePart (Head/HRP/PrimaryPart) na prompt")
-		return
-	end
-
+	if not anchor then return end
 	local prompt = anchor:FindFirstChildWhichIsA("ProximityPrompt")
 	if not prompt then
 		prompt = Instance.new("ProximityPrompt")
 		prompt.Parent = anchor
 	end
-	prompt.ActionText            = Config.PvPEntry.PromptText
-	prompt.ObjectText            = Config.PvPEntry.PromptObject
+	prompt.ActionText            = Config.PvPEntry.PromptText or "Zapłać za wstęp"
+	prompt.ObjectText            = Config.PvPEntry.PromptObject or "Wstęp do PvP"
 	prompt.HoldDuration          = 0
 	prompt.MaxActivationDistance = 8
 	prompt.RequiresLineOfSight   = false
 	prompt.Enabled               = true
-
 	prompt.Triggered:Connect(function(player: Player)
 		OpenPvPEntry:FireClient(player)
 	end)
-
-	print("[PvPEntryService] Kasjer gotowy → prompt na", anchor:GetFullName())
+	kasjerHooked = true
+	print("[PvPEntryService] KasjerPVP gotowy → prompt na", anchor:GetFullName())
 end
 
--- Nie blokuj reszty skryptu — szukanie riga w osobnym wątku
-task.spawn(setupKasjer)
+local function findRig(name: string): Instance?
+	local direct = workspace:FindFirstChild(name)
+	if direct then return direct end
+	for _, inst in ipairs(workspace:GetDescendants()) do
+		if inst.Name == name and (inst:IsA("Model") or inst:IsA("BasePart")) then
+			return inst
+		end
+	end
+	return nil
+end
 
-Players.PlayerRemoving:Connect(function(p) lastAction[p] = nil end)
+task.spawn(function()
+	local name = (Config.PvPEntry.KasjerName or "")
+	if name == "" then return end
+	-- Cyclical retry — bez warningu jeśli rig nie istnieje (jest opcjonalny)
+	while not kasjerHooked do
+		local rig = findRig(name)
+		if rig then attachKasjer(rig); return end
+		task.wait(3)
+	end
+end)
+workspace.DescendantAdded:Connect(function(inst: Instance)
+	if kasjerHooked then return end
+	local name = Config.PvPEntry.KasjerName
+	if name and inst.Name == name and (inst:IsA("Model") or inst:IsA("BasePart")) then
+		attachKasjer(inst)
+	end
+end)
 
-print("[PvPEntryService] Gotowy — wstęp:", COST, "PLN (za każdym razem)")
+print("[PvPEntryService] Gotowy — wstęp:", COST, "PLN (jednorazowy, konsumowany przy wejściu do strefy)")

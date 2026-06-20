@@ -268,7 +268,7 @@ menuGui.Parent = playerGui
 local hoverBtn = Instance.new("ImageButton")
 hoverBtn.Name = "HoverboardButton"
 hoverBtn.AnchorPoint = Vector2.new(0, 0.5)
-hoverBtn.Position = UDim2.new(0, 16, 0.5, 110)
+hoverBtn.Position = UDim2.new(0, 16, 0.35, 110)
 hoverBtn.Size = UDim2.fromOffset(90, 90)
 hoverBtn.BackgroundTransparency = 1
 hoverBtn.BorderSizePixel = 0
@@ -276,7 +276,20 @@ hoverBtn.Image = Config.DeckMenuIconId
 hoverBtn.ScaleType = Enum.ScaleType.Fit
 hoverBtn.AutoButtonColor = false
 hoverBtn.Parent = menuGui
-hoverScale(hoverBtn, 1.06)
+-- Hover: powiększenie + leciutki obrót (jak przycisk MENU)
+do
+	local sc = Instance.new("UIScale")
+	sc.Parent = hoverBtn
+	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	hoverBtn.MouseEnter:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
+		TweenService:Create(hoverBtn, ti, { Rotation = 6 }):Play()
+	end)
+	hoverBtn.MouseLeave:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
+		TweenService:Create(hoverBtn, ti, { Rotation = 0 }):Play()
+	end)
+end
 
 local menuOverlay = Instance.new("TextButton")
 menuOverlay.Size = UDim2.fromScale(1, 1)
