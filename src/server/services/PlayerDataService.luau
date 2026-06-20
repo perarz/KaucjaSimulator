@@ -39,8 +39,8 @@ local DEFAULT_DATA = {
 	RedeemedCodes = {},  -- [codeKey] = true — kody promocyjne już użyte (jednorazowe per gracz)
 	OwnedDecks    = {},     -- [deckKey] = true — posiadane deski (skateboardy)
 	EquippedDeck  = "",     -- klucz wyposażonej deski ("" = brak; R jeździ najlepszą posiadaną)
-	ParkingTicket = false,  -- true = kupił dostęp do bramy parkingowej (trwale; brama otwarta na zawsze)
 	HatOwned      = false,  -- czapka z HatShop — permanentny zakup, daje +HP +stamina +speed
+	BankCapLevel  = 0,      -- liczba kupionych ulepszeń pojemności skarbca (każde +1 cap, koszt rośnie liniowo)
 	-- Layout slotów ekwipunku — lista stacków { rarity, count } w kolejności wyświetlania.
 	-- Pozwala zachować splity (np. Zwykla 5+5) między sesjami. Klient wysyła SyncInventoryLayout przy każdej zmianie.
 	-- Walidowane przez serwer: suma per rzadkość MUSI równać się BackpackContents.

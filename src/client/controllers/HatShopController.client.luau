@@ -5,6 +5,17 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
 local UserInputService  = game:GetService("UserInputService")
+local SoundService      = game:GetService("SoundService")
+
+local function playSfx(name: string)
+	local folder = workspace:FindFirstChild("SFX")
+	local tmpl = folder and folder:FindFirstChild(name)
+	if not (tmpl and tmpl:IsA("Sound")) then return end
+	local grp = SoundService:FindFirstChild("SfxGroup")
+	if not grp then grp = Instance.new("SoundGroup"); grp.Name = "SfxGroup"; grp.Parent = SoundService end
+	local s = tmpl:Clone(); s.SoundGroup = grp; s.Parent = SoundService; s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+end
 
 local Config        = require(ReplicatedStorage:WaitForChild("Config"))
 local Events        = ReplicatedStorage:WaitForChild("Events")
@@ -203,7 +214,7 @@ buyBtn.ZIndex                 = 4
 buyBtn.Parent                 = card
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = buyBtn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = buyBtn
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 0; s.Parent = buyBtn  -- bez ciemnej obramowki — czyściej, lepsza czytelność czarnego tekstu na zielonym
 	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = buyBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
 	buyBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.03 }):Play() end)
@@ -277,7 +288,7 @@ local function setOpen(open: boolean)
 	end
 end
 
-closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(false) end)
 UserInputService.InputBegan:Connect(function(inp, processed)
 	if processed then return end
 	if inp.KeyCode == Enum.KeyCode.Escape and isOpen then setOpen(false) end

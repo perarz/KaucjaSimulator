@@ -64,9 +64,6 @@
         "DeskaController": {
           "$path": "src/client/controllers/DeskaController.client.luau"
         },
-        "ParkingGuiController": {
-          "$path": "src/client/controllers/ParkingGuiController.client.luau"
-        },
         "DeckShopController": {
           "$path": "src/client/controllers/DeckShopController.client.luau"
         }
@@ -134,9 +131,6 @@
       },
       "DeskaService": {
         "$path": "src/server/services/DeskaService.server.luau"
-      },
-      "ParkingService": {
-        "$path": "src/server/services/ParkingService.server.luau"
       }
     },
 
@@ -180,6 +174,7 @@
         "BankDeposit":         { "$className": "RemoteEvent" },
         "BankWithdraw":        { "$className": "RemoteEvent" },
         "BankResult":          { "$className": "RemoteEvent" },
+        "UpgradeBank":         { "$className": "RemoteEvent" },
         "RedeemCode":          { "$className": "RemoteEvent" },
         "RedeemCodeResult":    { "$className": "RemoteEvent" },
         "BoostStatusUpdate":   { "$className": "RemoteEvent" },
@@ -195,8 +190,6 @@
         "DeskDismount":        { "$className": "RemoteEvent" },
         "DeskMountResult":     { "$className": "RemoteEvent" },
         "QuickMount":          { "$className": "RemoteEvent" },
-        "BuyParkingTicket":    { "$className": "RemoteEvent" },
-        "ParkingTicketResult": { "$className": "RemoteEvent" },
         "OpenDeckShop":        { "$className": "RemoteEvent" },
         "BuyDeck":             { "$className": "RemoteEvent" },
         "BuyDeckResult":       { "$className": "RemoteEvent" },

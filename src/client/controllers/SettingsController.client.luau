@@ -7,6 +7,16 @@ local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local SoundService     = game:GetService("SoundService")
 
+local function playSfx(name: string)
+	local folder = workspace:FindFirstChild("SFX")
+	local tmpl = folder and folder:FindFirstChild(name)
+	if not (tmpl and tmpl:IsA("Sound")) then return end
+	local grp = SoundService:FindFirstChild("SfxGroup")
+	if not grp then grp = Instance.new("SoundGroup"); grp.Name = "SfxGroup"; grp.Parent = SoundService end
+	local s = tmpl:Clone(); s.SoundGroup = grp; s.Parent = SoundService; s:Play()
+	s.Ended:Connect(function() s:Destroy() end)
+end
+
 local ResetProgress     = ReplicatedStorage:WaitForChild("Events"):WaitForChild("ResetProgress")
 local RedeemCode        = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RedeemCode")
 local RedeemCodeResult  = ReplicatedStorage:WaitForChild("Events"):WaitForChild("RedeemCodeResult")
@@ -658,7 +668,7 @@ local function setOpen(open: boolean)
 	end
 end
 
-closeBtn.MouseButton1Click:Connect(function() setOpen(false) end)
+closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(false) end)
 
 replayBtn.MouseButton1Click:Connect(function()
 	if _G["__playIntroTest"] then

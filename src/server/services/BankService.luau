@@ -7,7 +7,17 @@ local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local RARITIES = { "Zwykla", "Rzadka", "Epicka", "Legendarna", "Mityczny" }
 local BANK_DS  = DataStoreService:GetDataStore("BankData_v1")
-local BANK_CAPACITY = 10  -- max butelek (suma wszystkich rzadkości) w skarbcu
+local BANK_BASE_CAP  = (Config.Bank and Config.Bank.BaseCapacity)    or 10
+local BANK_UPG_BASE  = (Config.Bank and Config.Bank.UpgradeBaseCost) or 1000
+local BANK_UPG_STEP  = (Config.Bank and Config.Bank.UpgradeCostStep) or 500
+
+local function getBankCapacity(pData): number
+	return BANK_BASE_CAP + (pData.BankCapLevel or 0)
+end
+
+local function nextUpgradeCost(pData): number
+	return BANK_UPG_BASE + (pData.BankCapLevel or 0) * BANK_UPG_STEP
+end
 
 local cache: { [Player]: { [string]: number } } = {}
 
@@ -16,6 +26,7 @@ local BankInit    = Events:WaitForChild("BankInit")
 local BankDeposit = Events:WaitForChild("BankDeposit")
 local BankWithdraw= Events:WaitForChild("BankWithdraw")
 local BankResult  = Events:WaitForChild("BankResult")
+local UpgradeBank = Events:WaitForChild("UpgradeBank")
 local UpdateHUD   = Events:WaitForChild("UpdateHUD")
 
 local function deepCopy(t: { [string]: any }): { [string]: any }
@@ -85,7 +96,10 @@ task.spawn(function()
 			bankContents     = deepCopy(bData),
 			backpackContents = deepCopy(pData.BackpackContents),
 			backpackCapacity = Config.BackpackUpgrades[pData.BackpackLevel].Capacity,
-			bankCapacity     = BANK_CAPACITY,
+			bankCapacity     = getBankCapacity(pData),
+			bankUpgradeLevel = pData.BankCapLevel or 0,
+			bankUpgradeCost  = nextUpgradeCost(pData),
+			zlotowki         = pData.Zlotowki or 0,
 			hasSyrup         = (pData.Grandpa and pData.Grandpa.hasSyrup) or false,
 		})
 	end)
@@ -122,12 +136,13 @@ local function handleTransfer(player: Player, rawBp: any, rawBk: any)
 	end
 	if carried > cap then return false, "overCapacity" end
 
-	-- Bank capacity check: suma wszystkich rzadkości w skarbcu <= BANK_CAPACITY
+	-- Bank capacity check: suma wszystkich rzadkości w skarbcu <= dynamic capacity
+	local bankCap = getBankCapacity(pData)
 	local bankTotal = 0
 	for _, r in ipairs(RARITIES) do
 		bankTotal += math.floor(math.max(0, tonumber(rawBk[r] or 0) or 0))
 	end
-	if bankTotal > BANK_CAPACITY then return false, "bankFull" end
+	if bankTotal > bankCap then return false, "bankFull" end
 
 	-- Zastosuj
 	for _, r in ipairs(RARITIES) do
@@ -147,24 +162,59 @@ local function handleTransfer(player: Player, rawBp: any, rawBk: any)
 	return true, deepCopy(bData), deepCopy(pData.BackpackContents), cap
 end
 
-BankDeposit.OnServerEvent:Connect(function(player: Player, payload)
-	if type(payload) ~= "table" then return end
-	local ok, a, b, c = handleTransfer(player, payload.newBackpackContents, payload.newBankContents)
+local function fireTransferResult(player: Player, ok: boolean, a, b, c)
 	if ok then
-		BankResult:FireClient(player, { success = true, bankContents = a, backpackContents = b, backpackCapacity = c })
+		local pData = PlayerDataService.GetData(player)
+		BankResult:FireClient(player, {
+			success          = true,
+			bankContents     = a,
+			backpackContents = b,
+			backpackCapacity = c,
+			bankCapacity     = getBankCapacity(pData),
+		})
 	else
 		BankResult:FireClient(player, { success = false, reason = a })
 	end
+end
+
+BankDeposit.OnServerEvent:Connect(function(player: Player, payload)
+	if type(payload) ~= "table" then return end
+	fireTransferResult(player, handleTransfer(player, payload.newBackpackContents, payload.newBankContents))
 end)
 
 BankWithdraw.OnServerEvent:Connect(function(player: Player, payload)
 	if type(payload) ~= "table" then return end
-	local ok, a, b, c = handleTransfer(player, payload.newBackpackContents, payload.newBankContents)
-	if ok then
-		BankResult:FireClient(player, { success = true, bankContents = a, backpackContents = b, backpackCapacity = c })
-	else
-		BankResult:FireClient(player, { success = false, reason = a })
+	fireTransferResult(player, handleTransfer(player, payload.newBackpackContents, payload.newBankContents))
+end)
+
+-- ── Ulepszanie pojemności skarbca ─────────────────────────────────────────────
+UpgradeBank.OnServerEvent:Connect(function(player: Player)
+	local pData = PlayerDataService.GetData(player)
+	if (pData.BaseLevel or 0) < 1 then
+		BankResult:FireClient(player, { success = false, reason = "locked" })
+		return
 	end
+	local cost = nextUpgradeCost(pData)
+	if (pData.Zlotowki or 0) < cost then
+		BankResult:FireClient(player, { success = false, reason = "broke" })
+		return
+	end
+	pData.Zlotowki     = (pData.Zlotowki or 0) - cost
+	pData.BankCapLevel = (pData.BankCapLevel or 0) + 1
+	PlayerDataService.UpdateLeaderstats(player)
+	PlayerDataService.SaveData(player)
+
+	local bData = loadBank(player)
+	BankResult:FireClient(player, {
+		success          = true,
+		bankContents     = deepCopy(bData),
+		backpackContents = deepCopy(pData.BackpackContents),
+		backpackCapacity = Config.BackpackUpgrades[pData.BackpackLevel].Capacity,
+		bankCapacity     = getBankCapacity(pData),
+		bankUpgradeLevel = pData.BankCapLevel,
+		bankUpgradeCost  = nextUpgradeCost(pData),
+		upgraded         = true,
+	})
 end)
 
 -- Auto-save co 60s
