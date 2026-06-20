@@ -62,17 +62,46 @@ local function pickAnchor(rig: Instance): BasePart?
 	return nil
 end
 
+-- Dopasowanie odporne na spacje/wielkość liter: nazwa po lower + usunięte spacje
+local function normalize(s: string): string
+	return string.gsub(string.lower(s), "%s", "")
+end
+
+local function findKasjer(name: string): Instance?
+	-- 1) dokładne dopasowanie
+	local exact = workspace:FindFirstChild(name, true)
+	if exact then return exact end
+	-- 2) fuzzy: nazwa zawiera "kasjer" i "pvp" (po normalizacji), preferuj Model/BasePart
+	local target = normalize(name)
+	for _, d in workspace:GetDescendants() do
+		local n = normalize(d.Name)
+		if n == target or (string.find(n, "kasjer") and string.find(n, "pvp")) then
+			if d:IsA("Model") or d:IsA("BasePart") then
+				return d
+			end
+		end
+	end
+	return nil
+end
+
 local function setupKasjer()
 	local name = Config.PvPEntry.KasjerName
-	-- Szukaj riga gdziekolwiek w workspace (nie tylko bezpośrednie dziecko), z retry do ~30s
 	local rig
 	for _ = 1, 30 do
-		rig = workspace:FindFirstChild(name, true)
+		rig = findKasjer(name)
 		if rig then break end
 		task.wait(1)
 	end
 	if not rig then
-		warn("[PvPEntryService] Nie znaleziono '" .. name .. "' nigdzie w workspace — prompt nie powstał")
+		warn("[PvPEntryService] Nie znaleziono '" .. name .. "' w workspace. Kandydaci z 'kasjer' w nazwie:")
+		local any = false
+		for _, d in workspace:GetDescendants() do
+			if string.find(string.lower(d.Name), "kasjer") then
+				print("   • '" .. d.Name .. "' (" .. d.ClassName .. ") @ " .. d:GetFullName())
+				any = true
+			end
+		end
+		if not any then print("   (żadnych — rig nie istnieje pod tą nazwą)") end
 		return
 	end
 	print("[PvPEntryService] Znaleziono riga →", rig:GetFullName(), "(", rig.ClassName, ")")
