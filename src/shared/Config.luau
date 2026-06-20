@@ -327,5 +327,15 @@ return {
 
 	-- Gwarancje rzadkości na mapie
 	MinLegendarnaOnMap = 1,
-	MinEpickaOnMap = 3,
+	MinEpickaOnMap     = 3,
+
+	-- Wstęp do strefy PvP — opłata 300 PLN ZA KAŻDYM RAZEM (bez persystencji).
+	-- KasjerPVP (rig z ProximityPrompt) stoi przed bramą; po zapłacie brama się otwiera,
+	-- a Sensor zamyka ją po drugim przejściu gracza (pierwsze ignorowane).
+	PvPEntry = {
+		Cost          = 300,
+		KasjerName    = "KasjerPVP",      -- nazwa riga w workspace (szukane rekurencyjnie)
+		PromptText    = "Zapłać za wstęp",
+		PromptObject  = "Wstęp do PvP",
+	},
 }

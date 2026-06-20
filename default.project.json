@@ -66,6 +66,9 @@
         },
         "DeckShopController": {
           "$path": "src/client/controllers/DeckShopController.client.luau"
+        },
+        "PvPEntryGuiController": {
+          "$path": "src/client/controllers/PvPEntryGuiController.client.luau"
         }
       }
     },
@@ -131,6 +134,10 @@
       },
       "DeskaService": {
         "$path": "src/server/services/DeskaService.server.luau"
+      },
+      
+      "PvPEntryService": {
+        "$path": "src/server/services/PvPEntryService.server.luau"
       }
     },
 
@@ -194,7 +201,10 @@
         "BuyDeck":             { "$className": "RemoteEvent" },
         "BuyDeckResult":       { "$className": "RemoteEvent" },
         "EquipDeck":           { "$className": "RemoteEvent" },
-        "DeckStatus":          { "$className": "RemoteEvent" }
+        "DeckStatus":          { "$className": "RemoteEvent" },
+        "OpenPvPEntry":        { "$className": "RemoteEvent" },
+        "BuyPvPEntry":         { "$className": "RemoteEvent" },
+        "PvPEntryResult":      { "$className": "RemoteEvent" }
       }
     },
 
