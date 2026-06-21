@@ -74,6 +74,9 @@ local function preFillProgress(data, q): number
 		if data.EquippedPet and data.EquippedPet ~= "" then return q.target end
 	elseif q.kind == "upgrade_bank" then
 		if (data.BankCapLevel or 0) >= 1 then return q.target end
+	elseif q.kind == "grandpa_done" then
+		-- Gracz już ukończył quest dziadka → zalicz od razu
+		if data.Grandpa and data.Grandpa.state == "done" then return q.target end
 	elseif q.kind == "pet_rarity" then
 		-- Ma już peta tej rzadkości w EQ lub skarbcu
 		local function hasRarity(list): boolean
