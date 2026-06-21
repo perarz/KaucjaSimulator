@@ -281,6 +281,8 @@ Hooki te same co story (BottleService, KoszService itp.) — dzielą wspólne `A
 3. Bank: `sum(newBk) <= getBankCapacity(pData)`
 4. Sukces → `UpdateHUD` + `BankResult{bankCapacity}`. Fail: reason `invalid/conservation/overCapacity/bankFull/locked`.
 
+**Pet-overflow guard (klient):** bank UI ma 15 slotów, ale plecak do 50 — gdy butelki+pety > 15 pety wypadały z list i serwer odrzucał `conservation` → "BŁĄD ZAPISU". Fix: przy POTWIERDŹ reconcile UUIDów względem `serverEqPetIds`/`serverBankPetIds` (snapshot z BankInit, odświeżany przez UpdateHUD/PetStatusUpdate gdy bank otwarty) — brakujące pety wracają na oryginalną stronę. Inv-side build też waliduje sumy butelek vs `data.backpackContents` (jak bank-side `layoutOk`).
+
 ### RemoteEvents
 - `BankInit`, `BankDeposit` (POTWIERDŹ), `BankWithdraw` (alias), `BankResult`, `UpgradeBank`.
 

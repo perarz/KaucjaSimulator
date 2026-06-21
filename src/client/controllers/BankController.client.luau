@@ -1071,6 +1071,21 @@ confirmBtn.MouseButton1Click:Connect(function()
 	local newBk = arrayToContents(bankSlotArr, SLOT_COUNT_B)
 	local newEqPets   = arrayToPetIds(invSlotArr,  SLOT_COUNT_B)
 	local newBankPets = arrayToPetIds(bankSlotArr, SLOT_COUNT_B)
+
+	-- Reconcile petów: jeśli jakiś pet z serwera NIE zmieścił się w 15 slotach UI
+	-- (overflow — butelki + pety > 15) to wypadał z obu list → serwer odrzucał całość
+	-- ("conservation" → "BŁĄD ZAPISU"). Brakujące UUIDy przywracamy na ich oryginalną
+	-- stronę (serverEqPetIds/serverBankPetIds z BankInit), żeby conservation zawsze przeszło.
+	local present: { [string]: boolean } = {}
+	for _, id in ipairs(newEqPets)   do present[id] = true end
+	for _, id in ipairs(newBankPets) do present[id] = true end
+	for id in pairs(serverEqPetIds) do
+		if not present[id] then table.insert(newEqPets, id); present[id] = true end
+	end
+	for id in pairs(serverBankPetIds) do
+		if not present[id] then table.insert(newBankPets, id); present[id] = true end
+	end
+
 	-- Wyślij jako deposit (serwer waliduje conservation butelek + petów)
 	BankDeposit:FireServer({
 		newBackpackContents = newBp,
@@ -1260,6 +1275,20 @@ UpdateHUD.OnClientEvent:Connect(function(data)
 	serverBpContents = data.backpackContents or serverBpContents
 	renderAll()
 end)
+
+-- PetStatusUpdate: pety zmieniły się gdy bank otwarty (otwarcie jajka, equip/discard)
+-- → odśwież snapshot UUIDów, żeby reconcile przy POTWIERDŹ używał aktualnych petów.
+do
+	local PetStatusUpdate = Events:FindFirstChild("PetStatusUpdate")
+	if PetStatusUpdate then
+		(PetStatusUpdate :: RemoteEvent).OnClientEvent:Connect(function(data)
+			if not bankGui.Enabled then return end
+			if type(data) ~= "table" then return end
+			serverEqPetIds   = petIdSet(data.pets)
+			serverBankPetIds = petIdSet(data.bankPets)
+		end)
+	end
+end
 
 BankResult.OnClientEvent:Connect(function(result)
 	confirmBtn.Text             = "POTWIERDŹ"
