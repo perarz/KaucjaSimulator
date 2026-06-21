@@ -14,6 +14,8 @@ local RunService       = game:GetService("RunService")
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
 
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+
 local FONT       = Enum.Font.GothamBlack
 local TITLE_FONT = Enum.Font.LuckiestGuy   -- chunky cartoon style — fajny do collector simulatora
 local C_BLACK    = Color3.new(0, 0, 0)
@@ -164,6 +166,14 @@ task.spawn(function()
 	if kosze then
 		for _, k in ipairs(kosze:GetChildren()) do
 			table.insert(assets, k)
+		end
+	end
+
+	-- Tekstury petów (obrazki w slotach EQ) — preload by uniknąć pop-in
+	local petsCfg = Config.Pets and Config.Pets.Rarities
+	if petsCfg then
+		for _, rcfg in pairs(petsCfg) do
+			if type(rcfg) == "table" and rcfg.image then table.insert(assets, rcfg.image) end
 		end
 	end
 

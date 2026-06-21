@@ -95,11 +95,11 @@ return {
 		-- Drop weights (suma dowolna — RNG ważona).
 		-- Dodanie nowej rzadkości = wpis w Rarities + odpowiednie bonusy w Classes.bonuses.
 		Rarities = {
-			Common    = { order = 1, weight = 60, moneyMul = 1.1, color = Color3.fromRGB(180, 180, 180), displayName = "Common"    },
-			Rare      = { order = 2, weight = 25, moneyMul = 1.3, color = Color3.fromRGB( 55, 138, 221), displayName = "Rare"      },
-			Epic      = { order = 3, weight = 10, moneyMul = 1.5, color = Color3.fromRGB(127, 119, 221), displayName = "Epic"      },
-			Legendary = { order = 4, weight =  4, moneyMul = 1.7, color = Color3.fromRGB(239, 159,  39), displayName = "Legendary" },
-			Huge      = { order = 5, weight =  1, moneyMul = 2.0, color = Color3.fromRGB(220,  60, 200), displayName = "Huge"      },
+			Common    = { order = 1, weight = 60, moneyMul = 1.1, color = Color3.fromRGB(180, 180, 180), displayName = "Common",    image = "rbxassetid://116042181628072" },
+			Rare      = { order = 2, weight = 25, moneyMul = 1.3, color = Color3.fromRGB( 55, 138, 221), displayName = "Rare",      image = "rbxassetid://134038496529761" },
+			Epic      = { order = 3, weight = 10, moneyMul = 1.5, color = Color3.fromRGB(127, 119, 221), displayName = "Epic",      image = "rbxassetid://87097975330888"  },
+			Legendary = { order = 4, weight =  4, moneyMul = 1.7, color = Color3.fromRGB(239, 159,  39), displayName = "Legendary", image = "rbxassetid://98629817680740"  },
+			Huge      = { order = 5, weight =  1, moneyMul = 2.0, color = Color3.fromRGB(220,  60, 200), displayName = "Huge",      image = "rbxassetid://100283554982021" },
 		},
 
 		-- Klasy — każda definuje typ efektu + bonusy per rzadkość.
