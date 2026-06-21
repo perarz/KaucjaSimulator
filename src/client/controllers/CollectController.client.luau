@@ -237,10 +237,11 @@ local function syncPetSlots()
 					local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[p.rarity]) or {}
 					local color = rcfg.color or C_WHITE
 					slots[i] = {
-						id    = PET_ID_PREFIX .. p.id,
-						color = color,
-						name  = p.class,  -- "Sprinter" / "Tank" wyświetlane na slocie
-						count = 1,
+						id        = PET_ID_PREFIX .. p.id,
+						color     = color,
+						name      = p.class,  -- "Sprinter" / "Tank" wyświetlane na slocie
+						count     = 1,
+						petRarity = p.rarity, -- do obrazka tekstury peta (Config.Pets.Rarities[r].image)
 					}
 					presentSet[p.id] = true
 					break
@@ -1171,6 +1172,7 @@ local slotScales:    { UIScale }   = {}
 local slotStrokes:   { UIStroke }  = {}
 local slotPetGlows:  { Frame }     = {}    -- gradient overlay dla petów (diagonalna animacja)
 local slotPetGrads:  { UIGradient } = {}
+local slotPetImgs:   { ImageLabel } = {}   -- tekstura peta (obrazek per rzadkość)
 local slotLegGlows:  { Frame }     = {}
 local slotLegGrads:  { UIGradient } = {}
 local slotMytGlows:  { Frame }     = {}
@@ -1307,6 +1309,20 @@ for i = 1, SLOT_COUNT do
 	petGrad.Parent = petGlow
 	slotPetGlows[i] = petGlow
 	slotPetGrads[i] = petGrad
+
+	-- Tekstura peta — obrazek per rzadkość, mieści się w kwadracie slotu (z marginesem).
+	-- Nad glow/tłem, pod tekstem (nazwa klasy / count mają wyższy ZIndex).
+	local petImg = Instance.new("ImageLabel")
+	petImg.Size                   = UDim2.fromScale(0.82, 0.82)
+	petImg.Position               = UDim2.fromScale(0.5, 0.46)
+	petImg.AnchorPoint            = Vector2.new(0.5, 0.5)
+	petImg.BackgroundTransparency = 1
+	petImg.ScaleType              = Enum.ScaleType.Fit  -- cały obrazek mieści się w slocie
+	petImg.Image                  = ""
+	petImg.Visible                = false
+	petImg.ZIndex                 = 1  -- nad glow (0), pod tekstem nazwy/count (2)
+	petImg.Parent                 = sf
+	slotPetImgs[i] = petImg
 end
 
 -- ── Render ────────────────────────────────────────────────────────────────
@@ -1336,6 +1352,14 @@ local function renderSlot(i: number)
 			-- Ukryj zwykły count (1) dla peta — pokażemy emoji klasy
 			-- (slotNameLbls jest "Sprinter"/"Tank", count "1" pomijamy bo każdy pet = 1)
 			slotCountLbls[i].Text = ""
+			-- Tekstura peta per rzadkość
+			local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.petRarity]) or {}
+			if slotPetImgs[i] then
+				slotPetImgs[i].Image   = rcfg.image or ""
+				slotPetImgs[i].Visible = (rcfg.image ~= nil)
+			end
+		elseif slotPetImgs[i] then
+			slotPetImgs[i].Visible = false
 		end
 	else
 		slotFrames[i].BackgroundColor3 = C_SLOT
@@ -1346,6 +1370,7 @@ local function renderSlot(i: number)
 		slotLegGlows[i].Visible        = false
 		slotMytGlows[i].Visible        = false
 		slotPetGlows[i].Visible        = false
+		if slotPetImgs[i] then slotPetImgs[i].Visible = false end
 	end
 end
 

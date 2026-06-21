@@ -485,7 +485,7 @@ DeskaService to **standalone Script** (.server.luau) — NIE wymagaj w GameServe
 ### Struktura
 - Konfiguracja w `Config.Pets`:
   ```
-  Rarities = { Common = { order, weight, moneyMul, color, displayName }, ... }
+  Rarities = { Common = { order, weight, moneyMul, color, displayName, image }, ... }  -- image = tekstura w slocie EQ
   Classes  = { Sprinter = { effect="speed", bonuses={Common=3,...} }, Tank = ... }
   ClassWeights = { Sprinter = 1, Tank = 1 }
   ModelsFolderPath = { "Pets", "PetyZwykle" }
@@ -494,7 +494,7 @@ DeskaService to **standalone Script** (.server.luau) — NIE wymagaj w GameServe
 - Dodanie nowej rzadkości = 1 wpis w `Rarities` + bonusy w `Classes.<class>.bonuses[rarity]` + model `Pet<Name>` w `ReplicatedStorage.Pets.PetyZwykle`.
 
 ### UI
-- **Inventory:** każdy pet = osobny slot w głównym EQ (id=`Pet_<uuid>`), kolor per rzadkość. Klik → detail panel z **ZAŁÓŻ/ZDEJMIJ** + **WYRZUĆ**.
+- **Inventory:** każdy pet = osobny slot w głównym EQ (id=`Pet_<uuid>`), kolor per rzadkość + **tekstura** (`Config.Pets.Rarities[r].image`, ImageLabel ScaleType=Fit, ZIndex 1 — nad glow, pod nazwą klasy/count; preload w LoadingController). Klik → detail panel z **ZAŁÓŻ/ZDEJMIJ** + **WYRZUĆ**.
 - **Bank:** pety renderują się w slotach bank/eq, drag pet ↔ bank działa (swap, no-merge). Conservation server-side po UUIDach.
 - **Roulette:** 1 jajko = 1 strip, 3 jajka = 3 strippy obok siebie. Quint Out 3.5s spin, jeden start + jeden Win SFX. Polish: animowany gradient ramki dla Legendary/Huge, screen shake gdy HUGE.
 
