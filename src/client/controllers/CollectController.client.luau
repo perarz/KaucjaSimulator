@@ -418,15 +418,20 @@ end
 
 -- Hookup zewnętrznego Money ScreenGui — wykonywany PO definicji formatAmount/updateHud
 -- (closure capture'uje formatAmount jako upvalue — musi być zadeklarowany przed task.spawn).
-task.spawn(function()
-	local moneyGui = playerGui:WaitForChild("Money", 15)
-	if not moneyGui then
-		warn("[CollectController] Brak PlayerGui.Money (ScreenGui) — wallet HUD nie pokaże złotówek")
-		return
-	end
+--
+-- BUGFIX (portfel pokazuje "Label" zamiast kasy): Money ma domyślnie ResetOnSpawn=true,
+-- więc przy respawnie (śmierć PvP, DeathDrop instant respawn, reset postępu) Roblox niszczy
+-- stary Money i klonuje świeży. Świeży PLN TextLabel ma domyślny tekst "Label", a stary
+-- `walletLabel` wskazuje na zniszczony obiekt → updateHud pisze w martwy label.
+-- Dlatego rebindujemy przy KAŻDYM nowym Money GUI (ChildAdded) + sync widoczności.
+local currentMoneyGui: ScreenGui? = nil
+local walletLastEnabled = true
+
+local function hookupWallet(moneyGui: ScreenGui)
 	moneyGui.ResetOnSpawn   = false
 	moneyGui.IgnoreGuiInset = true
 	moneyGui.DisplayOrder   = 50
+	currentMoneyGui = moneyGui
 
 	local ramka = moneyGui:WaitForChild("Ramka", 10)
 	if not ramka then
@@ -444,20 +449,43 @@ task.spawn(function()
 		return
 	end
 	walletLabel = plnLbl
-	updateHud()  -- pierwszy sync
+	updateHud()  -- natychmiast wpisz aktualne saldo zamiast domyślnego "Label"
 
-	-- Chowanie Money gdy otwarte jakieś modalne UI (menu/sklepy/bank/quest/kosz).
-	-- Wszystkie te kontrolery wołają _G["__lockMovement"]/__unlockMovement
-	-- które zwiększają/zmniejszają _G["__moveLockCount"]. Heartbeat toggluje Enabled.
-	local lastEnabled = true
-	RunService.Heartbeat:Connect(function()
-		local count = tonumber(_G["__moveLockCount"]) or 0
-		local shouldShow = count == 0
-		if shouldShow ~= lastEnabled then
-			moneyGui.Enabled = shouldShow
-			lastEnabled = shouldShow
-		end
-	end)
+	-- Zsynchronizuj widoczność z aktualnym stanem modalnych UI (świeży klon jest Enabled=true)
+	local shouldShow = (tonumber(_G["__moveLockCount"]) or 0) == 0
+	moneyGui.Enabled  = shouldShow
+	walletLastEnabled = shouldShow
+end
+
+task.spawn(function()
+	local moneyGui = playerGui:WaitForChild("Money", 15)
+	if not moneyGui or not moneyGui:IsA("ScreenGui") then
+		warn("[CollectController] Brak PlayerGui.Money (ScreenGui) — wallet HUD nie pokaże złotówek")
+		return
+	end
+	hookupWallet(moneyGui)
+end)
+
+-- Re-bind gdy pojawi się świeży Money (respawn / ResetOnSpawn) — inaczej widać "Label".
+playerGui.ChildAdded:Connect(function(child)
+	if child:IsA("ScreenGui") and child.Name == "Money" and child ~= currentMoneyGui then
+		task.spawn(hookupWallet, child)
+	end
+end)
+
+-- Chowanie Money gdy otwarte jakieś modalne UI (menu/sklepy/bank/quest/kosz).
+-- Wszystkie te kontrolery wołają _G["__lockMovement"]/__unlockMovement
+-- które zwiększają/zmniejszają _G["__moveLockCount"]. Heartbeat toggluje Enabled.
+-- Podpięty RAZ, referuje currentMoneyGui (przeżywa rebind przy respawnie).
+RunService.Heartbeat:Connect(function()
+	local mg = currentMoneyGui
+	if not mg then return end
+	local count = tonumber(_G["__moveLockCount"]) or 0
+	local shouldShow = count == 0
+	if shouldShow ~= walletLastEnabled then
+		mg.Enabled = shouldShow
+		walletLastEnabled = shouldShow
+	end
 end)
 
 local BTN_W, BTN_H, BTN_GAP = 300, 90, 16
