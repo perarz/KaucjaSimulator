@@ -140,7 +140,14 @@ return {
 		TickInterval     = 0.25, -- jak często sweep
 		Name             = "Magnes",
 		Color            = Color3.fromRGB(220, 90, 90),
+		Image            = "rbxassetid://109129872039457",  -- tekstura w slocie EQ
 		Desc             = "Aktywuj na 2 minuty. Automatycznie zbiera wszystkie butelki wokół ciebie w zwiększonym promieniu (×1.5).",
+	},
+
+	-- Tekstury butelek w slotach EQ (per rzadkość). Dodawane stopniowo — brak wpisu = tylko kolor.
+	BottleSlotImages = {
+		Legendarna = "rbxassetid://105678168067263",
+		Mityczny   = "rbxassetid://97891521932209",
 	},
 
 	-- Sklep "Żabka" (workspace.blok_zabki.KasjerZabka) — sprzedaje magnesy za zł.

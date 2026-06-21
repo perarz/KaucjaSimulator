@@ -247,6 +247,7 @@ Hooki te same co story (BottleService, KoszService itp.) — dzielą wspólne `A
 
 - **15 slotów na sztywno (5×3)** — `SLOT_COUNT = 15`. Hover-scale 1.06. Kolor slota = `darken(rarity.color, 0.45)` + stroke pełny rarity color + biały tekst.
 - **VFX Legendarnej**: rotujący gold UIGradient + pulsujący stroke. **VFX Mitycznej**: fiolet/czarny.
+- **Tekstury slotów** (ImageLabel ScaleType=Fit, ZIndex 1, preload w LoadingController): pety (`Config.Pets.Rarities[r].image`), magnes (`Config.Magnet.Image`), butelki per rzadkość (`Config.BottleSlotImages` — na razie Legendarna/Mityczny). Brak wpisu = sam kolor.
 - **Detail panel** po prawej — slide-in, **instant switch** (klik dowolnego slotu natychmiast zmienia content, nie toggle). Pokazuje: rzadkość, count, wartość, mnożnik, przycisk **UPUŚĆ** (czerwony, drop 1 sztuki przed gracza). Syrop też renderuje się w slocie ale BEZ ceny/UPUŚĆ.
 - **Position-keyed layout** — `_G["__inventoryGetLayout"]/__inventorySetLayout` (map [slotIdx]={rarity,count}). Persystencja przez `SyncInventoryLayout:FireServer` do `data.InventoryStacks`. Bank UI używa tego API żeby split 1:1.
 - **Right-click** = split stack na pół (drag drugiej połowy).

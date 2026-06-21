@@ -177,6 +177,14 @@ task.spawn(function()
 		end
 	end
 
+	-- Tekstury butelek + magnes (sloty EQ)
+	if Config.BottleSlotImages then
+		for _, id in pairs(Config.BottleSlotImages) do
+			if type(id) == "string" then table.insert(assets, id) end
+		end
+	end
+	if Config.Magnet and Config.Magnet.Image then table.insert(assets, Config.Magnet.Image) end
+
 	-- 3) Preload (yielding — zwraca gdy wszystko gotowe)
 	setStatus("preload assetów (" .. #assets .. ")…")
 	if #assets > 0 then

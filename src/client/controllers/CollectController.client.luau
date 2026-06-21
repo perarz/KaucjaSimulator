@@ -1352,14 +1352,19 @@ local function renderSlot(i: number)
 			-- Ukryj zwykły count (1) dla peta — pokażemy emoji klasy
 			-- (slotNameLbls jest "Sprinter"/"Tank", count "1" pomijamy bo każdy pet = 1)
 			slotCountLbls[i].Text = ""
-			-- Tekstura peta per rzadkość
-			local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.petRarity]) or {}
-			if slotPetImgs[i] then
-				slotPetImgs[i].Image   = rcfg.image or ""
-				slotPetImgs[i].Visible = (rcfg.image ~= nil)
-			end
-		elseif slotPetImgs[i] then
-			slotPetImgs[i].Visible = false
+		end
+		-- Tekstura slotu: pet (per rzadkość) / magnes / butelka (Config.BottleSlotImages)
+		local img: string? = nil
+		if isPet then
+			img = ((Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.petRarity]) or {}).image
+		elseif data.id == MAGNET_ID then
+			img = Config.Magnet and Config.Magnet.Image
+		elseif data.id and string.sub(data.id, 1, 7) == "Bottle_" then
+			img = Config.BottleSlotImages and Config.BottleSlotImages[data.name]
+		end
+		if slotPetImgs[i] then
+			slotPetImgs[i].Image   = img or ""
+			slotPetImgs[i].Visible = (img ~= nil)
 		end
 	else
 		slotFrames[i].BackgroundColor3 = C_SLOT
