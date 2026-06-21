@@ -46,6 +46,9 @@ end
 
 -- ── Paleta ─────────────────────────────────────────────────────────────────
 local FONT        = Enum.Font.GothamBlack
+local TOAST_FONT  = Enum.Font.FredokaOne   -- czytelny, bez neonu (popupy błędów / gamepass)
+local TOAST_RED   = Color3.fromRGB(225, 70, 70)
+local TOAST_YELLOW = Color3.fromRGB(240, 195, 70)
 local C_BG        = Color3.fromRGB(18, 91, 73)
 local C_PANEL     = Color3.fromRGB(24, 110, 90)
 local C_HEADER    = Color3.fromRGB(0, 53, 39)
@@ -60,6 +63,32 @@ local X_RED_HOV   = Color3.fromRGB(255, 110, 110)
 -- ── Stan ───────────────────────────────────────────────────────────────────
 local lastInit: { [string]: any } = {}  -- ostatni payload OpenPetGablota
 local hasGamepass = false
+
+-- Anty-spam otwierania: gdy trwa animacja ruletki blokujemy ponowne otwarcie.
+-- `spinning` ignoruje nowe wyniki, a prompty E/T są wyłączane lokalnie więc
+-- naciskanie ich nic nie robi. `roulLocked` trzyma blokadę ruchu idempotentnie
+-- (1 lock ↔ 1 unlock) — inaczej spam dawał wiele locków i gracz nie mógł chodzić.
+local spinning   = false
+local roulLocked = false
+local gablotaPrompts: { [ProximityPrompt]: boolean } = {}
+
+local function setPromptsEnabled(enabled: boolean)
+	for p in pairs(gablotaPrompts) do
+		if p and p.Parent then p.Enabled = enabled end
+	end
+end
+
+local function lockMove()
+	if roulLocked then return end
+	roulLocked = true
+	if _G["__lockMovement"] then _G["__lockMovement"]() end
+end
+
+local function unlockMove()
+	if not roulLocked then return end
+	roulLocked = false
+	if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+end
 
 -- Sortowanie rzadkości po order
 local function listRaritiesOrdered(): { string }
@@ -105,29 +134,28 @@ toastLbl.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
 toastLbl.BackgroundTransparency = 0.35
 toastLbl.BorderSizePixel        = 0
 toastLbl.Text                   = ""
-toastLbl.Font                   = FONT
-toastLbl.TextSize               = 22
-toastLbl.TextColor3             = Color3.fromRGB(255, 255, 255)
-toastLbl.TextStrokeColor3       = Color3.new(0, 0, 0)
-toastLbl.TextStrokeTransparency = 0.4
+toastLbl.Font                   = TOAST_FONT
+toastLbl.TextSize               = 24
+toastLbl.TextColor3             = TOAST_RED
+toastLbl.TextStrokeTransparency = 1     -- bez neonowego obrysu tekstu
 toastLbl.Visible                = false
 toastLbl.Parent                 = toastGui
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = toastLbl
-	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(255, 80, 80); s.Thickness = 3; s.Parent = toastLbl
+	-- subtelny ciemny border zamiast jaskrawego (kolorowego) glow
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = toastLbl
 end
 
 local toastJob: thread? = nil
 local function showToast(msg: string, color: Color3?)
 	if toastJob then task.cancel(toastJob); toastJob = nil end
 	toastLbl.Text         = msg
-	toastLbl.TextColor3   = color or Color3.fromRGB(255, 255, 255)
+	toastLbl.TextColor3   = color or TOAST_RED   -- tylko czerwony lub żółty, bez neonu
 	toastLbl.TextTransparency = 0
 	toastLbl.BackgroundTransparency = 0.35
 	local stroke = toastLbl:FindFirstChildOfClass("UIStroke")
 	if stroke then
-		stroke.Color = color or Color3.fromRGB(255, 80, 80)
-		stroke.Transparency = 0
+		stroke.Transparency = 0   -- ciemny border stały, NIE przebarwiamy na kolor tekstu
 	end
 	toastLbl.Visible      = true
 	toastJob = task.spawn(function()
@@ -491,15 +519,17 @@ end
 local function hideAll()
 	if fadingOut then return end  -- nie spamuj
 	skipOverlay.Visible = false
+	spinning = false
+	setPromptsEnabled(true)   -- z powrotem włącz E/T po zakończeniu
 	if roulPanel.Visible then
 		fadeOutAndHide(roulPanel, function()
 			if not choicePanel.Visible then gui.Enabled = false end
-			if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+			unlockMove()
 		end)
 	else
 		if choicePanel.Visible then choicePanel.Visible = false end
 		gui.Enabled = false
-		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+		unlockMove()
 	end
 end
 
@@ -637,7 +667,9 @@ local function showRoulette(pets: { any })
 	-- BUGFIX: trzeba włączyć ScreenGui — wcześniej robił to showChoice, ale po usunięciu
 	-- choice GUI ruletka leciała bez gui.Enabled=true → niewidoczna (słychać tylko SFX).
 	gui.Enabled         = true
-	if _G["__lockMovement"] then _G["__lockMovement"]() end
+	spinning            = true
+	setPromptsEnabled(false)  -- wyłącz E/T — naciskanie podczas animacji nic nie robi
+	lockMove()
 
 	choicePanel.Visible = false
 	roulPanel.Visible   = true
@@ -752,11 +784,13 @@ end)
 
 PetRouletteResult.OnClientEvent:Connect(function(result)
 	if type(result) ~= "table" then return end
+	-- Trwa już animacja — ignoruj kolejny wynik (anty-spam, defense in depth).
+	if spinning and result.success then return end
 	if not result.success then
 		local msg = (result.reason == "broke") and "Za mało złotówek."
 			or (result.reason == "full") and "Brak miejsca w plecaku."
 			or "Coś poszło nie tak."
-		showToast(msg, Color3.fromRGB(255, 80, 80))
+		showToast(msg, TOAST_RED)
 		return
 	end
 	showRoulette(result.pets or {})
@@ -765,7 +799,7 @@ end)
 PromptPetGamepassBuy.OnClientEvent:Connect(function(payload)
 	if type(payload) ~= "table" then return end
 	MarketplaceService:PromptGamePassPurchase(localPlayer, payload.gamepassId or cfg.TripleEggGamepassId)
-	showToast("Wymaga Gamepass (29 R$) — kup w pop-upie aby otwierać 3 jajka.", Color3.fromRGB(255, 200, 60))
+	showToast("Wymaga Gamepass (29 R$) — kup w pop-upie aby otwierać 3 jajka.", TOAST_YELLOW)
 end)
 
 PetStatusUpdate.OnClientEvent:Connect(function(data)
@@ -868,6 +902,9 @@ local promptUis: { [ProximityPrompt]: BillboardGui } = {}
 
 ProximityPromptService.PromptShown:Connect(function(prompt, inputType)
 	if not prompt:GetAttribute("PetGablotaPrompt") then return end
+	gablotaPrompts[prompt] = true
+	-- Jeśli akurat trwa animacja — pokaż prompt wyłączony (E/T nieaktywne).
+	if spinning then prompt.Enabled = false end
 	if promptUis[prompt] then return end
 	local ui = buildPromptUi(prompt)
 	if ui then promptUis[prompt] = ui end
