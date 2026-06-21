@@ -635,6 +635,7 @@ require(script.Parent.HatShopService)
 require(script.Parent.DeathDropService)
 require(script.Parent.AdminService)
 require(script.Parent.BoostShopService)
+require(script.Parent.PlayerCollisionService)  -- collision group "Players" — gracze przechodzą przez siebie
 -- DeskaService i PvPEntryService to standalone Scripty (.server.luau) — uruchamiają się same
 ```
 
