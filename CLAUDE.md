@@ -683,7 +683,7 @@ Quest dziadka NIE używa `_G` — przez dedykowane RemoteEvents (GrandpaState/Di
 
 1. **DataStore.SetAsync yielduje** — NIE wywołuj SaveData w hot pathach (np. CollectBottle hooks). 2026 fix: usunięte z StoryQuestService.AddProgress.
 2. **Seat × Deska** — gracz siedzący na huśtawce + R → 2 welds na HRP → pod mapę. Fix: force `Sit=false + ChangeState(Jumping) + wait(0.15)` w mountPlayer.
-3. **Sprint × Deska** — SprintController nadpisuje WalkSpeed ustawiony przez deskę. Fix: `_G["__deskaMounted"]` early-return w sprint Heartbeat.
+3. **Sprint × Deska** — SprintController nadpisuje WalkSpeed ustawiony przez deskę. Fix: `_G["__deskaMounted"]` early-return w sprint Heartbeat ORAZ guard w `applySpeed()` (event-driven calle typu PetStatusUpdate przy otwarciu jajka clobberowały prędkość deski → wolny ruch). Po zejściu z deski `wasMounted` transition przywraca prędkość pieszą.
 4. **Roblox PlayerModule resetuje thumbstick position** — fix: `GetPropertyChangedSignal("Position")` lock z flagą `applying`.
 5. **DevTouchMovementMode wymaga elevated permissions** z LocalScript — ustaw przez `StarterPlayer.DevTouchMovementMode` w project.json.
 6. **Studio mobile emulator** ma `KeyboardEnabled = true` — nie excludować z gate'a touch.
