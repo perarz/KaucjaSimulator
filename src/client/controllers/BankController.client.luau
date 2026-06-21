@@ -360,6 +360,14 @@ end
 local bankSlotArr: { [number]: SlotData? } = {}
 local invSlotArr:  { [number]: SlotData? } = {}
 
+-- Autorytatywny stan SERWERA (z BankInit / udanego BankResult). Używany żeby przy
+-- zamknięciu banku BEZ POTWIERDŹ wykryć niezatwierdzony transfer i NIE utrwalić
+-- niespójnego layoutu (inaczej butelki znikają z widoku na zawsze).
+local serverBpContents:   { [string]: number } = {}
+local serverBankContents: { [string]: number } = {}
+local serverEqPetIds:   { [string]: boolean } = {}
+local serverBankPetIds: { [string]: boolean } = {}
+
 local bankFrames:   { Frame }      = {}; local bankNameLbls: { TextLabel } = {}
 local bankCntLbls:  { TextLabel }  = {}; local bankStrokes:  { UIStroke }  = {}
 local bankScales:   { UIScale }    = {}; local bankLegGlows: { Frame }     = {}
@@ -559,6 +567,17 @@ local function arrayToPetIds(arr: { [number]: SlotData? }, cap: number): { strin
 		if s and isPetSlot(s) then table.insert(ids, s.pet.id) end
 	end
 	return ids
+end
+
+-- Zbiór UUIDów z listy petów serwera ({ {id=...}, ... }) → { [id]=true }
+local function petIdSet(list: any): { [string]: boolean }
+	local set = {}
+	if type(list) == "table" then
+		for _, pet in ipairs(list) do
+			if type(pet) == "table" and pet.id then set[tostring(pet.id)] = true end
+		end
+	end
+	return set
 end
 
 -- ── Budowanie ramek slotów ────────────────────────────────────────────────────
@@ -982,11 +1001,41 @@ local function bankLockMove()
 	if not bankMoveLocked then bankMoveLocked = true; _G["__lockMovement"]() end
 end
 
+-- Czy obecny układ slotów różni się od autorytatywnego stanu serwera?
+-- (niezatwierdzony transfer EQ↔SKARBIEC). Jeśli tak — zamknięcie bez POTWIERDŹ
+-- NIE może utrwalić layoutu, bo zniknęłyby przeniesione butelki/pety.
+local function hasUncommittedChanges(): boolean
+	local invC  = arrayToContents(invSlotArr,  SLOT_COUNT_B)
+	local bankC = arrayToContents(bankSlotArr, SLOT_COUNT_B)
+	for _, r in ipairs(RARITY_ORDER) do
+		if (invC[r] or 0)  ~= (serverBpContents[r] or 0)   then return true end
+		if (bankC[r] or 0) ~= (serverBankContents[r] or 0) then return true end
+	end
+	-- Pety — porównaj zbiory UUIDów per strona
+	local function petSetMatches(arr, serverSet): boolean
+		local seen = {}
+		for _, id in ipairs(arrayToPetIds(arr, SLOT_COUNT_B)) do
+			if not serverSet[id] then return false end
+			seen[id] = true
+		end
+		for id in pairs(serverSet) do if not seen[id] then return false end end
+		return true
+	end
+	if not petSetMatches(invSlotArr,  serverEqPetIds)   then return true end
+	if not petSetMatches(bankSlotArr, serverBankPetIds) then return true end
+	return false
+end
+
 closeBank = function()
 	bankUnlockMove()
 	if drag.active then endDrag() end
-	syncInvLayoutToShared()  -- zapisz split layout do głównego ekwipunku
-	saveBankLayoutToCache()  -- zapisz split layout banku do session cache
+	-- Utrwalamy layout TYLKO gdy realny panel transferu był otwarty (nie locked)
+	-- ORAZ układ == stan serwera (sam rearrange / brak transferu).
+	-- Niezatwierdzony transfer porzucamy — CollectController zachowuje prawdziwy stan EQ.
+	if trPanel.Visible and not hasUncommittedChanges() then
+		syncInvLayoutToShared()  -- zapisz split layout do głównego ekwipunku
+		saveBankLayoutToCache()  -- zapisz split layout banku do session cache
+	end
 	TweenService:Create(trPanel, TW_CLOSE,
 		{ Position = UDim2.new(0.5, 0, 0.55, 0), BackgroundTransparency = 1 }):Play()
 	if lockedPanel and lockedPanel.Visible then
@@ -1090,6 +1139,11 @@ BankInit.OnClientEvent:Connect(function(data)
 	currentHasSyrup  = data.hasSyrup or false
 	currentUpgCost   = tonumber(data.bankUpgradeCost) or currentUpgCost
 	upgradeBtn.Text  = string.format("ULEPSZ — %d zł", currentUpgCost)
+	-- Snapshot autorytatywnego stanu serwera (do wykrycia niezatwierdzonych transferów)
+	serverBpContents   = data.backpackContents or {}
+	serverBankContents = data.bankContents or {}
+	serverEqPetIds     = petIdSet(data.eqPets)
+	serverBankPetIds   = petIdSet(data.bankPets)
 	buildSlotFrames(SLOT_COUNT_B)
 
 	-- Bank side: prefer in-session split layout (jeśli totals się zgadzają z serwerem), fallback do flat contents
@@ -1188,6 +1242,8 @@ UpdateHUD.OnClientEvent:Connect(function(data)
 	currentCapacity = tonumber(data.backpackCapacity) or currentCapacity
 	currentHasSyrup = data.hasSyrup or false
 	smartResyncInv(data.backpackContents, SLOT_COUNT_B)
+	-- Pickup w trakcie otwartego banku to nowy stan serwera EQ — odśwież snapshot
+	serverBpContents = data.backpackContents or serverBpContents
 	renderAll()
 end)
 
@@ -1231,6 +1287,12 @@ BankResult.OnClientEvent:Connect(function(result)
 				end
 			end
 		end
+		-- Transfer zatwierdzony — odśwież snapshot serwera (kolejne zamknięcie bez zmian
+		-- nie zgłosi fałszywie "niezatwierdzonych" transferów)
+		serverBpContents   = result.backpackContents or serverBpContents
+		serverBankContents = result.bankContents or serverBankContents
+		serverEqPetIds     = petIdSet(result.eqPets)
+		serverBankPetIds   = petIdSet(result.bankPets)
 		syncInvLayoutToShared()  -- po confirm zapisz nowy layout do głównego ekwipunku
 		saveBankLayoutToCache()  -- też zaktualizuj cache banku
 		renderAll()
