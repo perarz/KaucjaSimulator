@@ -12,6 +12,7 @@ local Events           = ReplicatedStorage:WaitForChild("Events")
 local SkillTreeInit    = Events:WaitForChild("SkillTreeInit")
 local SkillTreeUpdate  = Events:WaitForChild("SkillTreeUpdate")
 local HatStatusUpdate  = Events:WaitForChild("HatStatusUpdate")
+local PetStatusUpdate  = Events:WaitForChild("PetStatusUpdate")
 
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
@@ -35,6 +36,7 @@ local speedLevel      = 0
 local hatOwned        = false
 local hatSpeedBonus   = 0
 local hatStaminaBonus = 0
+local petSpeedBonus   = 0  -- z PetService (klasa Sprinter, addytywne do baseSpeed)
 local function getStaminaMax(): number return STAMINA_MAX_BASE + (hatOwned and hatStaminaBonus or 0) end
 local stamina      = STAMINA_MAX_BASE
 local sprinting    = false
@@ -46,6 +48,7 @@ local function getBaseSpeed(): number
 		s = Config.SpeedUpgrades[speedLevel].Speed
 	end
 	if hatOwned then s += hatSpeedBonus end
+	s += petSpeedBonus  -- Sprinter pet — addytywnie
 	return s
 end
 
@@ -175,8 +178,15 @@ HatStatusUpdate.OnClientEvent:Connect(function(data)
 	hatStaminaBonus = tonumber(data.staminaBonus) or 0
 	print(string.format("[SprintController] HatStatus → owned=%s speedBonus=%d staminaBonus=%d",
 		tostring(hatOwned), hatSpeedBonus, hatStaminaBonus))
-	-- Po założeniu czapki stamina powinna móc rosnąć do nowego maxa
 	if stamina > getStaminaMax() then stamina = getStaminaMax() end
+	applySpeed()
+end)
+
+PetStatusUpdate.OnClientEvent:Connect(function(data)
+	if type(data) ~= "table" then return end
+	local b = data.bonuses
+	petSpeedBonus = (b and tonumber(b.speed)) or 0
+	-- Aktualizacja prędkości natychmiast (nawet w trakcie sprintu/jazdy na desce — deska gate'uje sama)
 	applySpeed()
 end)
 

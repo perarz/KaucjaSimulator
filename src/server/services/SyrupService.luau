@@ -44,6 +44,8 @@ local function getCarriedCount(data): number
 	local carried = 0
 	for _, count in pairs(data.BackpackContents) do carried += count end
 	if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end
+	carried += data.MagnetCount or 0    -- magnes = 1 slot
+	carried += #(data.Pets or {})       -- pet = 1 slot
 	return carried
 end
 

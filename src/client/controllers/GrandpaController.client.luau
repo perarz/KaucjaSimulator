@@ -450,26 +450,53 @@ GrandpaDialog.OnClientEvent:Connect(function(payload)
 end)
 
 -- ── Per-player visibility syropu (z Kroku 2) ───────────────────────────────
-local function applySyrupVisibility(model: Instance)
-	if not model:IsA("Model") then return end
-	local owner = model:GetAttribute("OwnerUserId")
-	local isMine = (owner == player.UserId)
+-- Cudze syropy z questa dziadka muszą być niewidoczne (i bez interakcji).
+-- Roblox replikuje model + descendantów + attributes w osobnych batchach,
+-- więc jednorazowe GetDescendants po ChildAdded potrafi minąć Party.
+-- Rozwiązanie: trzymamy stan "isMine" per model, słuchamy DescendantAdded
+-- oraz GetAttributeChangedSignal("OwnerUserId") i re-aplikujemy.
 
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.LocalTransparencyModifier = isMine and 0 or 1
-		elseif d:IsA("ProximityPrompt") then
-			d.Enabled = isMine
-		elseif d:IsA("PointLight") then
-			d.Enabled = isMine
-		end
+local function applyToDescendant(d: Instance, isMine: boolean)
+	if d:IsA("BasePart") then
+		d.LocalTransparencyModifier = isMine and 0 or 1
+	elseif d:IsA("ProximityPrompt") then
+		d.Enabled = isMine
+	elseif d:IsA("PointLight") then
+		d.Enabled = isMine
 	end
 end
 
+local function attachSyrupModel(model: Instance)
+	if not model:IsA("Model") then return end
+
+	local function resolveIsMine(): boolean
+		return model:GetAttribute("OwnerUserId") == player.UserId
+	end
+
+	local function refreshAll()
+		local isMine = resolveIsMine()
+		for _, d in ipairs(model:GetDescendants()) do
+			applyToDescendant(d, isMine)
+		end
+	end
+
+	refreshAll()
+
+	-- Late-replicated parts (np. Mesh/Parts z template'u przychodzą po ChildAdded)
+	model.DescendantAdded:Connect(function(d)
+		applyToDescendant(d, resolveIsMine())
+	end)
+
+	-- Attribute może przyjść po instancji — wtedy ponownie aplikujemy
+	model:GetAttributeChangedSignal("OwnerUserId"):Connect(refreshAll)
+end
+
 local function watchSyrup(folder: Folder)
-	for _, child in ipairs(folder:GetChildren()) do applySyrupVisibility(child) end
+	for _, child in ipairs(folder:GetChildren()) do
+		task.spawn(attachSyrupModel, child)
+	end
 	folder.ChildAdded:Connect(function(child)
-		task.defer(applySyrupVisibility, child)
+		task.defer(attachSyrupModel, child)
 	end)
 end
 

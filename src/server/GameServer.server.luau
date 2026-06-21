@@ -2,6 +2,7 @@
 -- Entry point serwera — bootstrapuje wszystkie serwisy
 require(script.Parent.PlayerDataService)
 require(script.Parent.QuestService)        -- przed wszystkimi co go używają
+require(script.Parent.StoryQuestService)   -- linia fabularna; hooki w BottleService/UpgradeService/ShopService/GrandpaService
 require(script.Parent.BottleService)
 require(script.Parent.UpgradeService)
 require(script.Parent.ShopService)
@@ -19,5 +20,8 @@ require(script.Parent.HatShopService)
 require(script.Parent.DeathDropService)
 require(script.Parent.AdminService)
 require(script.Parent.BoostShopService)
+require(script.Parent.MagnetService)
+require(script.Parent.ZabkaService)
+require(script.Parent.PetService)
 -- DeskaService to standalone Script (.server.luau) — uruchamia się sam,
 -- NIE wymagaj go tutaj (require na Script rzuca "invalid argument").

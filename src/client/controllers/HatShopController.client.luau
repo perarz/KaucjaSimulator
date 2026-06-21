@@ -273,6 +273,7 @@ local isOpen   = false
 local function setOpen(open: boolean)
 	isOpen = open
 	if open then
+		if _G["__lockMovement"] then _G["__lockMovement"]() end
 		readLeaderstats()
 		refresh()
 		gui.Enabled = true
@@ -281,6 +282,7 @@ local function setOpen(open: boolean)
 		TweenService:Create(panel, TW_OPEN, { Position = POS_SHOW }):Play()
 		TweenService:Create(overlay, TW_OPEN, { BackgroundTransparency = 0.35 }):Play()
 	else
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
 		TweenService:Create(panel, TW_CLOSE, { Position = POS_HIDE }):Play()
 		local tw = TweenService:Create(overlay, TW_CLOSE, { BackgroundTransparency = 1 })
 		tw.Completed:Connect(function() if not isOpen then gui.Enabled = false end end)
@@ -307,9 +309,11 @@ BuyHatResult.OnClientEvent:Connect(function(result)
 	if type(result) ~= "table" then return end
 	if result.success then
 		pData.HatOwned = true
+		refresh()
+		-- Ustawiamy status PO refresh — inaczej branch `if pData.HatOwned` w refresh
+		-- nadpisuje "Kupiono!" na "" i gracz nigdy nie widzi potwierdzenia.
 		status.Text = "Kupiono! Czapka założona."
 		status.TextColor3 = C_ACC_GREEN
-		refresh()
 	else
 		local msg = "Nie udało się kupić."
 		if result.reason == "broke"   then msg = "Za mało złotówek."
@@ -321,13 +325,26 @@ BuyHatResult.OnClientEvent:Connect(function(result)
 	end
 end)
 
--- Sync z UpdateHUD (zmiana backpackContents po zakupie / sprzedaży / koszu)
+-- Sync z UpdateHUD (zmiana backpackContents po zakupie / sprzedaży / koszu / butelkomacie / drop)
 UpdateHUD.OnClientEvent:Connect(function(data)
 	if type(data) ~= "table" then return end
 	if data.backpackContents then
 		pData.BackpackContents = data.backpackContents
 		if isOpen then refresh() end
 	end
+end)
+
+-- BUG FIX: zbieranie butelki (klik prompt) NIE wysyła UpdateHUD — tylko CollectBottleResult.
+-- Magnes sweep też leci przez ten sam result (TryCollectBottle → CollectBottleResult).
+-- Bez tego listenera sklep nie aktualizuje pData.BackpackContents w trakcie zbierania,
+-- przez co status "Brakuje surowców" pozostaje mimo że gracz właśnie zebrał potrzebną butelkę.
+local CollectBottleResult = Events:WaitForChild("CollectBottleResult")
+CollectBottleResult.OnClientEvent:Connect(function(result)
+	if type(result) ~= "table" or not result.success then return end
+	local r = result.rarity
+	if type(r) ~= "string" then return end
+	pData.BackpackContents[r] = (pData.BackpackContents[r] or 0) + 1
+	if isOpen then refresh() end
 end)
 
 -- Sync salda

@@ -86,8 +86,13 @@ local function deckByKey(key: string)
 	return nil
 end
 local function priceText(deck): string
-	if deck.CostType == "Robux" then return (deck.RobuxPrice or "?") .. " R$" end
+	if deck.CostType == "Robux" or deck.CostType == "Gamepass" then
+		return (deck.RobuxPrice or "?") .. " R$"
+	end
 	return (deck.Cost or 0) .. " PLN"
+end
+local function isPaidInRobux(deck): boolean
+	return deck.CostType == "Robux" or deck.CostType == "Gamepass"
 end
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -230,10 +235,12 @@ local function refreshBuyPanel()
 		buyBtn.TextColor3 = C_DIMTEXT
 		buyBtn.Active = false
 	else
-		buyStatus.Text = (deck.CostType == "Robux") and "Płatność w Robux" or "Naciśnij KUP aby kupić"
+		local robux = isPaidInRobux(deck)
+		local label = (deck.CostType == "Gamepass") and "Gamepass" or "Płatność w Robux"
+		buyStatus.Text = robux and label or "Naciśnij KUP aby kupić"
 		buyStatus.TextColor3 = C_DIMTEXT
-		buyBtn.Text = (deck.CostType == "Robux") and ("KUP — " .. (deck.RobuxPrice or "?") .. " R$") or "KUP"
-		buyBtn.BackgroundColor3 = (deck.CostType == "Robux") and C_GOLD or C_ACCENT_GREEN
+		buyBtn.Text = robux and ("KUP — " .. (deck.RobuxPrice or "?") .. " R$") or "KUP"
+		buyBtn.BackgroundColor3 = robux and C_GOLD or C_ACCENT_GREEN
 		buyBtn.TextColor3 = C_HEADER
 		buyBtn.Active = true
 	end
@@ -268,8 +275,8 @@ menuGui.Parent = playerGui
 local hoverBtn = Instance.new("ImageButton")
 hoverBtn.Name = "HoverboardButton"
 hoverBtn.AnchorPoint = Vector2.new(0, 0.5)
-hoverBtn.Position = UDim2.new(0, 16, 0.35, 110)
-hoverBtn.Size = UDim2.fromOffset(90, 90)
+hoverBtn.Position = UDim2.new(0, 16, 0.35, 158)
+hoverBtn.Size = UDim2.fromOffset(135, 135)
 hoverBtn.BackgroundTransparency = 1
 hoverBtn.BorderSizePixel = 0
 hoverBtn.Image = Config.DeckMenuIconId

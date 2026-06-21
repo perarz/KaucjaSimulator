@@ -159,6 +159,12 @@ GrandpaTurnIn.OnServerEvent:Connect(function(player)
 
 	GrandpaDialog:FireClient(player, getDialogPayload(data))
 	pushState(player)
+
+	-- Story quest: grandpa_done
+	pcall(function()
+		local sqs = require(script.Parent.StoryQuestService)
+		sqs.AddProgress(player, "grandpa_done", 1)
+	end)
 end)
 
 -- Public API — używane przez SyrupService w Kroku 2

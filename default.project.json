@@ -73,6 +73,18 @@
         },
         "PvPEntryGuiController": {
           "$path": "src/client/controllers/PvPEntryGuiController.client.luau"
+        },
+        "StoryQuestController": {
+          "$path": "src/client/controllers/StoryQuestController.client.luau"
+        },
+        "MagnetController": {
+          "$path": "src/client/controllers/MagnetController.client.luau"
+        },
+        "ZabkaController": {
+          "$path": "src/client/controllers/ZabkaController.client.luau"
+        },
+        "PetGablotaController": {
+          "$path": "src/client/controllers/PetGablotaController.client.luau"
         }
       }
     },
@@ -102,6 +114,9 @@
       },
       "QuestService": {
         "$path": "src/server/services/QuestService.luau"
+      },
+      "StoryQuestService": {
+        "$path": "src/server/services/StoryQuestService.luau"
       },
       "IntroService": {
         "$path": "src/server/services/IntroService.luau"
@@ -135,6 +150,15 @@
       },
       "BoostShopService": {
         "$path": "src/server/services/BoostShopService.luau"
+      },
+      "MagnetService": {
+        "$path": "src/server/services/MagnetService.luau"
+      },
+      "ZabkaService": {
+        "$path": "src/server/services/ZabkaService.luau"
+      },
+      "PetService": {
+        "$path": "src/server/services/PetService.luau"
       },
       "DeskaService": {
         "$path": "src/server/services/DeskaService.server.luau"
@@ -209,7 +233,24 @@
         "OpenPvPEntry":        { "$className": "RemoteEvent" },
         "ClosePvPEntry":       { "$className": "RemoteEvent" },
         "BuyPvPEntry":         { "$className": "RemoteEvent" },
-        "PvPEntryResult":      { "$className": "RemoteEvent" }
+        "PvPEntryResult":      { "$className": "RemoteEvent" },
+        "StoryQuestInit":      { "$className": "RemoteEvent" },
+        "StoryQuestUpdate":    { "$className": "RemoteEvent" },
+        "StoryQuestComplete":  { "$className": "RemoteEvent" },
+        "StoryQuestClaim":     { "$className": "RemoteEvent" },
+        "UseMagnet":           { "$className": "RemoteEvent" },
+        "MagnetStatusUpdate":  { "$className": "RemoteEvent" },
+        "OpenZabka":           { "$className": "RemoteEvent" },
+        "BuyZabkaMagnet":      { "$className": "RemoteEvent" },
+        "BuyZabkaMagnetResult":{ "$className": "RemoteEvent" },
+        "OpenPetGablota":      { "$className": "RemoteEvent" },
+        "BuyEggOpen":          { "$className": "RemoteEvent" },
+        "PetRouletteResult":   { "$className": "RemoteEvent" },
+        "EquipPet":            { "$className": "RemoteEvent" },
+        "UnequipPet":          { "$className": "RemoteEvent" },
+        "DiscardPet":          { "$className": "RemoteEvent" },
+        "PetStatusUpdate":     { "$className": "RemoteEvent" },
+        "PromptPetGamepassBuy":{ "$className": "RemoteEvent" }
       }
     },
 

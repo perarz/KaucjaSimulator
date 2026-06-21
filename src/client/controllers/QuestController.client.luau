@@ -23,6 +23,9 @@ local QuestUpdate       = Events:WaitForChild("QuestUpdate")
 local ClaimQuest        = Events:WaitForChild("ClaimQuest")
 local ClaimQuestResult  = Events:WaitForChild("ClaimQuestResult")
 local GrandpaState      = Events:WaitForChild("GrandpaState")
+local StoryQuestInit    = Events:WaitForChild("StoryQuestInit")
+local StoryQuestUpdate  = Events:WaitForChild("StoryQuestUpdate")
+local StoryQuestClaim   = Events:WaitForChild("StoryQuestClaim")
 
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
@@ -40,6 +43,7 @@ local C_DIMTEXT  = Color3.fromRGB(175, 175, 175)
 local C_GREEN    = Color3.fromRGB(170, 221, 102)
 local C_BLUE     = Color3.fromRGB(88, 166, 255)
 local C_SYRUP    = Color3.fromRGB(200, 130, 60)  -- akcent dla questa dziadka
+local C_GOLD     = Color3.fromRGB(239, 199, 95)  -- akcent dla story questa
 local X_RED      = Color3.fromRGB(220, 70, 70)
 local X_RED_HOVER = Color3.fromRGB(255, 110, 110)
 
@@ -58,6 +62,18 @@ local grandpaQuest = {
 	hasSyrup = false,
 	desc     = "Znajdź syrop klonowy dziadka w parku",
 	reward   = 1000,
+}
+
+-- Stan questa fabularnego (z RemoteEvent StoryQuest*)
+local storyQuest = {
+	active       = false,
+	idx          = 1,
+	total        = 0,
+	desc         = "",
+	progress     = 0,
+	target       = 1,
+	reward       = 0,
+	readyToClaim = false,
 }
 
 local isOpen = false
@@ -108,15 +124,23 @@ overlay.AutoButtonColor        = false
 overlay.ZIndex                 = 1
 overlay.Parent                 = gui
 
-local panel = Instance.new("Frame")
-panel.Size                  = UDim2.fromOffset(PANEL_W, PANEL_H)
+-- Maksymalna widoczna wysokość panelu — content menu MenuController ma ~610px,
+-- zostawiamy bufor 30px. Powyżej tego włącza się scroll.
+local MAX_VISIBLE_H = 580
+
+local panel = Instance.new("ScrollingFrame")
+panel.Size                  = UDim2.fromOffset(PANEL_W, MAX_VISIBLE_H)
 panel.AnchorPoint           = Vector2.new(0.5, 0.5)
 panel.Position              = UDim2.new(0.5, 0, 0.55, 0)
--- Bez własnej ramki/tła — content siedzi w zakładce MenuController.
 panel.BackgroundTransparency = 1
 panel.BorderSizePixel       = 0
-panel.ClipsDescendants      = false
+panel.ClipsDescendants      = true
 panel.ZIndex                = 2
+panel.CanvasSize            = UDim2.fromOffset(PANEL_W, PANEL_H)
+panel.ScrollBarThickness    = 6
+panel.ScrollBarImageColor3  = Color3.fromRGB(8, 50, 35)
+panel.ScrollingDirection    = Enum.ScrollingDirection.Y
+panel.AutomaticCanvasSize   = Enum.AutomaticSize.None
 panel.Parent                = gui
 
 -- Header — niewidoczny w nowym UI (zakładka MenuController ma swój pasek)
@@ -233,6 +257,134 @@ grandpaContainer.BackgroundTransparency = 1
 grandpaContainer.BorderSizePixel        = 0
 grandpaContainer.ZIndex                 = 3
 grandpaContainer.Parent                 = panel
+
+-- Sekcja: FABUŁA (story quest)
+local storyLbl = Instance.new("TextLabel")
+storyLbl.Size                   = UDim2.new(1, -PAD * 2, 0, SECTION_LBL_H)
+storyLbl.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD)  -- ustawiane przez relayout
+storyLbl.BackgroundTransparency = 1
+storyLbl.Text                   = "FABUŁA"
+storyLbl.Font                   = FONT
+storyLbl.TextSize               = 16
+storyLbl.TextColor3             = C_GOLD
+storyLbl.TextXAlignment         = Enum.TextXAlignment.Left
+storyLbl.ZIndex                 = 3
+storyLbl.Parent                 = panel
+
+local storyContainer = Instance.new("Frame")
+storyContainer.Size                   = UDim2.new(1, -PAD * 2, 0, CARD_H)
+storyContainer.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP)
+storyContainer.BackgroundTransparency = 1
+storyContainer.BorderSizePixel        = 0
+storyContainer.ZIndex                 = 3
+storyContainer.Parent                 = panel
+
+-- Pojedyncza karta story (struktura jak grandpa card, bez claim)
+local storyCard = {
+	frame       = Instance.new("Frame"),
+	descLbl     = nil :: TextLabel?,
+	progBarBG   = nil :: Frame?,
+	progBarFill = nil :: Frame?,
+	progLbl     = nil :: TextLabel?,
+	rewardLbl   = nil :: TextLabel?,
+	statusLbl   = nil :: TextLabel?,
+}
+
+do
+	local frame = storyCard.frame
+	frame.Size = UDim2.new(1, 0, 0, CARD_H)
+	frame.Position = UDim2.fromOffset(0, 0)
+	frame.BackgroundColor3 = C_CARD
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 3
+	frame.Parent = storyContainer
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = frame
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = frame
+
+	local descLbl = Instance.new("TextLabel")
+	descLbl.Size                   = UDim2.new(1, -224, 0, 28)
+	descLbl.Position               = UDim2.fromOffset(16, 14)
+	descLbl.BackgroundTransparency = 1
+	descLbl.Font                   = FONT
+	descLbl.TextSize               = 16
+	descLbl.TextColor3             = C_WHITE
+	descLbl.TextXAlignment         = Enum.TextXAlignment.Left
+	descLbl.TextYAlignment         = Enum.TextYAlignment.Top
+	descLbl.TextWrapped            = true
+	descLbl.Text                   = ""
+	descLbl.ZIndex                 = 4
+	descLbl.Parent                 = frame
+	storyCard.descLbl = descLbl
+
+	local progBarBG = Instance.new("Frame")
+	progBarBG.Size = UDim2.new(1, -224, 0, 14)
+	progBarBG.Position = UDim2.new(0, 16, 1, -34)
+	progBarBG.BackgroundColor3 = Color3.fromRGB(8, 50, 35)
+	progBarBG.BorderSizePixel = 0
+	progBarBG.ZIndex = 4
+	progBarBG.Parent = frame
+	local pbc = Instance.new("UICorner"); pbc.CornerRadius = UDim.new(0, 4); pbc.Parent = progBarBG
+	storyCard.progBarBG = progBarBG
+
+	local progBarFill = Instance.new("Frame")
+	progBarFill.Size = UDim2.fromScale(0, 1)
+	progBarFill.BackgroundColor3 = C_GOLD
+	progBarFill.BorderSizePixel = 0
+	progBarFill.ZIndex = 5
+	progBarFill.Parent = progBarBG
+	local pfc = Instance.new("UICorner"); pfc.CornerRadius = UDim.new(0, 4); pfc.Parent = progBarFill
+	storyCard.progBarFill = progBarFill
+
+	local progLbl = Instance.new("TextLabel")
+	progLbl.Size = UDim2.new(1, 0, 1, 0)
+	progLbl.BackgroundTransparency = 1
+	progLbl.Font = FONT; progLbl.TextSize = 11
+	progLbl.TextColor3 = C_WHITE
+	progLbl.TextStrokeColor3 = Color3.new(0, 0, 0); progLbl.TextStrokeTransparency = 0.4
+	progLbl.Text = "0 / 0"
+	progLbl.ZIndex = 6
+	progLbl.Parent = progBarBG
+	storyCard.progLbl = progLbl
+
+	local rewardLbl = Instance.new("TextLabel")
+	rewardLbl.Size = UDim2.fromOffset(190, 28)
+	rewardLbl.AnchorPoint = Vector2.new(1, 0)
+	rewardLbl.Position = UDim2.new(1, -210, 0, 14)
+	rewardLbl.BackgroundTransparency = 1
+	rewardLbl.Font = FONT; rewardLbl.TextSize = 16
+	rewardLbl.TextColor3 = C_GOLD
+	rewardLbl.TextXAlignment = Enum.TextXAlignment.Right
+	rewardLbl.Text = "+0 zł"
+	rewardLbl.ZIndex = 4
+	rewardLbl.Parent = frame
+	storyCard.rewardLbl = rewardLbl
+
+	-- Status/Claim: TextButton (klik = ODBIERZ gdy gotowy)
+	local statusLbl = Instance.new("TextButton")
+	statusLbl.Size = UDim2.fromOffset(190, 50)
+	statusLbl.AnchorPoint = Vector2.new(1, 1)
+	statusLbl.Position = UDim2.new(1, -14, 1, -14)
+	statusLbl.BackgroundColor3 = C_BG; statusLbl.BorderSizePixel = 0
+	statusLbl.Text = "W TRAKCIE"
+	statusLbl.TextSize = 15
+	statusLbl.Font = FONT
+	statusLbl.TextColor3 = C_DIMTEXT
+	statusLbl.AutoButtonColor = false
+	statusLbl.ZIndex = 4
+	statusLbl.Parent = frame
+	local stC = Instance.new("UICorner"); stC.CornerRadius = UDim.new(0, 8); stC.Parent = statusLbl
+	local stS = Instance.new("UIStroke"); stS.Color = C_BORDER; stS.Thickness = 0; stS.Parent = statusLbl
+	statusLbl.MouseButton1Click:Connect(function()
+		-- Klikalny tylko gdy gotowy do odbioru (logika w renderStory)
+		if storyQuest.readyToClaim then
+			storyQuest.readyToClaim = false  -- prewencja double-fire'a
+			statusLbl.Active = false
+			statusLbl.Text = "..."
+			StoryQuestClaim:FireServer()
+		end
+	end)
+	storyCard.statusLbl = statusLbl
+end
 
 -- Sekcja: ZADANIA DZIENNE
 local dailyLbl = Instance.new("TextLabel")
@@ -518,19 +670,45 @@ do
 	grandpaCard.emptyLbl = emptyLbl
 end
 
+local STORY_SECTION_H   = SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP
 local DZIADEK_SECTION_H = SECTION_LBL_H + SECTION_GAP + CARD_H + CARD_GAP
 
-local function relayoutForGrandpaVisibility(showSection: boolean)
-	local extra = showSection and DZIADEK_SECTION_H or 0
-	-- DZIADEK na górze (gdy widoczna)
-	grandpaLbl.Visible       = showSection
-	grandpaContainer.Visible = showSection
-	-- DAILY label + countdown + cards przesunięte gdy DZIADEK ukryta
-	dailyLbl.Position    = UDim2.fromOffset(PAD,           HEADER_H + PAD + extra)
-	refreshLbl.Position  = UDim2.new(1, -PAD, 0,           HEADER_H + PAD + extra)
-	cardsContainer.Position = UDim2.fromOffset(PAD,        HEADER_H + PAD + SECTION_LBL_H + SECTION_GAP + extra)
-	-- Skróć panel gdy DZIADEK ukryta
-	panel.Size = UDim2.fromOffset(PANEL_W, PANEL_H - DZIADEK_SECTION_H + extra)
+-- Kolejność sekcji od góry: FABUŁA (cond) → DZIADEK (cond) → ZADANIA DZIENNE (always)
+local function relayoutSections(showStory: boolean, showGrandpa: boolean)
+	local y = HEADER_H + PAD
+
+	storyLbl.Visible       = showStory
+	storyContainer.Visible = showStory
+	if showStory then
+		storyLbl.Position       = UDim2.fromOffset(PAD, y)
+		storyContainer.Position = UDim2.fromOffset(PAD, y + SECTION_LBL_H + SECTION_GAP)
+		y += STORY_SECTION_H
+	end
+
+	grandpaLbl.Visible       = showGrandpa
+	grandpaContainer.Visible = showGrandpa
+	if showGrandpa then
+		grandpaLbl.Position       = UDim2.fromOffset(PAD, y)
+		grandpaContainer.Position = UDim2.fromOffset(PAD, y + SECTION_LBL_H + SECTION_GAP)
+		y += DZIADEK_SECTION_H
+	end
+
+	dailyLbl.Position       = UDim2.fromOffset(PAD,  y)
+	refreshLbl.Position     = UDim2.new(1, -PAD, 0,  y)
+	cardsContainer.Position = UDim2.fromOffset(PAD,  y + SECTION_LBL_H + SECTION_GAP)
+
+	-- Bazowy panel = PANEL_H - DZIADEK (bo PANEL_H zakłada grandpa visible). Dodajemy sekcje widoczne.
+	local basePanelH = PANEL_H - DZIADEK_SECTION_H
+	local extraH     = (showStory and STORY_SECTION_H or 0) + (showGrandpa and DZIADEK_SECTION_H or 0)
+	local fullH      = basePanelH + extraH
+	-- CanvasSize = pełna zawartość. Size panelu (visible viewport) zostaje stała.
+	-- Gdy fullH > MAX_VISIBLE_H, ScrollingFrame automatycznie pokaże scrollbar.
+	panel.CanvasSize = UDim2.fromOffset(PANEL_W, fullH)
+end
+
+-- Stary alias dla istniejącego renderGrandpa
+local function relayoutForGrandpaVisibility(showGrandpa: boolean)
+	relayoutSections(storyQuest.active, showGrandpa)
 end
 
 local function renderGrandpa()
@@ -538,7 +716,7 @@ local function renderGrandpa()
 	local active = (g.state == "active")
 	-- Pokazuj sekcję DZIADEK tylko gdy quest jest aktywny (state == "active").
 	-- "none" i "done" → cała sekcja ukryta, daily questy zajmują miejsce.
-	relayoutForGrandpaVisibility(active)
+	relayoutSections(storyQuest.active, active)
 	if not active then return end
 
 	-- Quest aktywny → pokaż content karty
@@ -748,6 +926,55 @@ GrandpaState.OnClientEvent:Connect(function(payload)
 	renderGrandpa()
 end)
 
--- Initial render — empty state przy starcie klienta, prawdziwe dane po QuestInit
+-- ── Story quest render + listeners ────────────────────────────────────────
+local function renderStory()
+	if not storyQuest.active then
+		relayoutSections(false, grandpaQuest.state == "active")
+		return
+	end
+	storyCard.descLbl.Text     = storyQuest.desc
+	storyCard.rewardLbl.Text   = string.format("+%d zł", storyQuest.reward or 0)
+	local target = math.max(1, storyQuest.target or 1)
+	storyCard.progBarFill.Size = UDim2.fromScale(math.clamp(storyQuest.progress / target, 0, 1), 1)
+	storyCard.progLbl.Text     = string.format("%d / %d", storyQuest.progress, target)
+	-- Przełączanie status/claim
+	if storyQuest.readyToClaim then
+		storyCard.statusLbl.Text             = "ODBIERZ"
+		storyCard.statusLbl.BackgroundColor3 = C_GREEN
+		storyCard.statusLbl.TextColor3       = Color3.new(0, 0, 0)
+		storyCard.statusLbl.Active           = true
+		storyCard.progBarFill.BackgroundColor3 = C_GREEN
+	else
+		storyCard.statusLbl.Text             = string.format("%d/%d", storyQuest.idx, storyQuest.total)
+		storyCard.statusLbl.BackgroundColor3 = C_BG
+		storyCard.statusLbl.TextColor3       = C_GOLD
+		storyCard.statusLbl.Active           = false
+		storyCard.progBarFill.BackgroundColor3 = C_GOLD
+	end
+	relayoutSections(true, grandpaQuest.state == "active")
+end
+
+local function applyStoryPayload(snap)
+	if not snap then return end
+	if snap.done then
+		storyQuest.active = false
+	else
+		storyQuest.active       = true
+		storyQuest.idx          = snap.idx or 1
+		storyQuest.total        = snap.total or 1
+		storyQuest.desc         = snap.desc or ""
+		storyQuest.progress     = snap.progress or 0
+		storyQuest.target       = snap.target or 1
+		storyQuest.reward       = snap.reward or 0
+		storyQuest.readyToClaim = snap.readyToClaim == true
+	end
+	renderStory()
+end
+
+StoryQuestInit.OnClientEvent:Connect(applyStoryPayload)
+StoryQuestUpdate.OnClientEvent:Connect(applyStoryPayload)
+
+-- Initial render — empty state przy starcie klienta, prawdziwe dane po QuestInit/StoryQuestInit
 renderGrandpa()
+renderStory()
 renderCards()

@@ -331,8 +331,31 @@ end)
 local currentCapacity = 10
 local currentBankCap  = 10
 local currentHasSyrup = false
+-- Magnes w EQ — każdy zajmuje 1 slot pojemności (zmniejsza efektywny cap dla butelek)
+local function currentMagnetCount(): number
+	local m = _G["__magnetState"]
+	return (m and tonumber(m.count)) or 0
+end
+-- Pety w EQ — każdy zajmuje 1 slot (do Kroku 3 nie transferują się do banku, więc po stronie EQ
+-- pozostają i blokują miejsce dla butelek).
+local function currentPetCount(): number
+	local p = _G["__petsState"]
+	return (p and p.pets and #p.pets) or 0
+end
 
-type SlotData = { rarity: string, count: number }
+-- Slot może być butelką (rarity + count) ALBO petem (pet = {id, rarity, class}).
+-- Petowy slot ma count = 1 i pole `pet` ustawione. Bottle slot ma `pet` = nil.
+type SlotData = { rarity: string, count: number, pet: { id: string, rarity: string, class: string }? }
+
+local function isPetSlot(s: SlotData?): boolean
+	return s ~= nil and s.pet ~= nil
+end
+
+-- Mapowanie rzadkości peta → kolor (z Config.Pets, fallback C_WHITE)
+local function petColor(rarity: string): Color3
+	local rcfg = Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[rarity]
+	return (rcfg and rcfg.color) or Color3.fromRGB(255, 255, 255)
+end
 
 local bankSlotArr: { [number]: SlotData? } = {}
 local invSlotArr:  { [number]: SlotData? } = {}
@@ -374,7 +397,19 @@ local function mgGrs(p: string)   return p == "bank" and bankMytGrads or invMytG
 local function renderSlot(panel: string, i: number)
 	local sf = frms(panel)[i]; if not sf then return end
 	local data = slotArr(panel)[i]
-	if data then
+	if data and isPetSlot(data) then
+		-- PET — kolor per rzadkość, nazwa = klasa, count ukryty
+		local col = petColor(data.pet.rarity)
+		sf.BackgroundColor3         = darken(col, 0.55)
+		stks(panel)[i].Color        = col
+		stks(panel)[i].Thickness    = 3
+		nmLbls(panel)[i].Text       = data.pet.class  -- "Sprinter" / "Tank"
+		nmLbls(panel)[i].TextColor3 = col
+		ctLbls(panel)[i].Text       = (data.pet.class == "Tank") and "🛡️" or "💨"
+		ctLbls(panel)[i].TextColor3 = C_WHITE
+		lgGs(panel)[i].Visible      = false
+		mgGs(panel)[i].Visible      = false
+	elseif data then
 		sf.BackgroundColor3         = darken(RARITY_COLORS[data.rarity], 0.45)
 		stks(panel)[i].Color        = RARITY_COLORS[data.rarity]
 		stks(panel)[i].Thickness    = 3
@@ -396,15 +431,37 @@ local function renderSlot(panel: string, i: number)
 end
 
 local function bankTotalCount(): number
+	-- Liczymy pety i butelki — każdy slot = 1 lub count (dla bottles)
 	local n = 0
-	for _, s in pairs(bankSlotArr) do if s then n += s.count end end
+	for _, s in pairs(bankSlotArr) do
+		if s then
+			if isPetSlot(s) then n += 1 else n += s.count end
+		end
+	end
 	return n
 end
 
 local function invTotalCount(): number
+	-- Bottle slots: count; pet slots: 1.
+	-- Syrop/magnes są poza widokiem bank UI (zostają w głównym EQ).
 	local n = 0
-	for _, s in pairs(invSlotArr) do if s then n += s.count end end
-	if currentHasSyrup then n += 1 end  -- syrop też zajmuje slot plecaka
+	local petsInBankPanel = 0
+	for _, s in pairs(invSlotArr) do
+		if s then
+			if isPetSlot(s) then
+				n += 1
+				petsInBankPanel += 1
+			else
+				n += s.count
+			end
+		end
+	end
+	if currentHasSyrup then n += 1 end
+	n += currentMagnetCount()
+	-- currentPetCount() liczy WSZYSTKIE pety gracza (z _G.__petsState); ale niektóre mogą
+	-- już być w invSlotArr (widzialne w bank UI). Żeby nie liczyć podwójnie, dodajemy
+	-- tylko te NIE w panelu EQ banku. Ale w naszym modelu pety w EQ ZAWSZE są w invSlotArr
+	-- po BankInit. Tu zostawiamy +0 — petsInBankPanel pokrywa wszystkie pety w EQ.
 	return n
 end
 
@@ -485,11 +542,23 @@ local function smartResyncInv(newContents: { [string]: number }, cap: number)
 end
 
 local function arrayToContents(arr: { [number]: SlotData? }, cap: number): { [string]: number }
+	-- Tylko butelki (pety pomijamy)
 	local c = { Zwykla = 0, Rzadka = 0, Epicka = 0, Legendarna = 0, Mityczny = 0 }
 	for i = 1, cap do
-		local s = arr[i]; if s then c[s.rarity] = (c[s.rarity] or 0) + s.count end
+		local s = arr[i]
+		if s and not isPetSlot(s) then c[s.rarity] = (c[s.rarity] or 0) + s.count end
 	end
 	return c
+end
+
+-- Wyciąga listę UUIDów petów z arr
+local function arrayToPetIds(arr: { [number]: SlotData? }, cap: number): { string }
+	local ids = {}
+	for i = 1, cap do
+		local s = arr[i]
+		if s and isPetSlot(s) then table.insert(ids, s.pet.id) end
+	end
+	return ids
 end
 
 -- ── Budowanie ramek slotów ────────────────────────────────────────────────────
@@ -635,13 +704,16 @@ end
 
 -- ── Drag & Drop ───────────────────────────────────────────────────────────────
 local function buildGhost(data: SlotData): Frame
-	local c = RARITY_COLORS[data.rarity]
+	local isPet = isPetSlot(data)
+	local c = isPet and petColor(data.pet.rarity) or RARITY_COLORS[data.rarity]
 	local g = mkFrame(bankGui, UDim2.fromOffset(SLOT_B, SLOT_B), ghostPos(), darken(c, 0.3), 0.08)
 	g.ZIndex = 100; g.Active = false; mkCorner(g, 10); mkStroke(g, c, 2)
-	local nl = mkLabel(g, UDim2.new(1,-6,0,14), UDim2.new(0,5,0,4), data.rarity, 10, C_WHITE)
+	local nameText = isPet and data.pet.class or data.rarity
+	local nl = mkLabel(g, UDim2.new(1,-6,0,14), UDim2.new(0,5,0,4), nameText, 10, C_WHITE)
 	nl.ZIndex = 101
+	local cntText = isPet and ((data.pet.class == "Tank") and "🛡️" or "💨") or tostring(data.count)
 	local cl = mkLabel(g, UDim2.new(1,-4,0,22), UDim2.new(0,0,1,-26),
-		tostring(data.count), 18, C_WHITE, Enum.TextXAlignment.Right)
+		cntText, 18, C_WHITE, Enum.TextXAlignment.Right)
 	cl.TextStrokeColor3 = Color3.new(0,0,0); cl.TextStrokeTransparency = 0.3; cl.ZIndex = 101
 	return g
 end
@@ -660,22 +732,36 @@ local function showCapacityError(msg: string?)
 	end)
 end
 
+-- Helper: ile slotów zajmuje (1 dla peta, count dla butelek)
+local function slotSize(s: SlotData?): number
+	if not s then return 0 end
+	if isPetSlot(s) then return 1 end
+	return s.count
+end
+
 local function performTransfer(fromP: string, toP: string, fromIdx: number, toIdx: number)
 	local fromArr = slotArr(fromP); local toArr = slotArr(toP)
 	local src = fromArr[fromIdx]; if not src then return end
 	local tgt = toArr[toIdx]
 
+	-- Czy to merge butelek (ta sama rzadkość, oba NIE pety) — pety nigdy nie merge'ują
+	local isBottleMerge = src and tgt
+		and not isPetSlot(src) and not isPetSlot(tgt)
+		and src.rarity == tgt.rarity
+
 	local curInvTotal = 0
-	for _, s in pairs(invSlotArr) do if s then curInvTotal += s.count end end
-	local invCap = currentCapacity - (currentHasSyrup and 1 or 0)
+	for _, s in pairs(invSlotArr) do curInvTotal += slotSize(s) end
+	local invCap = currentCapacity - (currentHasSyrup and 1 or 0) - currentMagnetCount()
 
 	local function invTotalAfter(): number
 		if fromP == "inv" and toP == "bank" then
-			if tgt and tgt.rarity ~= src.rarity then return curInvTotal - src.count + tgt.count
-			else return curInvTotal - src.count end
+			if isBottleMerge then return curInvTotal - slotSize(src)
+			elseif tgt then return curInvTotal - slotSize(src) + slotSize(tgt)
+			else return curInvTotal - slotSize(src) end
 		elseif fromP == "bank" and toP == "inv" then
-			if tgt and tgt.rarity ~= src.rarity then return curInvTotal - tgt.count + src.count
-			else return curInvTotal + src.count end
+			if isBottleMerge then return curInvTotal + slotSize(src)
+			elseif tgt then return curInvTotal - slotSize(tgt) + slotSize(src)
+			else return curInvTotal + slotSize(src) end
 		end
 		return curInvTotal
 	end
@@ -683,10 +769,10 @@ local function performTransfer(fromP: string, toP: string, fromIdx: number, toId
 	if invTotalAfter() > invCap then showCapacityError(); return end
 
 	if tgt then
-		if tgt.rarity == src.rarity then
+		if isBottleMerge then
 			tgt.count += src.count; fromArr[fromIdx] = nil
 		else
-			toArr[toIdx] = src; fromArr[fromIdx] = tgt
+			toArr[toIdx] = src; fromArr[fromIdx] = tgt  -- swap (też pet ↔ pet, pet ↔ bottle)
 		end
 	else
 		toArr[toIdx] = src; fromArr[fromIdx] = nil
@@ -712,7 +798,7 @@ splitSlot = function(panel: string, idx: number)
 	if drag.active then return end
 	local arr = slotArr(panel)
 	local src = arr[idx]
-	if not src or src.count < 2 then return end
+	if not src or isPetSlot(src) or src.count < 2 then return end  -- petów nie dzielimy
 	local half = math.floor(src.count / 2)
 	if half < 1 then return end
 	-- Zmniejsz źródło, zostaw widoczne — drag pokaże ghost z połową
@@ -766,7 +852,10 @@ local function endSplitDrag()
 			if toP == "inv" and fromP ~= "inv" then
 				local invTotal = 0
 				for _, s in pairs(invSlotArr) do if s then invTotal += s.count end end
-				local invCap = currentCapacity - (currentHasSyrup and 1 or 0)
+				-- invCap = pojemność dostępna dla zawartości panelu EQ (butelki + pety w invSlotArr).
+	-- Syrop i magnes są poza widokiem bank UI, więc je odejmujemy. Pety NIE odejmujemy
+	-- — są częścią invSlotArr, więc liczą się w invTotal po drugiej stronie checka.
+	local invCap = currentCapacity - (currentHasSyrup and 1 or 0) - currentMagnetCount()
 				if invTotal + splitN > invCap then
 					showCapacityError("ZA MAŁO MIEJSCA W PLECAKU!")
 					restoreToSource()
@@ -861,21 +950,25 @@ local TW_CLOSE = TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirectio
 -- Helper: zapisz aktualny layout invSlotArr do shared inventory layout (CollectController) — Z POZYCJAMI
 local function syncInvLayoutToShared()
 	if not _G["__inventorySetLayout"] then return end
+	-- Filtrujemy pety — CollectController syncuje je z _G.__petsState po PetStatusUpdate.
 	local layout = {}
 	for i = 1, SLOT_COUNT_B do
-		if invSlotArr[i] then
-			layout[i] = { rarity = invSlotArr[i].rarity, count = invSlotArr[i].count }
+		local s = invSlotArr[i]
+		if s and not isPetSlot(s) then
+			layout[i] = { rarity = s.rarity, count = s.count }
 		end
 	end
 	_G["__inventorySetLayout"](layout)
 end
 
 -- Cache split layout banku w session (przeżywa close → open)
+-- Filtrujemy pety — ich pozycje pochodzą z serwera (BankInit.bankPets).
 local function saveBankLayoutToCache()
 	local cache = {}
 	for i = 1, SLOT_COUNT_B do
-		if bankSlotArr[i] then
-			cache[i] = { rarity = bankSlotArr[i].rarity, count = bankSlotArr[i].count }
+		local s = bankSlotArr[i]
+		if s and not isPetSlot(s) then
+			cache[i] = { rarity = s.rarity, count = s.count }
 		end
 	end
 	_G["__bankLayoutCache"] = cache
@@ -927,8 +1020,15 @@ end)
 confirmBtn.MouseButton1Click:Connect(function()
 	local newBp = arrayToContents(invSlotArr,  SLOT_COUNT_B)
 	local newBk = arrayToContents(bankSlotArr, SLOT_COUNT_B)
-	-- Wyślij jako deposit (serwer sam oblicza co się zmieniło — conservation check)
-	BankDeposit:FireServer({ newBackpackContents = newBp, newBankContents = newBk })
+	local newEqPets   = arrayToPetIds(invSlotArr,  SLOT_COUNT_B)
+	local newBankPets = arrayToPetIds(bankSlotArr, SLOT_COUNT_B)
+	-- Wyślij jako deposit (serwer waliduje conservation butelek + petów)
+	BankDeposit:FireServer({
+		newBackpackContents = newBp,
+		newBankContents     = newBk,
+		newEqPetIds         = newEqPets,
+		newBankPetIds       = newBankPets,
+	})
 	confirmBtn.Text             = "ZAPISYWANIE..."
 	confirmBtn.BackgroundColor3 = Color3.fromRGB(20, 80, 40)
 end)
@@ -1021,6 +1121,17 @@ BankInit.OnClientEvent:Connect(function(data)
 			end
 		end
 	end
+	-- Dodaj pety z banku (po butelkach) — wypełniaj pierwsze wolne sloty
+	if type(data.bankPets) == "table" then
+		for _, pet in ipairs(data.bankPets) do
+			for i = 1, SLOT_COUNT_B do
+				if not bankSlotArr[i] then
+					bankSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }
+					break
+				end
+			end
+		end
+	end
 
 	-- Inv side: PREFER shared layout z głównego ekwipunku (Z POZYCJAMI — 1:1 mapping)
 	for i = 1, SLOT_COUNT_B do invSlotArr[i] = nil end
@@ -1042,6 +1153,17 @@ BankInit.OnClientEvent:Connect(function(data)
 		for _, r in ipairs(RARITY_ORDER) do
 			if (data.backpackContents[r] or 0) > 0 and ii <= SLOT_COUNT_B then
 				invSlotArr[ii] = { rarity = r, count = data.backpackContents[r] }; ii += 1
+			end
+		end
+	end
+	-- Dodaj pety z EQ (po butelkach) — wypełniaj pierwsze wolne sloty
+	if type(data.eqPets) == "table" then
+		for _, pet in ipairs(data.eqPets) do
+			for i = 1, SLOT_COUNT_B do
+				if not invSlotArr[i] then
+					invSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }
+					break
+				end
 			end
 		end
 	end
@@ -1080,8 +1202,28 @@ BankResult.OnClientEvent:Connect(function(result)
 			currentUpgCost  = tonumber(result.bankUpgradeCost) or currentUpgCost
 			upgradeBtn.Text = string.format("ULEPSZ — %d zł", currentUpgCost)
 		end
+		-- Najpierw czyścimy pety z obu arrays (server zwraca świeże listy), potem resync butelek
+		for i = 1, SLOT_COUNT_B do
+			if bankSlotArr[i] and isPetSlot(bankSlotArr[i]) then bankSlotArr[i] = nil end
+			if invSlotArr[i]  and isPetSlot(invSlotArr[i])  then invSlotArr[i]  = nil end
+		end
 		smartResyncArr(bankSlotArr, result.bankContents, SLOT_COUNT_B)
 		smartResyncArr(invSlotArr,  result.backpackContents, SLOT_COUNT_B)
+		-- Re-add pets z server response
+		if type(result.eqPets) == "table" then
+			for _, pet in ipairs(result.eqPets) do
+				for i = 1, SLOT_COUNT_B do
+					if not invSlotArr[i] then invSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }; break end
+				end
+			end
+		end
+		if type(result.bankPets) == "table" then
+			for _, pet in ipairs(result.bankPets) do
+				for i = 1, SLOT_COUNT_B do
+					if not bankSlotArr[i] then bankSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }; break end
+				end
+			end
+		end
 		syncInvLayoutToShared()  -- po confirm zapisz nowy layout do głównego ekwipunku
 		saveBankLayoutToCache()  -- też zaktualizuj cache banku
 		renderAll()

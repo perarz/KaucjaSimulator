@@ -41,10 +41,23 @@ local DEFAULT_DATA = {
 	EquippedDeck  = "",     -- klucz wyposażonej deski ("" = brak; R jeździ najlepszą posiadaną)
 	HatOwned      = false,  -- czapka z HatShop — permanentny zakup, daje +HP +stamina +speed
 	BankCapLevel  = 0,      -- liczba kupionych ulepszeń pojemności skarbca (każde +1 cap, koszt rośnie liniowo)
+	StoryQuestIndex    = 1, -- numer aktualnego questa fabularnego (1-based). > #Config.StoryQuests = wszystkie zrobione
+	StoryQuestProgress = 0, -- postęp w aktualnym quest'cie
 	-- Layout slotów ekwipunku — lista stacków { rarity, count } w kolejności wyświetlania.
 	-- Pozwala zachować splity (np. Zwykla 5+5) między sesjami. Klient wysyła SyncInventoryLayout przy każdej zmianie.
 	-- Walidowane przez serwer: suma per rzadkość MUSI równać się BackpackContents.
 	InventoryStacks = {},
+	-- Magnes (used-item z ekwipunku). MagnetCount = ile sztuk w plecaku.
+	-- Każdy magnes zajmuje 1 slot (NIE stackuje się — 1 slot = 1 sztuka).
+	-- Po użyciu count -= 1, serwer aktywuje 2-min sweep.
+	MagnetCount        = 0,
+	-- Pety: lista posiadanych petów + UUID wyposażonego.
+	-- Każdy pet = { id (UUID string), rarity (string), class (string) }.
+	-- Zajmuje 1 slot pojemności (tak jak butelka). Equipped daje bonusy (money/speed/HP).
+	-- BankPets — pety przechowywane w skarbcu (osobno od EQ, jak butelki w banku).
+	Pets               = {},
+	EquippedPet        = "",
+	BankPets           = {},
 }
 
 local function deepCopy(t: { [string]: any }): { [string]: any }

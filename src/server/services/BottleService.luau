@@ -641,46 +641,58 @@ DropBottle.OnServerEvent:Connect(function(player: Player, rarity: any)
 		backpackContents = data.BackpackContents,
 		backpackCapacity = cap,
 		hasSyrup         = (data.Grandpa and data.Grandpa.hasSyrup) or false,
+		magnetCount      = data.MagnetCount or 0,
 	})
 end)
 
-CollectBottle.OnServerEvent:Connect(function(player: Player, bottlePart: Instance)
-	-- Sanity: musi być Part lub Model w Workspace.Bottles
-	if not bottlePart then return end
-	if not (bottlePart:IsA("BasePart") or bottlePart:IsA("Model")) then return end
-	if bottlePart.Parent ~= bottlesFolder then return end
+-- Wspólna logika zbierania — używana przez CollectBottle handler (klient klika prompt)
+-- ORAZ MagnetService sweep (auto-pickup w promieniu).
+-- opts.skipDistanceCheck — pomija sanity 12-stud check (magnes ma własny radius)
+-- opts.silent — nie wysyła CollectBottleResult przy "full" (magnes nie spamuje błędami)
+-- Zwraca: success (bool), reason (string?), rarity (string?)
+function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, opts: {skipDistanceCheck: boolean?, silent: boolean?}?): (boolean, string?, string?)
+	opts = opts or {}
+	if not bottlePart then return false, "invalid", nil end
+	if not (bottlePart:IsA("BasePart") or bottlePart:IsA("Model")) then return false, "invalid", nil end
+	if bottlePart.Parent ~= bottlesFolder then return false, "invalid", nil end
 
 	local collectedValue = bottlePart:FindFirstChild("Collected") :: BoolValue
 	local rarityValue    = bottlePart:FindFirstChild("Rarity")    :: StringValue
-	if not collectedValue or collectedValue.Value then return end
-	if not rarityValue then return end
+	if not collectedValue or collectedValue.Value then return false, "alreadyCollected", nil end
+	if not rarityValue then return false, "invalid", nil end
 
-	-- Cooldown na własny drop po śmierci: właściciel nie może podnieść przez X sekund
-	-- (anty-spam — żeby nie odzyskał wszystkiego instant po respawnie). Inni gracze mogą od razu.
+	-- Cooldown na własny drop po śmierci — dotyczy obu trybów (ręczny pickup + magnes)
 	local dropOwner   = bottlePart:GetAttribute("DeathDropOwner")
 	local dropExpires = bottlePart:GetAttribute("DeathDropExpires")
 	if dropOwner and dropOwner == player.UserId and dropExpires and os.clock() < dropExpires then
-		CollectBottleResult:FireClient(player, { success = false, reason = "ownDropCooldown" })
-		return
+		if not opts.silent then
+			CollectBottleResult:FireClient(player, { success = false, reason = "ownDropCooldown" })
+		end
+		return false, "ownDropCooldown", nil
 	end
 
-	-- Sanity: odległość gracza
 	local character = player.Character
-	if not character then return end
+	if not character then return false, "noChar", nil end
 	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart
-	if not hrp then return end
-	if (hrp.Position - getBottlePos(bottlePart)).Magnitude > 12 then return end
+	if not hrp then return false, "noChar", nil end
+	if not opts.skipDistanceCheck then
+		if (hrp.Position - getBottlePos(bottlePart)).Magnitude > 12 then return false, "tooFar", nil end
+	end
 
 	local data = PlayerDataService.GetData(player)
 	local capacity = Config.BackpackUpgrades[data.BackpackLevel].Capacity
 
 	local carried = 0
 	for _, count in pairs(data.BackpackContents) do carried += count end
-	if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end  -- syrop zajmuje slot
+	if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end
+	carried += data.MagnetCount or 0   -- magnes = 1 slot
+	carried += #(data.Pets or {})       -- każdy pet = 1 slot
 
 	if carried >= capacity then
-		CollectBottleResult:FireClient(player, { success = false, reason = "full" })
-		return
+		if not opts.silent then
+			CollectBottleResult:FireClient(player, { success = false, reason = "full" })
+		end
+		return false, "full", nil
 	end
 
 	local rarity = rarityValue.Value
@@ -690,8 +702,11 @@ CollectBottle.OnServerEvent:Connect(function(player: Player, bottlePart: Instanc
 	data.BackpackContents[rarity] += 1
 	data.TotalBottles             += 1
 
-	-- Quest progress
 	QuestService.AddProgress(player, "collect", { rarity = rarity, amount = 1 })
+	pcall(function()
+		local sqs = require(script.Parent.StoryQuestService)
+		sqs.AddProgress(player, "collect", 1, { rarity = rarity })
+	end)
 
 	CollectBottleResult:FireClient(player, {
 		success        = true,
@@ -701,6 +716,11 @@ CollectBottle.OnServerEvent:Connect(function(player: Player, bottlePart: Instanc
 	})
 
 	scheduleRespawn()
+	return true, nil, rarity
+end
+
+CollectBottle.OnServerEvent:Connect(function(player: Player, bottlePart: Instance)
+	BottleService.TryCollectBottle(player, bottlePart)
 end)
 
 -- Handler opróżnienia plecaka (butelkomat)
@@ -724,6 +744,13 @@ EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 		multiplier *= BoostShopService.GetEarnMultiplier(player)
 	end
 
+	-- Pet equipped (rzadkość → moneyMul) — multiplikatywnie z resztą.
+	-- Stack: base × skillMul × boostMul × petMul.
+	local okP, PetService = pcall(function() return require(script.Parent.PetService) end)
+	if okP and PetService then
+		multiplier *= PetService.GetMoneyMul(player)
+	end
+
 	local earned = 0
 	local breakdown = {}
 	for rarity, count in pairs(data.BackpackContents) do
@@ -742,6 +769,10 @@ EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 	-- Quest progress: zarobione zł + 1 opróżnienie plecaka
 	QuestService.AddProgress(player, "earn", { amount = math.floor(earned) })
 	QuestService.AddProgress(player, "empty_backpack", { amount = 1 })
+	pcall(function()
+		local sqs = require(script.Parent.StoryQuestService)
+		sqs.AddProgress(player, "deposit", 1)
+	end)
 
 	EmptyBackpackResult:FireClient(player, {
 		success         = true,

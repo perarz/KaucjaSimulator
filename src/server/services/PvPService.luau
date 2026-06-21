@@ -18,6 +18,13 @@ local function fireForceDismount(player: Player)
 	if ev and ev:IsA("BindableEvent") then ev:Fire(player) end
 end
 
+-- Analogicznie pet — chowamy wizualnego peta gdy gracz wejdzie w PVPZone/SAFEZONE.
+-- Efekty (HP/speed/money) nie znikają — tylko model.
+local function fireForceDespawnPet(player: Player)
+	local ev = ServerScriptService:FindFirstChild("ForceDespawnPetEvent")
+	if ev and ev:IsA("BindableEvent") then ev:Fire(player) end
+end
+
 local POLL_INTERVAL  = 0.25
 local SWORD_TAG      = "__PvPSword"
 local GRACE_SECONDS  = 3   -- po wejściu: ForceField + sword.Enabled=false przez 3s
@@ -207,7 +214,7 @@ local function pushOutOfZone(player: Player, zone: BasePart)
 
 	local half      = zone.Size / 2
 	-- Diagonalna przekątna XZ + bufor — gwarantuje wyjście niezależnie od rotacji strefy
-	local pushDist  = math.sqrt(half.X * half.X + half.Z * half.Z) + 6
+	local pushDist  = math.sqrt(half.X * half.X + half.Z * half.Z) + 1
 	local target    = Vector3.new(zonePos.X + nx * pushDist, hrpPos.Y, zonePos.Z + nz * pushDist)
 
 	hrp.CFrame = CFrame.new(target)
@@ -299,6 +306,7 @@ task.spawn(function()
 						inSafeZone[p] = true
 						addSafeZoneFF(p)
 						fireForceDismount(p)  -- zakaz deski w SAFEZONE
+						fireForceDespawnPet(p)  -- pet znika w strefie
 					elseif not inSafe and wasInSafe then
 						inSafeZone[p] = nil
 						removeSafeZoneFF(p)
@@ -316,6 +324,7 @@ task.spawn(function()
 				if should then
 					-- Gracz fizycznie w strefie — w PvPZone deska zabroniona w obu przypadkach
 					fireForceDismount(p)
+					fireForceDespawnPet(p)  -- pet znika w PVP arenie
 					if was then
 						-- Już wewnątrz z mieczem — nic nie robimy (nie sprawdzamy biletu,
 						-- bo został skonsumowany przy wejściu i PvPAccess teraz=false)

@@ -124,6 +124,11 @@ local function tryBuyBackpack(player: Player, targetLevel: number)
 		newCapacity = upgrade.Capacity,
 	})
 
+	pcall(function()
+		local sqs = require(script.Parent.StoryQuestService)
+		sqs.AddProgress(player, "buy_backpack", 1)
+	end)
+
 	-- Przełóż model plecaka na postaci na nowy poziom
 	local ok, BackpackEquipService = pcall(function()
 		return require(ServerScriptService:WaitForChild("BackpackEquipService"))

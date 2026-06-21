@@ -58,10 +58,10 @@ return {
 			key = "VIP",
 			name = "Deska VIP",
 			model = "DeskaVIP",
-			Speed = 68,
-			CostType = "Robux",
-			RobuxProductId = 3605653942,
-			RobuxPrice = 30,
+			Speed = 100,
+			CostType = "Gamepass",          -- Gamepass (one-time unlock), nie Developer Product
+			GamepassId = 1883460051,
+			RobuxPrice = 30,                -- info-only do UI
 			gablota = 4,
 			color = Color3.fromRGB(230, 190, 60),
 		},
@@ -79,6 +79,75 @@ return {
 		BaseCapacity = 10,
 		UpgradeBaseCost = 1000,
 		UpgradeCostStep = 500,
+	},
+
+	-- ── Pety ────────────────────────────────────────────────────────────────
+	-- Struktura jest zaprojektowana tak, by dodanie nowej rzadkości/klasy = 1 wpis w tabeli.
+	-- Każdy pet ma unikalne UUID + (rarity, class). Zajmuje 1 slot w plecaku (jak butelka).
+	-- Equipped (max 1) daje bonusy: money mul × skill mul × boost mul (multyplikatywnie);
+	-- speed/HP addytywnie do bazy (deska/sprint/MaxHealth).
+	Pets = {
+		-- Folder modeli wizualnych (1 model per rzadkość — Sprinter i Tank wyglądają tak samo wizualnie).
+		-- Ścieżka: ReplicatedStorage.Pets.PetyZwykle.PetCommon (itd.)
+		ModelsFolderPath = { "Pets", "PetyZwykle" },
+		ModelNamePrefix  = "Pet",  -- ModelNamePrefix .. rarity → "PetCommon", "PetHuge", ...
+
+		-- Drop weights (suma dowolna — RNG ważona).
+		-- Dodanie nowej rzadkości = wpis w Rarities + odpowiednie bonusy w Classes.bonuses.
+		Rarities = {
+			Common    = { order = 1, weight = 60, moneyMul = 1.1, color = Color3.fromRGB(180, 180, 180), displayName = "Common"    },
+			Rare      = { order = 2, weight = 25, moneyMul = 1.3, color = Color3.fromRGB( 55, 138, 221), displayName = "Rare"      },
+			Epic      = { order = 3, weight = 10, moneyMul = 1.5, color = Color3.fromRGB(127, 119, 221), displayName = "Epic"      },
+			Legendary = { order = 4, weight =  4, moneyMul = 1.7, color = Color3.fromRGB(239, 159,  39), displayName = "Legendary" },
+			Huge      = { order = 5, weight =  1, moneyMul = 2.0, color = Color3.fromRGB(220,  60, 200), displayName = "Huge"      },
+		},
+
+		-- Klasy — każda definuje typ efektu + bonusy per rzadkość.
+		-- Dodanie nowej klasy = wpis tutaj + wpis w ClassWeights.
+		Classes = {
+			Sprinter = {
+				displayName = "Sprinter",
+				effect      = "speed",   -- aplikowane: WalkSpeed (chodzenie/sprint) + deck.Speed na desce
+				bonuses     = { Common = 3,  Rare = 5,  Epic = 10, Legendary = 15, Huge = 25  },
+			},
+			Tank = {
+				displayName = "Tank",
+				effect      = "hp",      -- aplikowane: Humanoid.MaxHealth (+= bonus na CharacterAdded)
+				bonuses     = { Common = 10, Rare = 15, Epic = 25, Legendary = 50, Huge = 100 },
+			},
+		},
+		ClassWeights = { Sprinter = 1, Tank = 1 },  -- 50/50 niezależnie od rzadkości
+
+		-- Koszty
+		SingleEggCost   = 500,            -- 1 jajko = 500 zł zawsze
+		TripleEggCost   = 1500,           -- 3 jajka = 1500 zł (tylko przy gamepass'ie)
+		TripleEggGamepassId = 1884317989, -- gamepass odblokowujący opcję 3-jajek
+
+		-- Hard cap równoczesnych petów wyposażonych (na razie 1)
+		MaxEquipped = 1,
+
+		-- Cooldown server-side przy OpenEgg (anty-spam)
+		OpenCooldownSec = 1.0,
+	},
+
+	-- Magnes — używany item z ekwipunku. Aktywacja na 2 min: serwer co tick zbiera
+	-- wszystkie butelki w promieniu Radius (= 1.5× normalna odległość zbierania = 5 studs).
+	-- Stack zachowuje się jak "1 na slot" — każdy magnes = oddzielny slot, count zawsze 1.
+	Magnet = {
+		DurationSec      = 120,
+		BaseRadius       = 5,    -- normalna ProximityPrompt MaxActivationDistance dla butelek
+		RadiusMultiplier = 1.5,  -- magnes działa w 5 * 1.5 = 7.5 studs
+		TickInterval     = 0.25, -- jak często sweep
+		Name             = "Magnes",
+		Color            = Color3.fromRGB(220, 90, 90),
+		Desc             = "Aktywuj na 2 minuty. Automatycznie zbiera wszystkie butelki wokół ciebie w zwiększonym promieniu (×1.5).",
+	},
+
+	-- Sklep "Żabka" (workspace.blok_zabki.KasjerZabka) — sprzedaje magnesy za zł.
+	Zabka = {
+		MagnetCost = 1000,
+		PromptText = "Sklep Żabka",
+		PromptObject = "Kasjer",
 	},
 
 	-- Sklep czapek (workspace.SKLEP2.Cashier) — jednorazowy zakup permanentnej czapki z bonusami
@@ -140,7 +209,17 @@ return {
 	-- Minimum butelek na obszar — zapewnia że małe party też mają sens.
 	MinBottlesPerArea = 3,
 	-- Twardy limit zabezpieczający (na wypadek olbrzymich obszarów).
-	MaxBottlesHardCap = 400,
+	-- Bumped 400→800 żeby ludzie nie zapychali limitu przez wyrzucanie/death-dropy
+	-- (gdy limit pełny, BottleService nie respawnuje nowych).
+	MaxBottlesHardCap = 800,
+
+	-- Death-drop: po śmierci butelki spadają. Żeby mapa nie zapychała się dropami
+	-- przy aktywnym PvP, gdy łączna liczba dropów na mapie > MaxOnMap, despawn
+	-- najstarszych nadmiarowych jest natychmiastowy (zamiast czekania DespawnSec).
+	DeathDrop = {
+		DespawnSec  = 120,  -- standard: 2 minuty bezczynności
+		MaxOnMap    = 150,  -- powyżej tego liczby drop bottles, prune najstarszych
+	},
 
 	-- Event "Deszcz Legendarek" — przez 15s mapa pełna samych Legendarnych.
 	-- Średnio raz na 5-10 min (losowy interwał).
@@ -228,7 +307,7 @@ return {
 			kind = "collect",
 			rarity = "Zwykla",
 			target = 30,
-			reward = { kind = "zl", amount = 75 },
+			reward = { kind = "zl", amount = 25 },
 		},
 		{
 			id = "collect_rzadka_15",
@@ -236,7 +315,7 @@ return {
 			kind = "collect",
 			rarity = "Rzadka",
 			target = 15,
-			reward = { kind = "zl", amount = 160 },
+			reward = { kind = "zl", amount = 50 },
 		},
 		{
 			id = "collect_epicka_5",
@@ -244,7 +323,7 @@ return {
 			kind = "collect",
 			rarity = "Epicka",
 			target = 5,
-			reward = { kind = "zl", amount = 250 },
+			reward = { kind = "zl", amount = 80 },
 		},
 		{
 			id = "collect_legendarna_1",
@@ -252,49 +331,49 @@ return {
 			kind = "collect",
 			rarity = "Legendarna",
 			target = 1,
-			reward = { kind = "zl", amount = 300 },
+			reward = { kind = "zl", amount = 100 },
 		},
 		{
 			id = "collect_any_75",
 			desc = "Zbierz 75 dowolnych butelek",
 			kind = "collect_any",
 			target = 75,
-			reward = { kind = "zl", amount = 200 },
+			reward = { kind = "zl", amount = 60 },
 		},
 		{
 			id = "earn_500",
 			desc = "Zarób 500 zł w butelkomacie",
 			kind = "earn",
 			target = 500,
-			reward = { kind = "zl", amount = 160 },
+			reward = { kind = "zl", amount = 50 },
 		},
 		{
 			id = "earn_2000",
 			desc = "Zarób 2000 zł w butelkomacie",
 			kind = "earn",
 			target = 2000,
-			reward = { kind = "zl", amount = 300 },
+			reward = { kind = "zl", amount = 100 },
 		},
 		{
 			id = "search_kosz_8",
 			desc = "Przeszukaj 8 koszy",
 			kind = "search_kosz",
 			target = 8,
-			reward = { kind = "zl", amount = 220 },
+			reward = { kind = "zl", amount = 70 },
 		},
 		{
 			id = "empty_backpack_4",
 			desc = "Opróżnij plecak 4 razy",
 			kind = "empty_backpack",
 			target = 4,
-			reward = { kind = "zl", amount = 190 },
+			reward = { kind = "zl", amount = 60 },
 		},
 		{
 			id = "buy_skill_1",
 			desc = "Kup 1 ulepszenie w drzewku",
 			kind = "buy_skill",
 			target = 1,
-			reward = { kind = "zl", amount = 250 },
+			reward = { kind = "zl", amount = 80 },
 		},
 	},
 
@@ -339,5 +418,22 @@ return {
 		KasjerName    = "KasjerPVP",      -- opcjonalny rig, jeśli nie istnieje to OK
 		PromptText    = "Zapłać za wstęp",
 		PromptObject  = "Wstęp do PvP",
+	},
+
+	-- Linia fabularna: chain questów po kolei. Każdy ma kind (typ akcji), target (ile potrzeba),
+	-- reward (zł), desc (tekst w UI). Po wykonaniu jednego automatycznie startuje następny.
+	-- UI: pierwsza inicjacja questa → wielki napis na środku 4s → zmniejsza się i ląduje w rogu (HUD).
+	-- Po wykonaniu: WYKONANO na środku + nagroda, po 2s następny.
+	StoryQuests = {
+		{ id = "collect_10",       desc = "Zbierz 10 butelek",                  kind = "collect_any",    target = 10,  reward = 30  },
+		{ id = "deposit_2",        desc = "Oddaj butelki do butelkomatu 2 razy", kind = "deposit",        target = 2,   reward = 50  },
+		{ id = "buy_2_skills",     desc = "Kup 2 ulepszenia w drzewku (Menu → Umiejętności)", kind = "buy_skill", target = 2, reward = 100 },
+		{ id = "buy_backpack",     desc = "Kup lepszy plecak w sklepie",         kind = "buy_backpack",   target = 1,   reward = 75  },
+		{ id = "buy_deck",         desc = "Kup deskę lvl 1 w gablocie (1000 zł)", kind = "buy_deck",      deckKey = "Default", target = 1, reward = 200 },
+		{ id = "collect_100",      desc = "Zbierz 100 butelek",                 kind = "collect_any",    target = 100, reward = 300 },
+		{ id = "collect_5_legendary", desc = "Zbierz 5 Legendarnych butelek",   kind = "collect_rarity", rarity = "Legendarna", target = 5, reward = 400 },
+		{ id = "grandpa_done",     desc = "Pomóż Dziadkowi z syropem klonowym",  kind = "grandpa_done",   target = 1,   reward = 500 },
+		{ id = "buy_deck_red",     desc = "Kup deskę lvl 2 - Red (3000 zł)",    kind = "buy_deck",       deckKey = "Red",  target = 1, reward = 100 },
+		{ id = "buy_deck_blue",    desc = "Kup deskę lvl 3 - Blue (5000 zł)",   kind = "buy_deck",       deckKey = "Blue", target = 1, reward = 100 },
 	},
 }

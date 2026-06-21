@@ -40,9 +40,11 @@ local C_DIMTEXT      = Color3.fromRGB(175, 175, 175)
 local C_ACCENT_GREEN = Color3.fromRGB(170, 221, 102)
 
 -- Wymiary
--- MENU_W=1380 mieści skill tree wide (1312 px). MobileScaleController zmniejsza na małych ekranach.
-local MENU_W      = 1380
-local MENU_H      = 760
+-- MENU_W=1480 mieści wider EQ (slotsW 760 + gap 24 + detail 480 = 1264 + paddings) + skill tree wide.
+-- MENU_H=880 mieści 4 widoczne rzędy slotów (596) + tabbar + paddings + 28 toplabel + detal.
+-- MobileScaleController zmniejsza na małych ekranach.
+local MENU_W      = 1480
+local MENU_H      = 880
 local TABBAR_H    = 84
 local TABBAR_PAD  = 12         -- padding bubble od krawędzi tab baru
 local CONTENT_PAD = 24
@@ -77,8 +79,8 @@ gui.Parent         = playerGui
 local menuBtn = Instance.new("ImageButton")
 menuBtn.Name                   = "MenuButton"
 menuBtn.AnchorPoint            = Vector2.new(0, 0.5)
-menuBtn.Position               = UDim2.new(0, 16, 0.35, 0)
-menuBtn.Size                   = UDim2.fromOffset(135, 90)
+menuBtn.Position               = UDim2.new(0, -10, 0.35, 0)
+menuBtn.Size                   = UDim2.fromOffset(203, 135)
 menuBtn.BackgroundTransparency = 1
 menuBtn.BorderSizePixel        = 0
 menuBtn.Image                  = "rbxassetid://99401921944526"
@@ -352,6 +354,13 @@ local TI_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirectio
 local function setMenuOpen(open: boolean)
 	if isMenuOpen == open then return end
 	isMenuOpen = open
+
+	-- Lock movement + sygnał dla wallet HUD żeby się schował (poprzez _G.__moveLockCount)
+	if open then
+		if _G["__lockMovement"] then _G["__lockMovement"]() end
+	else
+		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+	end
 
 	if open then
 		panel.Visible   = true

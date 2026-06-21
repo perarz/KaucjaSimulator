@@ -56,11 +56,13 @@ end
 local RARITY_ORDER  = { "Zwykla", "Rzadka", "Epicka", "Legendarna", "Mityczny" }
 local RARITY_COLORS = Config.BottleColors
 
-local SLOT_COUNT    = 15
-local SLOTS_PER_ROW = 5
-local SLOT_SIZE     = 140
-local SLOT_GAP      = 12
-local PAD           = 30
+local SLOT_COUNT       = 60     -- max items w EQ (capacity L4=50 + pety/magnesy/syrop + headroom)
+local SLOTS_PER_ROW    = 5
+local SLOT_SIZE        = 140
+local SLOT_GAP         = 12
+local PAD              = 30
+local VISIBLE_ROWS     = 4      -- ile rzędów widzimy bez scrollowania (reszta scrolluje)
+local SCROLLBAR_THICK  = 8
 
 local C_BG        = Color3.fromRGB(18, 91, 73)
 local C_PANEL     = Color3.fromRGB(24, 110, 90)
@@ -95,6 +97,18 @@ local SYRUP_NAME  = "Syrop Dziadka"
 local SYRUP_COLOR = Config.GrandpaQuest and Config.GrandpaQuest.SyrupLight
 	or Color3.fromRGB(200, 130, 60)
 local SYRUP_DESC  = "Syrop klonowy dziadka. Zanieś go staremu — pewnie da ci coś w zamian."
+
+-- Magnes — używany item, NIE stackuje się (1 sztuka = 1 slot)
+local MAGNET_ID    = "Magnet"
+local MAGNET_NAME  = (Config.Magnet and Config.Magnet.Name) or "Magnes"
+local MAGNET_COLOR = (Config.Magnet and Config.Magnet.Color) or Color3.fromRGB(220, 90, 90)
+local MAGNET_DESC  = (Config.Magnet and Config.Magnet.Desc) or "Aktywuj, by zbierać butelki automatycznie."
+
+-- Pet slot id prefix: "Pet_<uuid>". Każdy pet = osobny slot (NIE stackuje się — unikalny UUID).
+local PET_ID_PREFIX = "Pet_"
+local function isPetSlotId(id: string?): boolean
+	return id ~= nil and string.sub(id, 1, #PET_ID_PREFIX) == PET_ID_PREFIX
+end
 
 local slots: { SlotData? } = {}
 for i = 1, SLOT_COUNT do slots[i] = nil end
@@ -143,6 +157,95 @@ local function addSyrupToInventory()
 		if not slots[i] then
 			slots[i] = { id = SYRUP_ID, color = SYRUP_COLOR, name = SYRUP_NAME, count = 1 }
 			return
+		end
+	end
+end
+
+-- Magnes — każdy egzemplarz to oddzielny slot (count = 1). Synchronizuje liczbę
+-- slotów magnesu z `_G.__magnetState.count` ustawionym przez MagnetController.
+local function countMagnetSlots(): number
+	local n = 0
+	for i = 1, SLOT_COUNT do
+		if slots[i] and slots[i].id == MAGNET_ID then n += 1 end
+	end
+	return n
+end
+
+local function syncMagnetSlots()
+	local state = _G["__magnetState"]
+	local target = (state and tonumber(state.count)) or 0
+	local current = countMagnetSlots()
+	if target == current then return end
+	if target > current then
+		local toAdd = target - current
+		for i = 1, SLOT_COUNT do
+			if toAdd <= 0 then break end
+			if not slots[i] then
+				slots[i] = { id = MAGNET_ID, color = MAGNET_COLOR, name = MAGNET_NAME, count = 1 }
+				toAdd -= 1
+			end
+		end
+	else
+		local toRemove = current - target
+		for i = SLOT_COUNT, 1, -1 do
+			if toRemove <= 0 then break end
+			if slots[i] and slots[i].id == MAGNET_ID then
+				slots[i] = nil
+				toRemove -= 1
+			end
+		end
+	end
+end
+
+-- ── Pety ──────────────────────────────────────────────────────────────────
+-- Każdy pet = osobny slot (id = "Pet_<uuid>"). Sync z _G.__petsState.pets — lista
+-- pełna; usuwamy te których nie ma w state (np. discard/equip-to-bank), dodajemy nowe.
+local function syncPetSlots()
+	local state = _G["__petsState"]
+	local pets = (state and state.pets) or {}
+
+	-- Set istniejących UUID server-side
+	local serverSet: { [string]: any } = {}
+	for _, p in ipairs(pets) do
+		if p and p.id then serverSet[p.id] = p end
+	end
+
+	-- 1) Usuń sloty których pet już nie istnieje
+	for i = 1, SLOT_COUNT do
+		local s = slots[i]
+		if s and isPetSlotId(s.id) then
+			local uuid = string.sub(s.id, #PET_ID_PREFIX + 1)
+			if not serverSet[uuid] then
+				slots[i] = nil
+			end
+		end
+	end
+
+	-- 2) Dodaj nowe pety które jeszcze nie mają slotu
+	local presentSet: { [string]: boolean } = {}
+	for i = 1, SLOT_COUNT do
+		local s = slots[i]
+		if s and isPetSlotId(s.id) then
+			presentSet[string.sub(s.id, #PET_ID_PREFIX + 1)] = true
+		end
+	end
+	for _, p in ipairs(pets) do
+		if not presentSet[p.id] then
+			-- Znajdź pierwszy wolny slot
+			for i = 1, SLOT_COUNT do
+				if not slots[i] then
+					local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[p.rarity]) or {}
+					local color = rcfg.color or C_WHITE
+					slots[i] = {
+						id    = PET_ID_PREFIX .. p.id,
+						color = color,
+						name  = p.class,  -- "Sprinter" / "Tank" wyświetlane na slocie
+						count = 1,
+					}
+					presentSet[p.id] = true
+					break
+				end
+			end
 		end
 	end
 end
@@ -211,6 +314,11 @@ local function syncSlotsFromContents()
 	elseif not hudData.hasSyrup and hasSyrupSlot then
 		clearSyrupFromInventory()
 	end
+
+	-- Magnes — sync slotów do _G.__magnetState.count
+	syncMagnetSlots()
+	-- Pety — sync slotów do _G.__petsState.pets
+	syncPetSlots()
 end
 
 -- ── Helpers UI ────────────────────────────────────────────────────────────
@@ -257,31 +365,100 @@ hudGui.Name = "HUD"; hudGui.ResetOnSpawn = false
 hudGui.IgnoreGuiInset = true; hudGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 hudGui.Parent = playerGui
 
-local walletFrame = mkFrame(hudGui, UDim2.new(0, 360, 0, 87), UDim2.new(0.5, 0, 0, 6), C_BG, 0.05)
-walletFrame.AnchorPoint = Vector2.new(0.5, 0)
-mkStroke(walletFrame, C_BORDER, 6)
-
-local walletLabel = mkLabel(walletFrame, UDim2.new(1, -16, 1, 0), UDim2.new(0, 8, 0, 0),
-	"0 PLN", 48, C_ACCENT_GREEN, Enum.TextXAlignment.Center)
+-- Wallet: używamy zewnętrznego ScreenGui "Money" wstawionego do StarterGui przez usera.
+-- Struktura: PlayerGui.Money.Ramka (ImageLabel) → PLN (TextLabel pod ramką).
+-- Ruszamy tylko Ramka (anchor top-center). PLN zostaje w swoim miejscu względem Ramka.
+-- walletLabel = TextLabel PLN; updateHud() musi tolerować nil (rezolwuje się asynchronicznie).
+local walletLabel: TextLabel = nil :: any
+-- Hookup w task.spawn poniżej, PO definicji formatAmount (bo closure go używa).
 
 local invCountLbl: TextLabel? = nil
 
--- Formatuje kwotę w złotówkach: integer → "10", float → "10.50"
+-- Wstawia przecinki co 3 cyfry w części całkowitej: "100000000" → "100,000,000"
+local function withThousandSeparators(intStr: string): string
+	-- Obsłuż znak minus
+	local sign = ""
+	if string.sub(intStr, 1, 1) == "-" then
+		sign = "-"; intStr = string.sub(intStr, 2)
+	end
+	-- gsub iteracyjnie wstawia przecinek przed każdą grupę 3 cyfr od końca
+	local out = intStr
+	while true do
+		local replaced
+		out, replaced = string.gsub(out, "^(-?%d+)(%d%d%d)", "%1,%2")
+		if replaced == 0 then break end
+	end
+	return sign .. out
+end
+
+-- Formatuje kwotę w złotówkach z przecinkami co 3 cyfry:
+-- integer → "100,000,000"; float → "100,000,000.50"
 -- Tolerancja 0.005 żeby uniknąć fałszywych decimali od liczb zmiennoprzecinkowych
 local function formatAmount(amount: number): string
 	local rounded = math.floor(amount * 100 + 0.5) / 100
+	local intPart = math.floor(math.abs(rounded))
+	local intStr  = withThousandSeparators(tostring(intPart))
+	if rounded < 0 then intStr = "-" .. intStr end
 	if math.abs(rounded - math.floor(rounded)) < 0.005 then
-		return tostring(math.floor(rounded))
+		return intStr
 	end
-	return string.format("%.2f", rounded)
+	-- Część po przecinku — 2 cyfry, bez separatorów
+	local fracPart = math.floor(math.abs(rounded) * 100 + 0.5) % 100
+	return string.format("%s.%02d", intStr, fracPart)
 end
 
 local function updateHud()
-	walletLabel.Text = formatAmount(hudData.zlotowki) .. " PLN"
+	if walletLabel then
+		walletLabel.Text = formatAmount(hudData.zlotowki) .. " PLN"
+	end
 	if invCountLbl then
 		invCountLbl.Text = string.format("%d/%d", hudData.bottlesCarried, hudData.backpackCapacity)
 	end
 end
+
+-- Hookup zewnętrznego Money ScreenGui — wykonywany PO definicji formatAmount/updateHud
+-- (closure capture'uje formatAmount jako upvalue — musi być zadeklarowany przed task.spawn).
+task.spawn(function()
+	local moneyGui = playerGui:WaitForChild("Money", 15)
+	if not moneyGui then
+		warn("[CollectController] Brak PlayerGui.Money (ScreenGui) — wallet HUD nie pokaże złotówek")
+		return
+	end
+	moneyGui.ResetOnSpawn   = false
+	moneyGui.IgnoreGuiInset = true
+	moneyGui.DisplayOrder   = 50
+
+	local ramka = moneyGui:WaitForChild("Ramka", 10)
+	if not ramka then
+		warn("[CollectController] Brak Money.Ramka — wallet HUD nie pokaże złotówek")
+		return
+	end
+	-- Wyśrodkuj ramkę wysoko na górze ekranu — negatywny Y żeby Ramka wjechała wyżej
+	-- (PLN siedzi pod Ramką, więc gdy Ramka idzie w górę, PLN też się podnosi razem z nią)
+	ramka.AnchorPoint = Vector2.new(0.5, 0)
+	ramka.Position    = UDim2.new(0.5, 0, 0, -60)
+
+	local plnLbl = ramka:WaitForChild("PLN", 10)
+	if not plnLbl or not plnLbl:IsA("TextLabel") then
+		warn("[CollectController] Brak Money.Ramka.PLN (TextLabel)")
+		return
+	end
+	walletLabel = plnLbl
+	updateHud()  -- pierwszy sync
+
+	-- Chowanie Money gdy otwarte jakieś modalne UI (menu/sklepy/bank/quest/kosz).
+	-- Wszystkie te kontrolery wołają _G["__lockMovement"]/__unlockMovement
+	-- które zwiększają/zmniejszają _G["__moveLockCount"]. Heartbeat toggluje Enabled.
+	local lastEnabled = true
+	RunService.Heartbeat:Connect(function()
+		local count = tonumber(_G["__moveLockCount"]) or 0
+		local shouldShow = count == 0
+		if shouldShow ~= lastEnabled then
+			moneyGui.Enabled = shouldShow
+			lastEnabled = shouldShow
+		end
+	end)
+end)
 
 local BTN_W, BTN_H, BTN_GAP = 300, 90, 16
 -- 4 przyciski w pionie, wycentrowane na Y=0.5
@@ -400,8 +577,12 @@ local INV_HEADER_H = 52
 local INV_DET_W    = 480      -- szerokość detail panelu po prawej (wider w nowym menu)
 local INV_DET_GAP  = 24       -- gap między slotami a detail panelem
 local panelRows    = math.ceil(SLOT_COUNT / SLOTS_PER_ROW)
-local slotsW       = SLOTS_PER_ROW * SLOT_SIZE + (SLOTS_PER_ROW - 1) * SLOT_GAP
-local slotsH       = panelRows * SLOT_SIZE + (panelRows - 1) * SLOT_GAP
+-- slotsW = pełna szerokość siatki + thickness scrollbara po prawej
+local slotsW       = SLOTS_PER_ROW * SLOT_SIZE + (SLOTS_PER_ROW - 1) * SLOT_GAP + SCROLLBAR_THICK + 4
+-- slotsH = WIDOCZNA wysokość (VISIBLE_ROWS rzędów) — reszta scrolluje
+local slotsH       = VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_GAP
+-- canvasH = pełna wysokość zawartości (wszystkie rzędy) — ScrollingFrame ją używa
+local canvasH      = panelRows * SLOT_SIZE + (panelRows - 1) * SLOT_GAP
 local INV_W_COMPACT = slotsW + PAD * 2
 local INV_W_WIDE    = INV_W_COMPACT + INV_DET_W + PAD       -- detail + prawy padding
 local INV_W        = INV_W_WIDE  -- zachowane dla pozycji detail panelu poniżej
@@ -473,11 +654,18 @@ do
 end
 
 -- sloty po lewej stronie panelu (PAD od lewej), detail panel po prawej
-local slotsContainer = mkFrame(invPanel,
-	UDim2.fromOffset(slotsW, slotsH),
-	UDim2.fromOffset(PAD, INV_HEADER_H + PAD),
-	C_PANEL, 1)
-slotsContainer.ZIndex = 3
+-- ScrollingFrame — VISIBLE_ROWS rzędów widocznych, reszta scrolluje
+local slotsContainer = Instance.new("ScrollingFrame")
+slotsContainer.Size                   = UDim2.fromOffset(slotsW, slotsH)
+slotsContainer.Position               = UDim2.fromOffset(PAD, INV_HEADER_H + PAD)
+slotsContainer.BackgroundTransparency = 1
+slotsContainer.BorderSizePixel        = 0
+slotsContainer.CanvasSize             = UDim2.fromOffset(0, canvasH)
+slotsContainer.ScrollBarThickness     = SCROLLBAR_THICK
+slotsContainer.ScrollBarImageColor3   = C_BORDER
+slotsContainer.ScrollingDirection     = Enum.ScrollingDirection.Y
+slotsContainer.ZIndex                 = 3
+slotsContainer.Parent                 = invPanel
 
 -- ── Detail panel (po prawej) — wysuwa się po kliknięciu w slot ────────────
 
@@ -591,6 +779,34 @@ invDetDropBtn.TextColor3             = C_WHITE
 invDetDropBtn.AutoButtonColor        = false
 invDetDropBtn.ZIndex                 = 6
 invDetDropBtn.Parent                 = invDetPanel
+
+-- Przycisk UŻYJ (tylko dla magnesu) — aktywuje 2-min sweep
+local invDetUseBtn = Instance.new("TextButton")
+invDetUseBtn.Size                   = UDim2.new(1, -32, 0, 44)
+invDetUseBtn.AnchorPoint            = Vector2.new(0, 1)
+invDetUseBtn.Position               = UDim2.new(0, 16, 1, -16)
+invDetUseBtn.BackgroundColor3       = MAGNET_COLOR
+invDetUseBtn.BorderSizePixel        = 0
+invDetUseBtn.Text                   = "UŻYJ"
+invDetUseBtn.TextSize               = 18
+invDetUseBtn.Font                   = FONT_MAIN
+invDetUseBtn.TextColor3             = C_WHITE
+invDetUseBtn.AutoButtonColor        = false
+invDetUseBtn.Visible                = false
+invDetUseBtn.ZIndex                 = 6
+invDetUseBtn.Parent                 = invDetPanel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetUseBtn
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = invDetUseBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetUseBtn
+	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	invDetUseBtn.MouseEnter:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.04 }):Play()
+	end)
+	invDetUseBtn.MouseLeave:Connect(function()
+		TweenService:Create(sc, ti, { Scale = 1.00 }):Play()
+	end)
+end
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetDropBtn
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = invDetDropBtn
@@ -611,10 +827,95 @@ local invDetCurrentRarity: string? = nil
 
 invDetDropBtn.MouseButton1Click:Connect(function()
 	local r = invDetCurrentRarity
-	if not r or r == SYRUP_ID then return end
+	if not r or r == SYRUP_ID or r == MAGNET_ID then return end
 	if (hudData.backpackContents[r] or 0) <= 0 then return end
 	DropBottleEvt:FireServer(r)
 end)
+
+invDetUseBtn.MouseButton1Click:Connect(function()
+	if invDetCurrentRarity ~= MAGNET_ID then return end
+	local mState = _G["__magnetState"] or { count = 0, active = false }
+	if (mState.count or 0) <= 0 or mState.active then return end
+	playSfx("Click")
+	if _G["__magnetTryUse"] then _G["__magnetTryUse"]() end
+	hideInvDetail()
+end)
+
+-- Handlery petów PONIŻEJ definicji buttonów (linia ~859) — order issue jeśli tu
+
+-- ── Pet buttons (ZAŁÓŻ/ZDEJMIJ + WYRZUĆ) ──────────────────────────────────
+local PetEvents          = ReplicatedStorage:WaitForChild("Events")
+local EquipPetEvt        = PetEvents:WaitForChild("EquipPet")
+local UnequipPetEvt      = PetEvents:WaitForChild("UnequipPet")
+local DiscardPetEvt      = PetEvents:WaitForChild("DiscardPet")
+
+local invDetPetEquipBtn = Instance.new("TextButton")
+invDetPetEquipBtn.Size                   = UDim2.new(1, -32, 0, 44)
+invDetPetEquipBtn.AnchorPoint            = Vector2.new(0, 1)
+invDetPetEquipBtn.Position               = UDim2.new(0, 16, 1, -68)  -- nad WYRZUĆ
+invDetPetEquipBtn.BackgroundColor3       = C_ACCENT_GREEN
+invDetPetEquipBtn.BorderSizePixel        = 0
+invDetPetEquipBtn.Text                   = "ZAŁÓŻ"
+invDetPetEquipBtn.TextSize               = 16
+invDetPetEquipBtn.Font                   = FONT_MAIN
+invDetPetEquipBtn.TextColor3             = Color3.new(0, 0, 0)
+invDetPetEquipBtn.AutoButtonColor        = false
+invDetPetEquipBtn.Visible                = false
+invDetPetEquipBtn.ZIndex                 = 6
+invDetPetEquipBtn.Parent                 = invDetPanel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetPetEquipBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetPetEquipBtn
+	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	invDetPetEquipBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
+	invDetPetEquipBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
+end
+
+local invDetPetDiscardBtn = Instance.new("TextButton")
+invDetPetDiscardBtn.Size                   = UDim2.new(1, -32, 0, 44)
+invDetPetDiscardBtn.AnchorPoint            = Vector2.new(0, 1)
+invDetPetDiscardBtn.Position               = UDim2.new(0, 16, 1, -16)
+invDetPetDiscardBtn.BackgroundColor3       = Color3.fromRGB(180, 70, 70)
+invDetPetDiscardBtn.BorderSizePixel        = 0
+invDetPetDiscardBtn.Text                   = "WYRZUĆ"
+invDetPetDiscardBtn.TextSize               = 16
+invDetPetDiscardBtn.Font                   = FONT_MAIN
+invDetPetDiscardBtn.TextColor3             = C_WHITE
+invDetPetDiscardBtn.AutoButtonColor        = false
+invDetPetDiscardBtn.Visible                = false
+invDetPetDiscardBtn.ZIndex                 = 6
+invDetPetDiscardBtn.Parent                 = invDetPanel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetPetDiscardBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetPetDiscardBtn
+	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	invDetPetDiscardBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
+	invDetPetDiscardBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
+end
+
+-- Pet click handlers (PO definicji buttonów żeby uniknąć order bug)
+invDetPetEquipBtn.MouseButton1Click:Connect(function()
+	if not isPetSlotId(invDetCurrentRarity) then return end
+	local uuid = string.sub(invDetCurrentRarity, #PET_ID_PREFIX + 1)
+	local state = _G["__petsState"]
+	local equippedId = (state and state.equippedId) or ""
+	playSfx("Click")
+	if uuid == equippedId then
+		UnequipPetEvt:FireServer()
+	else
+		EquipPetEvt:FireServer(uuid)
+	end
+end)
+
+invDetPetDiscardBtn.MouseButton1Click:Connect(function()
+	if not isPetSlotId(invDetCurrentRarity) then return end
+	local uuid = string.sub(invDetCurrentRarity, #PET_ID_PREFIX + 1)
+	playSfx("Click")
+	DiscardPetEvt:FireServer(uuid)
+	hideInvDetail()
+end)
+
+-- (rejestracja listenera __magnetAddListener jest na końcu pliku — po definicji updateInventory)
 
 local INV_DET_TI_OPEN  = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local INV_DET_TI_CLOSE = TweenInfo.new(0.20, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
@@ -640,6 +941,66 @@ local function refreshInvDetail()
 		invDetTotalLbl.Text    = "Nie sprzedasz tego w butelkomacie"
 		invDetMultLbl.Text     = ""
 		invDetDesc.Text        = SYRUP_DESC
+		return
+	end
+
+	-- Pet — każdy slot to konkretny pet (id = "Pet_<uuid>")
+	if isPetSlotId(rarity) then
+		local uuid = string.sub(rarity, #PET_ID_PREFIX + 1)
+		local state = _G["__petsState"]
+		local pets  = (state and state.pets) or {}
+		local equippedId = (state and state.equippedId) or ""
+		local pet
+		for _, p in ipairs(pets) do
+			if p.id == uuid then pet = p; break end
+		end
+		if not pet then
+			invDetTitle.Text = "Pet"
+			invDetCount.Text = "(usunięty)"
+			invDetBaseLbl.Text = ""
+			invDetTotalLbl.Text = ""
+			invDetMultLbl.Text = ""
+			invDetDesc.Text = ""
+			return
+		end
+		local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[pet.rarity]) or {}
+		local ccfg = (Config.Pets and Config.Pets.Classes and Config.Pets.Classes[pet.class]) or {}
+		local color = rcfg.color or C_WHITE
+		local rname = rcfg.displayName or pet.rarity
+
+		invDetTitle.Text       = string.format("%s %s", rname, pet.class)
+		invDetTitle.TextColor3 = color
+		invDetCount.Text       = (uuid == equippedId) and "WYPOSAŻONY ✓" or "1 sztuka"
+		invDetCount.TextColor3 = (uuid == equippedId) and C_ACCENT_GREEN or C_DIMTEXT
+		invDetBaseLbl.Text     = string.format("Mnożnik kasy: ×%.1f", rcfg.moneyMul or 1)
+		local bonus = (ccfg.bonuses and ccfg.bonuses[pet.rarity]) or 0
+		if ccfg.effect == "speed" then
+			invDetTotalLbl.Text = string.format("Speed bonus: +%d (chodzenie i deska)", bonus)
+		elseif ccfg.effect == "hp" then
+			invDetTotalLbl.Text = string.format("HP bonus: +%d", bonus)
+		else
+			invDetTotalLbl.Text = ""
+		end
+		invDetMultLbl.Text = ""
+		invDetDesc.Text    = "Tylko 1 pet może być wyposażony naraz. Wyrzucenie usuwa pet na stałe."
+		return
+	end
+
+	-- Magnes — każdy slot to OSOBNA sztuka (count zawsze 1, klikany pojedynczo)
+	if rarity == MAGNET_ID then
+		local mState = _G["__magnetState"] or { count = 0, active = false, secondsLeft = 0 }
+		invDetTitle.Text       = MAGNET_NAME
+		invDetTitle.TextColor3 = MAGNET_COLOR
+		invDetCount.Text       = "1 sztuka"
+		invDetBaseLbl.Text     = string.format("Czas działania: %d s", Config.Magnet.DurationSec)
+		invDetTotalLbl.Text    = string.format("Promień: ×%.1f", Config.Magnet.RadiusMultiplier)
+		if mState.active then
+			invDetMultLbl.Text = string.format("AKTYWNY — zostało %ds", math.ceil(mState.secondsLeft or 0))
+			invDetMultLbl.TextColor3 = MAGNET_COLOR
+		else
+			invDetMultLbl.Text = ""
+		end
+		invDetDesc.Text        = MAGNET_DESC
 		return
 	end
 
@@ -685,7 +1046,38 @@ local function setInvDetailContentVisible(visible: boolean)
 	invDetSep2.Visible     = visible
 	invDetDesc.Visible     = visible
 	invDetCloseBtn.Visible = visible
-	invDetDropBtn.Visible  = visible and invDetCurrentRarity ~= SYRUP_ID
+	local isPet = visible and isPetSlotId(invDetCurrentRarity)
+	-- DROP: tylko dla butelek (nie syrop, nie magnes, nie pet)
+	invDetDropBtn.Visible  = visible
+		and invDetCurrentRarity ~= SYRUP_ID
+		and invDetCurrentRarity ~= MAGNET_ID
+		and not isPet
+	-- UŻYJ: tylko dla magnesu
+	invDetUseBtn.Visible   = visible and invDetCurrentRarity == MAGNET_ID
+	if invDetUseBtn.Visible then
+		local mState = _G["__magnetState"] or { count = 0, active = false }
+		local canUse = (mState.count or 0) > 0 and not mState.active
+		invDetUseBtn.BackgroundColor3 = canUse and MAGNET_COLOR or Color3.fromRGB(90, 90, 90)
+		invDetUseBtn.Text = mState.active and "AKTYWNY…" or (canUse and "UŻYJ" or "BRAK MAGNESÓW")
+		invDetUseBtn.AutoButtonColor = false
+	end
+	-- PET: ZAŁÓŻ/ZDEJMIJ + WYRZUĆ
+	invDetPetEquipBtn.Visible   = isPet
+	invDetPetDiscardBtn.Visible = isPet
+	if isPet then
+		local uuid = string.sub(invDetCurrentRarity, #PET_ID_PREFIX + 1)
+		local state = _G["__petsState"]
+		local equippedId = (state and state.equippedId) or ""
+		if uuid == equippedId then
+			invDetPetEquipBtn.Text            = "ZDEJMIJ"
+			invDetPetEquipBtn.BackgroundColor3 = Color3.fromRGB(190, 150, 60)
+			invDetPetEquipBtn.TextColor3       = C_WHITE
+		else
+			invDetPetEquipBtn.Text            = "ZAŁÓŻ"
+			invDetPetEquipBtn.BackgroundColor3 = C_ACCENT_GREEN
+			invDetPetEquipBtn.TextColor3       = Color3.new(0, 0, 0)
+		end
+	end
 	invDetPlaceholder.Visible = not visible
 end
 
@@ -749,6 +1141,8 @@ local slotNameLbls:  { TextLabel } = {}
 local slotCountLbls: { TextLabel } = {}
 local slotScales:    { UIScale }   = {}
 local slotStrokes:   { UIStroke }  = {}
+local slotPetGlows:  { Frame }     = {}    -- gradient overlay dla petów (diagonalna animacja)
+local slotPetGrads:  { UIGradient } = {}
 local slotLegGlows:  { Frame }     = {}
 local slotLegGrads:  { UIGradient } = {}
 local slotMytGlows:  { Frame }     = {}
@@ -857,6 +1251,34 @@ for i = 1, SLOT_COUNT do
 	mytGrad.Parent = mytGlow
 	slotMytGlows[i] = mytGlow
 	slotMytGrads[i] = mytGrad
+
+	-- Pet glow overlay — diagonalny gradient (45°) z kolorem peta + bielą.
+	-- Rotuje wolniej niż Legendary/Mythic, transparency mniej intensywna — subtelniejszy efekt.
+	local petGlow = Instance.new("Frame")
+	petGlow.Size = UDim2.fromScale(1, 1)
+	petGlow.Position = UDim2.fromScale(0, 0)
+	petGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255)  -- nadpisywane w renderSlot per pet
+	petGlow.BackgroundTransparency = 0.55
+	petGlow.BorderSizePixel = 0
+	petGlow.Visible = false
+	petGlow.ZIndex = 0
+	petGlow.Parent = sf
+	mkCorner(petGlow, 12)
+	local petGrad = Instance.new("UIGradient")
+	petGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0,    Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.5,  Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1,    Color3.fromRGB(255, 255, 255)),
+	})  -- ColorSequence ustawiany dynamicznie w renderSlot (per pet color)
+	petGrad.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,    0.85),
+		NumberSequenceKeypoint.new(0.5,  0.10),
+		NumberSequenceKeypoint.new(1,    0.85),
+	})
+	petGrad.Rotation = 45
+	petGrad.Parent = petGlow
+	slotPetGlows[i] = petGlow
+	slotPetGrads[i] = petGrad
 end
 
 -- ── Render ────────────────────────────────────────────────────────────────
@@ -873,6 +1295,20 @@ local function renderSlot(i: number)
 		slotCountLbls[i].TextColor3    = C_WHITE
 		slotLegGlows[i].Visible        = (data.name == "Legendarna")
 		slotMytGlows[i].Visible        = (data.name == "Mityczny")
+		-- Pet slot — pokaż diagonalny gradient w kolorze peta
+		local isPet = isPetSlotId(data.id)
+		slotPetGlows[i].Visible = isPet
+		if isPet then
+			-- ColorSequence: kolor rzadkości → biel → kolor rzadkości
+			slotPetGrads[i].Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0,   data.color),
+				ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
+				ColorSequenceKeypoint.new(1,   data.color),
+			})
+			-- Ukryj zwykły count (1) dla peta — pokażemy emoji klasy
+			-- (slotNameLbls jest "Sprinter"/"Tank", count "1" pomijamy bo każdy pet = 1)
+			slotCountLbls[i].Text = ""
+		end
 	else
 		slotFrames[i].BackgroundColor3 = C_SLOT
 		slotStrokes[i].Color           = C_BORDER_SL
@@ -881,6 +1317,7 @@ local function renderSlot(i: number)
 		slotCountLbls[i].Text          = ""
 		slotLegGlows[i].Visible        = false
 		slotMytGlows[i].Visible        = false
+		slotPetGlows[i].Visible        = false
 	end
 end
 
@@ -932,16 +1369,20 @@ _G["__inventorySetLayout"] = function(layout: { [number]: { rarity: string, coun
 		end
 	end
 	-- Wstaw każdy stack na jego ZAPISANY slot
+	local function isProtected(idx: number): boolean
+		local sl = slots[idx]
+		return sl ~= nil and (sl.id == SYRUP_ID or sl.id == MAGNET_ID or isPetSlotId(sl.id))
+	end
 	for slotIdx, s in pairs(layout) do
 		local i = tonumber(slotIdx)
 		if i and i >= 1 and i <= SLOT_COUNT then
-			-- Nie nadpisuj syropu — jeśli ten slot ma syrop, znajdź wolny niżej
-			if slots[i] and slots[i].id == SYRUP_ID then
+			-- Nie nadpisuj syropu ani magnesu — jeśli ten slot zajęty, znajdź wolny niżej
+			if isProtected(i) then
 				for j = 1, SLOT_COUNT do
 					if not slots[j] then i = j; break end
 				end
 			end
-			if not (slots[i] and slots[i].id == SYRUP_ID) then
+			if not isProtected(i) then
 				slots[i] = {
 					id    = "Bottle_" .. s.rarity,
 					name  = s.rarity,
@@ -987,7 +1428,8 @@ _G["__inventorySetStacks"] = function(stacks: { { rarity: string, count: number 
 		local positions = existingPositions[s.rarity]
 		if positions and #positions > 0 then
 			local idx = table.remove(positions, 1)
-			if not (slots[idx] and slots[idx].id == SYRUP_ID) then
+			local prot = slots[idx] and (slots[idx].id == SYRUP_ID or slots[idx].id == MAGNET_ID or isPetSlotId(slots[idx].id))
+			if not prot then
 				slots[idx] = {
 					id    = "Bottle_" .. s.rarity,
 					name  = s.rarity,
@@ -1030,13 +1472,18 @@ RunService.Heartbeat:Connect(function(dt)
 			slotLegGrads[i].Rotation = (slotLegGrads[i].Rotation + 80 * dt) % 360
 		elseif data and data.name == "Mityczny" then
 			local pulse = (math.sin(t * 4.0) + 1) * 0.5
-			-- Pulsujący stroke fiolet → ciemny fiolet/czarny
 			slotStrokes[i].Color = Color3.fromRGB(
 				80  + math.floor(pulse * 100),
 				20  + math.floor(pulse * 60),
 				140 + math.floor(pulse * 100))
 			slotStrokes[i].Thickness = 3 + pulse * 2.5
 			slotMytGrads[i].Rotation = (slotMytGrads[i].Rotation + 60 * dt) % 360
+		elseif data and isPetSlotId(data.id) then
+			-- Pet: diagonalny shimmer (45° wolniej niż legendary) — odróżnia od butelek
+			slotPetGrads[i].Rotation = (slotPetGrads[i].Rotation + 45 * dt) % 360
+			-- Subtelny pulse stroke w kolorze peta
+			local pulse = (math.sin(t * 3.0) + 1) * 0.5  -- 0..1
+			slotStrokes[i].Thickness = 3 + pulse * 1.5
 		end
 	end
 end)
@@ -1124,7 +1571,7 @@ local function splitInvSlot(slotIdx: number)
 	if drag.active then return end
 	local src = slots[slotIdx]
 	if not src or src.count < 2 then return end
-	if src.id == SYRUP_ID then return end  -- syropu nie dzielimy
+	if src.id == SYRUP_ID or src.id == MAGNET_ID or isPetSlotId(src.id) then return end  -- syropu/magnesu/petów nie dzielimy
 	local half = math.floor(src.count / 2)
 	if half < 1 then return end
 	slots[slotIdx].count -= half
@@ -1205,13 +1652,26 @@ local function endDrag()
 		return
 	end
 
-	-- Swap jeśli upuszczono na inny slot
+	-- Merge gdy upuszczamy butelki tej samej rzadkości — sumujemy counta zamiast swapować.
+	-- Inne kombinacje (różne rzadkości, syrop, magnes, pet) → swap jak dotychczas.
 	if target and target ~= fromIdx then
-		local tmp        = slots[fromIdx]
-		slots[fromIdx]   = slots[target]
-		slots[target]    = tmp
-		setSlotHighlight(target, false)
-		swapped = true
+		local src = slots[fromIdx]
+		local tgt = slots[target]
+		local isBottleMerge = src and tgt
+			and string.sub(src.id, 1, 7) == "Bottle_"
+			and src.id == tgt.id  -- ta sama rzadkość
+		if isBottleMerge then
+			tgt.count += src.count
+			slots[fromIdx] = nil
+			setSlotHighlight(target, false)
+			swapped = true
+		else
+			local tmp      = slots[fromIdx]
+			slots[fromIdx] = slots[target]
+			slots[target]  = tmp
+			setSlotHighlight(target, false)
+			swapped = true
+		end
 	end
 
 	-- Przywróć widoczność source slotu
@@ -1237,6 +1697,12 @@ local function endDrag()
 			elseif slotData.id == SYRUP_ID then
 				playSfx("Click")
 				showInvDetail(SYRUP_ID)
+			elseif slotData.id == MAGNET_ID then
+				playSfx("Click")
+				showInvDetail(MAGNET_ID)
+			elseif isPetSlotId(slotData.id) then
+				playSfx("Click")
+				showInvDetail(slotData.id)  -- pełne "Pet_<uuid>"
 			end
 		end
 	end
@@ -1656,6 +2122,16 @@ UpdateHUD.OnClientEvent:Connect(function(data)
 	local total = 0
 	for _, v in pairs(data.backpackContents) do total += v end
 	if hudData.hasSyrup then total += 1 end
+	-- Magnes: każdy zajmuje 1 slot. Liczba z payloadu (jeśli serwer wysłał) lub z _G state.
+	local magnetCount = tonumber(data.magnetCount)
+	if not magnetCount then
+		local m = _G["__magnetState"]
+		magnetCount = (m and tonumber(m.count)) or 0
+	end
+	total += magnetCount
+	-- Pety — każdy = 1 slot
+	local ps = _G["__petsState"]
+	total += (ps and ps.pets and #ps.pets) or 0
 	hudData.bottlesCarried = total
 
 	-- Pierwsza wiadomość z inventoryStacks (layout per-slot) — wczytaj zapisany układ + pozycje
@@ -1792,4 +2268,67 @@ task.spawn(watchButelkomaty)
 
 updateHud()
 updateInventory()
+
+-- ── Pet listener ──────────────────────────────────────────────────────────
+-- PetService wysyła PetStatusUpdate przy każdej zmianie petów. Aktualizujemy
+-- _G.__petsState (czytane też przez Bank/SprintController) + syncujemy sloty.
+local PetStatusUpdateEvt = ReplicatedStorage:WaitForChild("Events"):WaitForChild("PetStatusUpdate")
+_G["__petsState"] = { pets = {}, equippedId = "", bankPets = {}, bonuses = {} }
+PetStatusUpdateEvt.OnClientEvent:Connect(function(data)
+	if type(data) ~= "table" then return end
+	_G["__petsState"] = {
+		pets        = data.pets or {},
+		equippedId  = data.equippedId or "",
+		bankPets    = data.bankPets or {},
+		hasGamepass = data.hasGamepass == true,
+		bonuses     = data.bonuses or {},
+	}
+	syncPetSlots()
+	-- bottlesCarried zależy od liczby petów (każdy = 1 slot)
+	local total = 0
+	for _, v in pairs(hudData.backpackContents) do total += v end
+	if hudData.hasSyrup then total += 1 end
+	local m = _G["__magnetState"]
+	total += (m and tonumber(m.count)) or 0
+	total += #(_G["__petsState"].pets or {})
+	hudData.bottlesCarried = total
+	updateHud()
+	updateInventory()
+	if invDetVisible and isPetSlotId(invDetCurrentRarity) then
+		refreshInvDetail()
+		setInvDetailContentVisible(true)
+	end
+end)
+
+-- ── Magnet listener ───────────────────────────────────────────────────────
+-- MUSI być na końcu pliku — closure odwołuje się do `updateInventory` i innych
+-- helperów, które w Lua resolve'ują się jako globalne (nil) jeśli są zadeklarowane
+-- po miejscu definicji closure'a. Przez to slot magnesu nie odświeżał się od razu
+-- po użyciu (dopiero gdy inny mechanizm wymusił render).
+task.spawn(function()
+	for _ = 1, 50 do
+		if _G["__magnetAddListener"] then break end
+		task.wait(0.1)
+	end
+	if not _G["__magnetAddListener"] then return end
+	_G["__magnetAddListener"](function()
+		-- Magnes wpływa na pojemność — przelicz bottlesCarried (z petami)
+		local total = 0
+		for _, v in pairs(hudData.backpackContents) do total += v end
+		if hudData.hasSyrup then total += 1 end
+		local m = _G["__magnetState"]
+		total += (m and tonumber(m.count)) or 0
+		local ps = _G["__petsState"]
+		total += (ps and ps.pets and #ps.pets) or 0
+		hudData.bottlesCarried = total
+		updateHud()
+
+		syncMagnetSlots()
+		updateInventory()
+		if invDetVisible and invDetCurrentRarity == MAGNET_ID then
+			refreshInvDetail()
+			setInvDetailContentVisible(true)
+		end
+	end)
+end)
 

@@ -75,7 +75,7 @@ end)
 
 -- ── Panel admina (tylko dla adminów, F2 toggle) ─────────────────────────────
 local PANEL_W = 460
-local PANEL_H = 440  -- powiększony żeby pomieścić sekcję DODAJ KOD
+local PANEL_H = 510  -- powiększony żeby pomieścić sekcję DODAJ KOD + MAGNES
 
 local gui = Instance.new("ScreenGui")
 gui.Name           = "AdminPanel"
@@ -165,6 +165,18 @@ rewardInput.Text = "500"
 local codeBtn = mkBtn(panel, UDim2.fromOffset(96, 36), UDim2.new(1, -112, 0, 302), "DODAJ", Color3.fromRGB(255, 220, 100))
 local codeStatus = mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 342),
 	"", 12, Color3.fromRGB(170, 221, 102))
+
+-- Give magnes section
+mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 372), "DAJ SOBIE MAGNESY", 14, Color3.fromRGB(175, 175, 175))
+local magnetInput = mkInput(panel, UDim2.fromOffset(140, 36), UDim2.fromOffset(16, 396), "Ile sztuk")
+magnetInput.Text = "1"
+local magnetBtn = mkBtn(panel, UDim2.fromOffset(96, 36), UDim2.new(1, -112, 0, 396), "DODAJ", Color3.fromRGB(220, 90, 90))
+
+magnetBtn.MouseButton1Click:Connect(function()
+	local n = tonumber(magnetInput.Text) or 0
+	if n <= 0 then return end
+	AdminAction:FireServer({ action = "giveMagnet", count = n })
+end)
 
 -- Hint
 mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, PANEL_H - 30),

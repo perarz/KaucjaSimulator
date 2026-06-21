@@ -142,6 +142,10 @@ local function setupKoszPrompt(kosz: Instance)
 		-- Quest progress: każda butelka z kosza liczy się jako collect
 		QuestService.AddProgress(player, "collect", { rarity = rarity, amount = count })
 		QuestService.AddProgress(player, "search_kosz", { amount = 1 })
+		pcall(function()
+			local sqs = require(script.Parent.StoryQuestService)
+			sqs.AddProgress(player, "collect", count, { rarity = rarity })
+		end)
 
 		-- Cooldown na kosza
 		koszCooldownUntil[kosz] = tick() + KOSZ_COOLDOWN_SEC

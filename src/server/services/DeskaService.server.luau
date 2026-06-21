@@ -158,6 +158,20 @@ local function mountPlayer(player: Player, deckKey: string)
 	local humanoid = char and char:FindFirstChildOfClass("Humanoid") :: Humanoid?
 	if not hrp or not humanoid then return end
 
+	-- Wstajemy z siedzenia (huśtawka, krzesło, Seat/VehicleSeat) przed wsiadem na deskę.
+	-- Bez tego welds bind do HRP konfliktują z SeatWeld → gracz wpada pod mapę.
+	if humanoid.SeatPart then
+		humanoid.Sit = false
+		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		task.wait(0.15)  -- daj klatkę na destruction SeatWeld i fizyczne odlepienie
+		-- Re-fetch HRP — character mógł się zmienić w trakcie wait
+		local refreshedChar = player.Character
+		if not refreshedChar then return end
+		local refreshedHrp = refreshedChar:FindFirstChild("HumanoidRootPart")
+		if not (refreshedHrp and refreshedHrp:IsA("BasePart")) then return end
+		hrp = refreshedHrp :: BasePart
+	end
+
 	-- Znajdź szablon w workspace.Deski (fallback ReplicatedStorage.Deski)
 	-- Szablon może być Modelem (z PrimaryPart) ALBO pojedynczym BasePart/Union.
 	local deskiFolder = workspace:FindFirstChild("Deski") or ReplicatedStorage:FindFirstChild("Deski")
@@ -204,7 +218,13 @@ local function mountPlayer(player: Player, deckKey: string)
 	weld.Part1  = primary
 	weld.Parent = primary
 
-	humanoid.WalkSpeed  = deck.Speed
+	-- Sprinter pet — addytywny bonus do deck.Speed (np. Default 40 + Huge 25 = 65)
+	local petSpeedBonus = 0
+	local okP, PetService = pcall(function() return require(script.Parent.PetService) end)
+	if okP and PetService then
+		petSpeedBonus = PetService.GetSpeedBonus(player) or 0
+	end
+	humanoid.WalkSpeed  = deck.Speed + petSpeedBonus
 	humanoid.JumpHeight = 0
 
 	mountedData[player] = { weld = weld, board = board, deckKey = deckKey }
@@ -216,11 +236,19 @@ end
 local function grantDeckInternal(player: Player, key: string, autoEquip: boolean)
 	local data = PlayerDataService.GetData(player)
 	data.OwnedDecks = data.OwnedDecks or {}
+	-- Liczymy progres tylko gdy to PIERWSZY zakup tej deski (nie podwójny grant)
+	local wasNew = not data.OwnedDecks[key]
 	data.OwnedDecks[key] = true
 	if autoEquip and (not data.EquippedDeck or data.EquippedDeck == "") then
 		data.EquippedDeck = key
 	end
 	pushStatus(player)
+	if wasNew then
+		pcall(function()
+			local sqs = require(script.Parent:WaitForChild("StoryQuestService"))
+			sqs.AddProgress(player, "buy_deck", 1, { deckKey = key })
+		end)
+	end
 end
 
 -- Wywoływane przez BoostShopService.ProcessReceipt (przez BindableEvent) dla VIP w Robux
@@ -243,6 +271,27 @@ local function tryBuyDeck(player: Player, key: string)
 		return
 	end
 
+	if deck.CostType == "Gamepass" then
+		local id = deck.GamepassId
+		if not id or id == 0 then
+			warn("[DeskaService] Brak GamepassId dla deski", key, "— wpisz Gamepass ID w Config.Decks")
+			BuyDeckResult:FireClient(player, { success = false, reason = "noproduct", deckKey = key })
+			return
+		end
+		-- Sprawdź czy gracz już posiada (np. kupił wcześniej a OwnedDecks się nie zsynchronizowało)
+		local ok, owns = pcall(function()
+			return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+		end)
+		if ok and owns then
+			-- Posiada gamepass — grant od razu
+			grantDeck(player, key)
+			return
+		end
+		-- Inaczej prompt kupna — grant odbywa się w PromptGamePassPurchaseFinished niżej
+		MarketplaceService:PromptGamePassPurchase(player, id)
+		return
+	end
+
 	if deck.CostType == "Robux" then
 		local id = deck.RobuxProductId
 		if not id or id == 0 then
@@ -250,7 +299,7 @@ local function tryBuyDeck(player: Player, key: string)
 			BuyDeckResult:FireClient(player, { success = false, reason = "noproduct", deckKey = key })
 			return
 		end
-		MarketplaceService:PromptProductPurchase(player, id)  -- grant w ProcessReceipt
+		MarketplaceService:PromptProductPurchase(player, id)
 		return
 	end
 
@@ -439,10 +488,39 @@ BuyDeck.OnServerEvent:Connect(function(player: Player, key: string)
 	tryBuyDeck(player, key)
 end)
 
+-- ── Gamepass: nasłuch zakupów + check przy join ────────────────────────────────
+-- Po zakupie gamepass'a w trakcie sesji — grant odpowiedniej deski.
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, gpId: number, purchased: boolean)
+	if not purchased then return end
+	for _, deck in ipairs(Config.Decks) do
+		if deck.CostType == "Gamepass" and deck.GamepassId == gpId then
+			grantDeck(player, deck.key)
+			break
+		end
+	end
+end)
+
+-- Przy joinie sprawdź gamepassy — jeśli gracz posiada gamepass a deski nie ma → grant
+local function checkGamepassDecksOnJoin(player: Player)
+	local data = PlayerDataService.GetData(player)
+	data.OwnedDecks = data.OwnedDecks or {}
+	for _, deck in ipairs(Config.Decks) do
+		if deck.CostType == "Gamepass" and deck.GamepassId and not data.OwnedDecks[deck.key] then
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, deck.GamepassId)
+			end)
+			if ok and owns then
+				grantDeck(player, deck.key)
+			end
+		end
+	end
+end
+
 -- ── Lifecycle ──────────────────────────────────────────────────────────────────
 Players.PlayerAdded:Connect(function(player)
 	task.spawn(function()
-		PlayerDataService.GetData(player)  -- upewnij się że dane wczytane
+		PlayerDataService.GetData(player)
+		checkGamepassDecksOnJoin(player)  -- po wczytaniu danych
 		task.wait(1)
 		pushStatus(player)
 	end)
@@ -451,6 +529,11 @@ Players.PlayerAdded:Connect(function(player)
 		local prev = mountedData[player]
 		if prev and prev.board and prev.board.Parent then prev.board:Destroy() end
 		mountedData[player] = nil
+		-- BUGFIX: bez tego klient zostawał z `mounted = true` po śmierci na desce —
+		-- press R → klient myślał że jeździ → wysyłał DeskDismount zamiast Mount →
+		-- server (mountedData=nil) ignorował → gracz nie mógł wsiąść na deskę nigdy więcej.
+		-- Szczególnie widoczne na VIP (Speed=100) gdzie ludzie częściej giną podczas jazdy.
+		DeskMountResult:FireClient(player, false, nil)
 		task.wait(0.5)
 		pushStatus(player)
 	end)

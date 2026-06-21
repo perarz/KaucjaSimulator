@@ -138,3 +138,14 @@ end)
 
 -- API dla MobileControlsController (przycisk DESKA na ekranie)
 _G["__deskaToggle"] = toggleDeska
+
+-- Po respawnie ZAWSZE resetujemy stan klienta — weld zginął z postacią, więc nawet
+-- jeśli server's DeskMountResult(false) dotrze z opóźnieniem, nie zostawimy stale
+-- `mounted = true` które blokuje wsiadanie (DeskMount fire'uje Dismount zamiast Mount).
+localPlayer.CharacterAdded:Connect(function()
+	mounted      = false
+	currentBoard = nil
+	_G["__deskaMounted"] = false
+	if renderConnection then renderConnection:Disconnect(); renderConnection = nil end
+	if skateTrack then skateTrack:Stop(); skateTrack = nil end
+end)

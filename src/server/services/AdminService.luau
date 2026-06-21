@@ -69,6 +69,15 @@ AdminAction.OnServerEvent:Connect(function(player: Player, payload)
 		})
 		print(string.format("[AdminService] %s otrzymał %d × %s", player.Name, count, rarity))
 
+	elseif action == "giveMagnet" then
+		local count = tonumber(payload.count) or 0
+		if count <= 0 or count > 100 then return end
+		local ok, MagnetService = pcall(function() return require(script.Parent.MagnetService) end)
+		if ok and MagnetService then
+			MagnetService.Grant(player, count)
+			print(string.format("[AdminService] %s otrzymał %d × magnes", player.Name, count))
+		end
+
 	elseif action == "kick" then
 		local target = Players:FindFirstChild(tostring(payload.target or ""))
 		if target then target:Kick("[Admin] " .. tostring(payload.reason or "Kick")) end

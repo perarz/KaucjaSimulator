@@ -84,6 +84,10 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 		data.BaseLevel = 1
 		PlayerDataService.UpdateLeaderstats(player)
 		QuestService.AddProgress(player, "buy_skill", { amount = 1 })
+		pcall(function()
+			local sqs = require(script.Parent.StoryQuestService)
+			sqs.AddProgress(player, "buy_skill", 1)
+		end)
 		SkillTreeUpdate:FireClient(player, {
 			success     = true,
 			upgradeType = "Base",
@@ -113,6 +117,10 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 		data.LuckLevel = 1
 		PlayerDataService.UpdateLeaderstats(player)
 		QuestService.AddProgress(player, "buy_skill", { amount = 1 })
+		pcall(function()
+			local sqs = require(script.Parent.StoryQuestService)
+			sqs.AddProgress(player, "buy_skill", 1)
+		end)
 		SkillTreeUpdate:FireClient(player, {
 			success     = true,
 			upgradeType = "Luck",
@@ -147,6 +155,10 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 	meta.apply(player, targetLevel)
 	PlayerDataService.UpdateLeaderstats(player)
 	QuestService.AddProgress(player, "buy_skill", { amount = 1 })
+	pcall(function()
+		local sqs = require(script.Parent.StoryQuestService)
+		sqs.AddProgress(player, "buy_skill", 1)
+	end)
 
 	SkillTreeUpdate:FireClient(player, {
 		success     = true,

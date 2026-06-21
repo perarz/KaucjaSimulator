@@ -92,11 +92,18 @@ local function applyHatEffects(player: Player)
 	local hum = char:FindFirstChildOfClass("Humanoid")
 	if not hum then return end
 
-	-- HP bonus
-	hum.MaxHealth = 100 + (Config.HatShop.HpBonus or 0)
-	hum.Health = hum.MaxHealth
+	-- HP bonus — DELEGATE do PetService (single source of truth dla MaxHealth = 100 + hat + pet).
+	-- Bez tego dwa serwisy race'owały by się o MaxHealth (kto ostatni, ten wygrywa, pet bonus by ginął).
+	local okP, PetService = pcall(function() return require(script.Parent.PetService) end)
+	if okP and PetService then
+		PetService.ApplyPetEffects(player)
+	else
+		-- Fallback gdy PetService jeszcze nie wczytany
+		hum.MaxHealth = 100 + (Config.HatShop.HpBonus or 0)
+		hum.Health = hum.MaxHealth
+	end
 
-	-- Akcesorium
+	-- Akcesorium (czapka graficznie)
 	clearOldHat(char)
 	local template = ReplicatedStorage:FindFirstChild(Config.HatShop.Template)
 	if template and template:IsA("Accessory") then

@@ -20,7 +20,9 @@ local UpdateHUD = ReplicatedStorage:WaitForChild("Events"):WaitForChild("UpdateH
 local SCATTER_RADIUS = 5    -- studs — promień rozsypania wokół ciała
 local DROP_HEIGHT    = 2    -- studs nad ziemią (od powierzchni której dotyka raycast)
 local RESPAWN_DELAY  = 0    -- instant respawn po śmierci
-local OWN_DROP_COOLDOWN_SEC = 5  -- przez tyle sekund właściciel nie może podnieść własnego dropu (anty-spam)
+local OWN_DROP_COOLDOWN_SEC = 5    -- przez tyle sekund właściciel nie może podnieść własnego dropu (anty-spam)
+local DESPAWN_AFTER_SEC      = (Config.DeathDrop and Config.DeathDrop.DespawnSec) or 120
+local MAX_DROPS_ON_MAP       = (Config.DeathDrop and Config.DeathDrop.MaxOnMap) or 150
 
 -- ── Raycast w dół: znajdź wysokość ziemi pod podaną pozycją XZ ──
 -- Iteracyjnie pomija invisible trigger parts (PVPZone, BottleSpawnAreas itp.) — wszystko o Transparency >= 0.9.
@@ -64,6 +66,38 @@ local function findBodyAnchor(character: Model): BasePart?
 	return nil
 end
 
+-- ── Prune: gdy łączna liczba dropów na mapie > MAX_DROPS_ON_MAP, kasujemy najstarsze ──
+-- Wywoływane po każdym death dropie (po dodaniu nowych butelek). Liczone przez
+-- atrybut `DeathDropOwner` — odróżnia od normalnych spawnów BottleService.
+local function pruneExcessDrops()
+	local folder = Workspace:FindFirstChild("Bottles")
+	if not folder then return end
+
+	local drops = {}
+	for _, b in ipairs(folder:GetChildren()) do
+		local owner = b:GetAttribute("DeathDropOwner")
+		if owner then
+			-- DeathDropExpires = clock + OWN_DROP_COOLDOWN, więc starsze butelki mają mniejszy expires
+			-- (proxy do spawn time bez dodatkowych attributes)
+			local expires = b:GetAttribute("DeathDropExpires") or 0
+			table.insert(drops, { bottle = b, expires = expires })
+		end
+	end
+
+	if #drops <= MAX_DROPS_ON_MAP then return end
+
+	-- Sortuj rosnąco po expires — najstarsze pierwsze
+	table.sort(drops, function(a, b) return a.expires < b.expires end)
+
+	local toRemove = #drops - MAX_DROPS_ON_MAP
+	for i = 1, toRemove do
+		local b = drops[i].bottle
+		if b and b.Parent then b:Destroy() end
+	end
+	print(string.format("[DeathDropService] Prune: usunięto %d najstarszych dropów (było %d, cap=%d)",
+		toRemove, #drops, MAX_DROPS_ON_MAP))
+end
+
 -- ── Główna logika: zrzuć butelki + wyzeruj plecak + sync HUD ──
 local function dropBottlesOnDeath(player: Player, character: Model)
 	local data = PlayerDataService.GetData(player)
@@ -95,14 +129,23 @@ local function dropBottlesOnDeath(player: Player, character: Model)
 				local z     = center.Z + math.sin(angle) * dist
 				local y     = findGroundY(x, z, center.Y)
 				pcall(function()
-					BottleService.SpawnBottle(Vector3.new(x, y, z), rarity, nil, {
+					local bottle = BottleService.SpawnBottle(Vector3.new(x, y, z), rarity, nil, {
 						DeathDropOwner    = player.UserId,
 						DeathDropExpires  = os.clock() + OWN_DROP_COOLDOWN_SEC,
 					})
+					-- Auto-despawn po 2 minutach jeśli nikt nie podniesie
+					if bottle then
+						task.delay(DESPAWN_AFTER_SEC, function()
+							if bottle and bottle.Parent then bottle:Destroy() end
+						end)
+					end
 				end)
 			end
 		end
 	end
+
+	-- Po dodaniu nowych dropów — przytnij najstarsze jeśli przekroczyliśmy limit globalny
+	pruneExcessDrops()
 
 	-- Wyzeruj plecak
 	for rarity in pairs(data.BackpackContents) do
