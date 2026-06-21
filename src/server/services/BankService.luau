@@ -265,7 +265,8 @@ UpgradeBank.OnServerEvent:Connect(function(player: Player)
 	pData.Zlotowki     = (pData.Zlotowki or 0) - cost
 	pData.BankCapLevel = (pData.BankCapLevel or 0) + 1
 	PlayerDataService.UpdateLeaderstats(player)
-	PlayerDataService.SaveData(player)
+	-- BEZ SaveData tutaj — SetAsync yielduje i zapycha kolejkę DataStore
+	-- ("request was added to queue"). BankCapLevel utrwala auto-save co 60s + PlayerRemoving.
 
 	-- Story quest hook: ulepszenie skarbca
 	pcall(function()
