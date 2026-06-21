@@ -67,6 +67,21 @@ local function preFillProgress(data, q): number
 		else
 			if data.OwnedDecks and next(data.OwnedDecks) then return q.target end
 		end
+	elseif q.kind == "buy_egg" then
+		-- Ma już jakiegokolwiek peta → otworzył przynajmniej jedno jajko
+		if (data.Pets and #data.Pets > 0) or (data.BankPets and #data.BankPets > 0) then return q.target end
+	elseif q.kind == "equip_pet" then
+		if data.EquippedPet and data.EquippedPet ~= "" then return q.target end
+	elseif q.kind == "upgrade_bank" then
+		if (data.BankCapLevel or 0) >= 1 then return q.target end
+	elseif q.kind == "pet_rarity" then
+		-- Ma już peta tej rzadkości w EQ lub skarbcu
+		local function hasRarity(list): boolean
+			if not list then return false end
+			for _, p in ipairs(list) do if p.rarity == q.petRarity then return true end end
+			return false
+		end
+		if hasRarity(data.Pets) or hasRarity(data.BankPets) then return q.target end
 	end
 	return 0
 end
@@ -128,6 +143,10 @@ end
 --   "buy_backpack"    — kupno plecaka w sklepie
 --   "buy_deck"        — kupno deski (DeskaService.grantDeckInternal)
 --   "grandpa_done"    — ukończenie questa dziadka
+--   "buy_egg"         — kupno/otwarcie jajka (PetService.OpenEgg)
+--   "equip_pet"       — założenie peta (PetService EquipPet)
+--   "upgrade_bank"    — ulepszenie skarbca (BankService UpgradeBank)
+--   "pet_rarity"      — wylosowanie peta danej rzadkości. params.rarity = q.petRarity
 function StoryQuestService.AddProgress(player: Player, kind: string, amount: number?, params: any?)
 	if not player or not player.Parent then return end
 	local data = PlayerDataService.GetData(player)
@@ -148,6 +167,10 @@ function StoryQuestService.AddProgress(player: Player, kind: string, amount: num
 			matched = true
 		end
 	elseif q.kind == "grandpa_done"   and kind == "grandpa_done" then matched = true
+	elseif q.kind == "buy_egg"        and kind == "buy_egg"      then matched = true
+	elseif q.kind == "equip_pet"      and kind == "equip_pet"    then matched = true
+	elseif q.kind == "upgrade_bank"   and kind == "upgrade_bank" then matched = true
+	elseif q.kind == "pet_rarity"     and kind == "pet_rarity" and params and params.rarity == q.petRarity then matched = true
 	end
 	if not matched then return end
 

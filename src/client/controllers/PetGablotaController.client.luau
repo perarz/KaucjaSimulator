@@ -129,7 +129,8 @@ toastGui.Parent         = playerGui
 local toastLbl = Instance.new("TextLabel")
 toastLbl.AnchorPoint            = Vector2.new(0.5, 0)
 toastLbl.Position               = UDim2.new(0.5, 0, 0, 240)
-toastLbl.Size                   = UDim2.fromOffset(560, 56)
+toastLbl.AutomaticSize          = Enum.AutomaticSize.X   -- szerokość dopasowana do tekstu
+toastLbl.Size                   = UDim2.fromOffset(0, 56)
 toastLbl.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
 toastLbl.BackgroundTransparency = 0.35
 toastLbl.BorderSizePixel        = 0
@@ -144,6 +145,10 @@ do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = toastLbl
 	-- subtelny ciemny border zamiast jaskrawego (kolorowego) glow
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = toastLbl
+	-- margines wewnętrzny — tekst nie dotyka krawędzi gdy box dopasowuje szerokość
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 28); pad.PaddingRight = UDim.new(0, 28)
+	pad.Parent = toastLbl
 end
 
 local toastJob: thread? = nil
