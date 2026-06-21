@@ -160,6 +160,9 @@
       "PetService": {
         "$path": "src/server/services/PetService.luau"
       },
+      "PlayerCollisionService": {
+        "$path": "src/server/services/PlayerCollisionService.luau"
+      },
       "DeskaService": {
         "$path": "src/server/services/DeskaService.server.luau"
       },
