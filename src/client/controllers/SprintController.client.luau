@@ -41,6 +41,7 @@ local function getStaminaMax(): number return STAMINA_MAX_BASE + (hatOwned and h
 local stamina      = STAMINA_MAX_BASE
 local sprinting    = false
 local shiftHeld    = false
+local wasMounted   = false  -- do wykrycia zejścia z deski → przywrócenie prędkości pieszej
 
 local function getBaseSpeed(): number
 	local s = DEFAULT_SPEED
@@ -59,6 +60,10 @@ local function getHumanoid(): Humanoid?
 end
 
 local function applySpeed()
+	-- Gdy jeździsz na desce — NIE dotykamy WalkSpeed (deska/DeskaService nim zarządza).
+	-- Inaczej event-driven calle (PetStatusUpdate przy otwarciu jajka, HatStatus,
+	-- SkillTreeUpdate) nadpisywały prędkość deski na pieszą → "poruszasz się wolno".
+	if _G["__deskaMounted"] == true then return end
 	local hum = getHumanoid()
 	if not hum then return end
 	local base = getBaseSpeed()
@@ -117,7 +122,13 @@ RunService.Heartbeat:Connect(function(dt)
 		if sprinting then sprinting = false end
 		shiftHeld = false
 		container.Visible = false
+		wasMounted = true
 		return
+	end
+	-- Tuż po zejściu z deski — przywróć prędkość pieszą (applySpeed był gate'owany)
+	if wasMounted then
+		wasMounted = false
+		applySpeed()
 	end
 
 	-- Gate: brak Fundamentu → sprint wyłączony, pasek schowany
@@ -186,7 +197,8 @@ PetStatusUpdate.OnClientEvent:Connect(function(data)
 	if type(data) ~= "table" then return end
 	local b = data.bonuses
 	petSpeedBonus = (b and tonumber(b.speed)) or 0
-	-- Aktualizacja prędkości natychmiast (nawet w trakcie sprintu/jazdy na desce — deska gate'uje sama)
+	-- applySpeed jest no-op gdy jeździsz na desce (gate w applySpeed) — nie nadpisze
+	-- prędkości deski przy otwieraniu jajka / equipowaniu peta.
 	applySpeed()
 end)
 
