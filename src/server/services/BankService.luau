@@ -267,6 +267,11 @@ UpgradeBank.OnServerEvent:Connect(function(player: Player)
 	PlayerDataService.UpdateLeaderstats(player)
 	PlayerDataService.SaveData(player)
 
+	-- Story quest hook: ulepszenie skarbca
+	pcall(function()
+		require(script.Parent.StoryQuestService).AddProgress(player, "upgrade_bank", 1)
+	end)
+
 	local bData = loadBank(player)
 	BankResult:FireClient(player, {
 		success          = true,

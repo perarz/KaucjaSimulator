@@ -119,20 +119,26 @@ default.project.json
 ## Linia fabularna (StoryQuestService + StoryQuestController + sekcja FABUŁA w QuestController)
 
 ### Cel
-Onboarding — gracz wie co robić. 8 questów w ustalonej kolejności (Config.StoryQuests). Po wykonaniu kliknij ODBIERZ → wypłata + auto-start następnego.
+Onboarding — gracz wie co robić. 14 questów w ustalonej kolejności (Config.StoryQuests). Po wykonaniu kliknij ODBIERZ → wypłata + auto-start następnego.
 
 ### Chain (Config.StoryQuests)
 1. Zbierz 10 butelek (30 zł)
 2. Oddaj do butelkomatu 2× (50 zł)
 3. Kup 2 ulepszenia w drzewku (100 zł)
-4. Kup lepszy plecak (75 zł)
-5. Kup deskę w gablocie (200 zł)
-6. Zbierz 100 butelek (300 zł)
-7. Zbierz 5 Legendarnych butelek (400 zł)
-8. Pomóż Dziadkowi (500 zł — max)
+4. Kup lepszy plecak (150 zł)
+5. Kup 1 jajko z petem (250 zł)
+6. Załóż peta (300 zł)
+7. Kup deskę lvl 1 - Default (400 zł)
+8. Zbierz 100 butelek (600 zł)
+9. Zbierz 5 Legendarnych butelek (800 zł)
+10. Ulepsz skarbiec (1000 zł)
+11. Pomóż Dziadkowi (1200 zł)
+12. Kup deskę lvl 2 - Red (1500 zł)
+13. Wylosuj Legendarnego peta (2000 zł)
+14. Kup deskę lvl 3 - Blue (2500 zł — max)
 
 ### Mechanika
-- `StoryQuestService.AddProgress(player, kind, amount, params?)` — hooki w istniejących serwisach (BottleService.CollectBottle/EmptyBackpack, KoszService, UpgradeService.Buy*, ShopService.tryBuyBackpack, DeskaService.grantDeckInternal, GrandpaService.GrandpaTurnIn). Wszystkie przez `pcall(require...)`.
+- `StoryQuestService.AddProgress(player, kind, amount, params?)` — hooki w istniejących serwisach (BottleService.CollectBottle/EmptyBackpack, KoszService, UpgradeService.Buy*, ShopService.tryBuyBackpack, DeskaService.grantDeckInternal, GrandpaService.GrandpaTurnIn, PetService.OpenEgg/EquipPet, BankService.UpgradeBank). Wszystkie przez `pcall(require...)`.
 - Po dopełnieniu targetu → `readyToClaim = true` w snapshot. **NIE wypłaca automatycznie**. Gracz klika ODBIERZ → `StoryQuestClaim:FireServer()` → wypłata + `Index++` + reset `Progress` + po 2.5s nowy `StoryQuestInit`.
 - **`preFillProgress`** — przy `fireInit` na świeży quest sprawdza stan gracza. Jeśli ma już najlepszy plecak / 2+ skille / jakąś deskę → quest startuje od razu jako gotowy do odbioru.
 - **`PlayerDataService.SaveData` USUNIĘTE z `AddProgress`** — SetAsync yieldował 1-2s i blokował `CollectBottleResult` (SFX/VFX delay). Save zostaje w `claimAndAdvance` + auto-save co 60s.
@@ -140,6 +146,8 @@ Onboarding — gracz wie co robić. 8 questów w ustalonej kolejności (Config.S
 ### Kindy
 - `collect_any` (bez filtra), `collect_rarity` (z `params.rarity == q.rarity`)
 - `deposit`, `buy_skill`, `buy_backpack`, `buy_deck`, `grandpa_done`
+- `buy_egg` (otwarcie jajka), `equip_pet` (założenie peta), `upgrade_bank` (ULEPSZ skarbca)
+- `pet_rarity` (wylosowanie peta — `params.rarity == q.petRarity`)
 
 ### UI
 - **Corner HUD** (`StoryQuestController`) — prawy dolny róg, 460×130. Header "FABUŁA X/Y", desc, nagroda gold, pasek/ODBIERZ.

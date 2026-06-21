@@ -424,6 +424,15 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 	pushHud(player)
 	PetService.PushStatus(player)
 	PetRouletteResult:FireClient(player, { success = true, pets = drops })
+
+	-- Story quest hooki: kupno jajka + wylosowanie peta danej rzadkości
+	pcall(function()
+		local sqs = require(script.Parent.StoryQuestService)
+		sqs.AddProgress(player, "buy_egg", count)
+		for _, pet in ipairs(drops) do
+			sqs.AddProgress(player, "pet_rarity", 1, { rarity = pet.rarity })
+		end
+	end)
 	return drops
 end
 
@@ -447,6 +456,10 @@ EquipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	PetService.PushStatus(player)
 	applyPetEffects(player)
 	syncVisual(player)
+	-- Story quest hook: założenie peta
+	pcall(function()
+		require(script.Parent.StoryQuestService).AddProgress(player, "equip_pet", 1)
+	end)
 end)
 
 UnequipPet.OnServerEvent:Connect(function(player: Player)
