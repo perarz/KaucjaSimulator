@@ -269,6 +269,7 @@ Hooki te same co story (BottleService, KoszService itp.) — dzielą wspólne `A
 - **Bank side**: `_G["__bankLayoutCache"]` — saved on close + po POTWIERDŹ. Restore jeśli sumy z cache == server bankContents.
 - **Inv side**: position-keyed przez `__inventoryGetLayout/__inventorySetLayout`.
 - Wyjątek od 1:1: pickup butelki podczas otwartego banku → stackuje (UpdateHUD).
+- **Discard-on-unconfirmed-close**: `closeBank` utrwala layout TYLKO gdy `trPanel.Visible` i `not hasUncommittedChanges()` (układ == snapshot serwera `serverBpContents`/`serverBankContents`/pet-sety z BankInit/BankResult). Niezatwierdzony transfer EQ↔SKARBIEC jest porzucany — inaczej zredukowany layout EQ trafiał do shared inventory i przeniesione butelki znikały z widoku na zawsze.
 
 ### Pojemność + ULEPSZ
 - `BaseCapacity=10`, każde ulepszenie `+1 cap`, koszt `1000 + N×500` (L0→1000, L1→1500, L2→2000...).
