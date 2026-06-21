@@ -130,12 +130,12 @@ Onboarding — gracz wie co robić. 14 questów w ustalonej kolejności (Config.
 6. Załóż peta (300 zł)
 7. Kup deskę lvl 1 - Default (400 zł)
 8. Zbierz 100 butelek (600 zł)
-9. Zbierz 5 Legendarnych butelek (800 zł)
-10. Ulepsz skarbiec (1000 zł)
-11. Pomóż Dziadkowi (1200 zł)
-12. Kup deskę lvl 2 - Red (1500 zł)
-13. Wylosuj Legendarnego peta (2000 zł)
-14. Kup deskę lvl 3 - Blue (2500 zł — max)
+9. Zbierz 5 Legendarnych butelek (400 zł)
+10. Ulepsz skarbiec (500 zł)
+11. Pomóż Dziadkowi (150 zł)
+12. Kup deskę lvl 2 - Red (200 zł)
+13. Wylosuj Legendarnego peta (500 zł)
+14. Kup deskę lvl 3 - Blue (500 zł)
 
 ### Mechanika
 - `StoryQuestService.AddProgress(player, kind, amount, params?)` — hooki w istniejących serwisach (BottleService.CollectBottle/EmptyBackpack, KoszService, UpgradeService.Buy*, ShopService.tryBuyBackpack, DeskaService.grantDeckInternal, GrandpaService.GrandpaTurnIn, PetService.OpenEgg/EquipPet, BankService.UpgradeBank). Wszystkie przez `pcall(require...)`.
