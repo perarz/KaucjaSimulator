@@ -614,6 +614,8 @@ local DROP_FORWARD_DIST = 3   -- studs przed graczem
 DropBottle.OnServerEvent:Connect(function(player: Player, rarity: any)
 	if type(rarity) ~= "string" then return end
 	if not Config.BottleValues[rarity] then return end
+	-- Zakaz wyrzucania itemów w strefie PvP (anti-exploit + porządek na arenie)
+	if player:GetAttribute("InPvPZone") == true then return end
 
 	local data = PlayerDataService.GetData(player)
 	if not data.BackpackContents then return end
