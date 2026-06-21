@@ -4,6 +4,8 @@
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+local MessagingService  = game:GetService("MessagingService")
+local DataStoreService  = game:GetService("DataStoreService")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
@@ -13,6 +15,62 @@ local AdminInit      = Events:WaitForChild("AdminInit")
 local AdminAction    = Events:WaitForChild("AdminAction")
 local AdminBroadcast = Events:WaitForChild("AdminBroadcast")
 local UpdateHUD      = Events:WaitForChild("UpdateHUD")
+
+-- ── Cross-server (globalne akcje admina) ────────────────────────────────────
+-- Broadcast i dodanie kodu działają na WSZYSTKICH serwerach, nie tylko na tym
+-- gdzie admin kliknął. Live propagacja przez MessagingService; kody dodatkowo
+-- utrwalane w DataStore żeby serwery startujące PÓŹNIEJ też je miały.
+-- Lokalnie stosujemy od razu (instant feedback + działa w Studio), a echo z
+-- własnego serwera ignorujemy po game.JobId żeby nie zdublować.
+local TOPIC_BROADCAST = "AdminBroadcast"
+local TOPIC_ADDCODE   = "AdminAddCode"
+local codesStore      = DataStoreService:GetDataStore("AdminCodes_v1")
+local CODES_KEY       = "ALL"
+
+local function applyBroadcast(msg: string, from: string)
+	AdminBroadcast:FireAllClients({ message = msg, from = from })
+end
+
+local function applyCode(code: string, reward: number)
+	Config.Codes = Config.Codes or {}
+	Config.Codes[code] = { reward = reward }
+end
+
+-- Subskrypcja eventów z innych serwerów (pomijamy własne echo po JobId)
+task.spawn(function()
+	pcall(function()
+		MessagingService:SubscribeAsync(TOPIC_BROADCAST, function(packet)
+			local d = packet.Data
+			if type(d) ~= "table" or d.serverId == game.JobId then return end
+			if type(d.message) == "string" then
+				applyBroadcast(d.message, tostring(d.from or "Admin"))
+			end
+		end)
+	end)
+	pcall(function()
+		MessagingService:SubscribeAsync(TOPIC_ADDCODE, function(packet)
+			local d = packet.Data
+			if type(d) ~= "table" or d.serverId == game.JobId then return end
+			if type(d.code) == "string" and tonumber(d.reward) then
+				applyCode(d.code, tonumber(d.reward) :: number)
+			end
+		end)
+	end)
+end)
+
+-- Załaduj globalne kody utrwalone wcześniej (żeby ten świeży serwer też je miał)
+task.spawn(function()
+	local ok, stored = pcall(function() return codesStore:GetAsync(CODES_KEY) end)
+	if ok and type(stored) == "table" then
+		local n = 0
+		for code, reward in pairs(stored) do
+			if type(code) == "string" and type(reward) == "number" then
+				applyCode(code, reward); n += 1
+			end
+		end
+		if n > 0 then print(string.format("[AdminService] Załadowano %d globalnych kodów", n)) end
+	end
+end)
 
 local function isAdmin(player: Player): boolean
 	local list = Config.Admins or {}
@@ -42,8 +100,16 @@ AdminAction.OnServerEvent:Connect(function(player: Player, payload)
 	if action == "broadcast" then
 		local msg = tostring(payload.message or "")
 		if #msg == 0 or #msg > 200 then return end
-		AdminBroadcast:FireAllClients({ message = msg, from = player.Name })
-		print(string.format("[AdminService] %s broadcast: %s", player.Name, msg))
+		-- Lokalnie od razu + rozgłoś na pozostałe serwery (live)
+		applyBroadcast(msg, player.Name)
+		task.spawn(function()
+			pcall(function()
+				MessagingService:PublishAsync(TOPIC_BROADCAST, {
+					message = msg, from = player.Name, serverId = game.JobId,
+				})
+			end)
+		end)
+		print(string.format("[AdminService] %s broadcast (global): %s", player.Name, msg))
 
 	elseif action == "giveZl" then
 		local amount = tonumber(payload.amount) or 0
@@ -83,15 +149,31 @@ AdminAction.OnServerEvent:Connect(function(player: Player, payload)
 		if target then target:Kick("[Admin] " .. tostring(payload.reason or "Kick")) end
 
 	elseif action == "addCode" then
-		-- Dodaje runtime'owy kod promocyjny — żyje do restartu serwera.
-		-- CodeService czyta Config.Codes server-side, więc mutacja tu działa.
+		-- Dodaje globalny kod promocyjny. CodeService czyta Config.Codes server-side,
+		-- więc mutacja tu działa lokalnie. Dodatkowo: utrwalamy w DataStore (serwery
+		-- startujące później) + rozgłaszamy przez MessagingService (live serwery).
 		local code = string.upper(string.gsub(tostring(payload.code or ""), "%s", ""))
 		local reward = tonumber(payload.reward) or 0
 		if #code == 0 or #code > 32 then return end
 		if reward <= 0 or reward > 1000000 then return end
-		Config.Codes = Config.Codes or {}
-		Config.Codes[code] = { reward = reward }
-		print(string.format("[AdminService] %s dodał kod %s = %d zł", player.Name, code, reward))
+		applyCode(code, reward)  -- lokalnie od razu
+		task.spawn(function()
+			-- Utrwalenie (atomowy merge) — żeby świeże serwery też miały kod
+			pcall(function()
+				codesStore:UpdateAsync(CODES_KEY, function(old)
+					old = (type(old) == "table") and old or {}
+					old[code] = reward
+					return old
+				end)
+			end)
+			-- Live propagacja do innych serwerów
+			pcall(function()
+				MessagingService:PublishAsync(TOPIC_ADDCODE, {
+					code = code, reward = reward, serverId = game.JobId,
+				})
+			end)
+		end)
+		print(string.format("[AdminService] %s dodał kod (global) %s = %d zł", player.Name, code, reward))
 	end
 end)
 

@@ -514,7 +514,12 @@ DeskaService to **standalone Script** (.server.luau) — NIE wymagaj w GameServe
 ## Panel admina (AdminService + AdminController)
 
 - `Config.Admins` — lista UserId i/lub nazw.
-- F2 otwiera panel. Akcje: **broadcast** (czarny box gold border w centrum 5s), **giveZl** (max 1M), **giveBottles** (max 1000), **kick**, **addCode** (mutuje `Config.Codes[code]` server-side, runtime, ginie przy restart).
+- F2 otwiera panel. Akcje: **broadcast** (czarny box gold border w centrum 5s), **giveZl** (max 1M), **giveBottles** (max 1000), **kick**, **addCode**.
+- **Globalne akcje (cross-server)**: `broadcast` i `addCode` działają na WSZYSTKICH serwerach.
+  - Live propagacja przez `MessagingService` (topiki `AdminBroadcast` / `AdminAddCode`).
+  - Stosowane lokalnie od razu (instant feedback + działa w Studio); echo własnego serwera ignorowane po `game.JobId` (anti-duplikacja).
+  - `addCode` dodatkowo utrwalany w DataStore `AdminCodes_v1` (klucz `ALL`, atomowy `UpdateAsync`) — serwery startujące PÓŹNIEJ ładują kody na starcie. Broadcast jest tylko live (efemeryczny).
+- `giveZl`/`giveBottles`/`giveMagnet`/`kick` pozostają lokalne (dotyczą jednego gracza/serwera).
 - Throttle 0.3s między akcjami. Każda akcja waliduje admin status (anti-cheat).
 - Przycisk close i wszystkie buttony bez UIStroke (Thickness=0 — czytelność).
 
@@ -524,7 +529,7 @@ DeskaService to **standalone Script** (.server.luau) — NIE wymagaj w GameServe
 
 - Wpisywane w Ustawieniach. `Config.Codes`: OGDC=200, PVPOG=500, HOLYFINDER=1000, PARKOUR=150.
 - Throttle 0.5s. Walidacja: uppercase, max 32 chars, sprawdza `data.RedeemedCodes[code]`.
-- AdminAction "addCode" może dodawać runtime'owo (do restartu serwera).
+- AdminAction "addCode" dodaje kod **globalnie** (wszystkie serwery): live przez `MessagingService` + persystencja w DataStore `AdminCodes_v1` (świeże serwery ładują na starcie). Patrz sekcja Panel admina.
 
 ---
 
