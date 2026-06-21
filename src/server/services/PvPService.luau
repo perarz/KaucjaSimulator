@@ -126,12 +126,16 @@ local function giveSwordWithGrace(player: Player)
 		if backpack then
 			local clone = template:Clone()
 			clone:SetAttribute(SWORD_TAG, true)
+			clone.CanBeDropped = false  -- NIE można wyrzucić miecza (anti-exploit: wynoszenie poza arenę)
 			clone.Parent = backpack
 			sword = clone
 			print("[PvPService]", player.Name, "→ miecz dodany do Backpack")
 		end
 	end
-	if sword then sword.Enabled = false end
+	if sword then
+		sword.Enabled = false
+		sword.CanBeDropped = false  -- defense in depth (gdyby miecz był z poprzedniej sesji)
+	end
 
 	print(string.format("[PvPService] %s: grace %ds start (FF + sword disabled)", player.Name, GRACE_SECONDS))
 
@@ -334,6 +338,7 @@ task.spawn(function()
 							p:SetAttribute("PvPAccess", false)
 							print("[PvPService] WEJŚCIE (bilet skonsumowany):", p.Name)
 							inZone[p] = true
+							p:SetAttribute("InPvPZone", true)  -- gate dla DropBottle/DiscardPet
 							giveSwordWithGrace(p)
 							normalizeScales(p)
 							if guiShownFor[p] then
@@ -355,6 +360,7 @@ task.spawn(function()
 					if was then
 						print("[PvPService] WYJŚCIE ze strefy:", p.Name)
 						inZone[p] = nil
+						p:SetAttribute("InPvPZone", false)
 						removeSword(p)
 						restoreScales(p)
 					end

@@ -472,6 +472,8 @@ end)
 
 DiscardPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	if type(petId) ~= "string" then return end
+	-- Zakaz wyrzucania itemów (petów) w strefie PvP
+	if player:GetAttribute("InPvPZone") == true then return end
 	local data = PlayerDataService.GetData(player)
 	local idx = petIndex(data.Pets or {}, petId)
 	if not idx then return end

@@ -1187,14 +1187,28 @@ BankInit.OnClientEvent:Connect(function(data)
 		end
 	end
 
-	-- Inv side: PREFER shared layout z głównego ekwipunku (Z POZYCJAMI — 1:1 mapping)
+	-- Inv side: PREFER shared layout z głównego ekwipunku (Z POZYCJAMI — 1:1 mapping),
+	-- ALE tylko gdy sumy butelek == data.backpackContents (jak bank side z layoutOk).
+	-- Inaczej (stale/niespójny layout) butelki nie zgadzałyby się z serwerem i POTWIERDŹ
+	-- zwracał "conservation" → "BŁĄD ZAPISU". Fallback do flat contents z serwera.
 	for i = 1, SLOT_COUNT_B do invSlotArr[i] = nil end
 	local sharedLayout = _G["__inventoryGetLayout"] and _G["__inventoryGetLayout"]()
-	local hasShared = false
+	local invLayoutOk = false
 	if type(sharedLayout) == "table" then
-		for _, _ in pairs(sharedLayout) do hasShared = true; break end
+		local layoutTotals: { [string]: number } = {}
+		local any = false
+		for _, s in pairs(sharedLayout) do
+			any = true
+			layoutTotals[s.rarity] = (layoutTotals[s.rarity] or 0) + s.count
+		end
+		if any then
+			invLayoutOk = true
+			for _, r in ipairs(RARITY_ORDER) do
+				if (layoutTotals[r] or 0) ~= (data.backpackContents[r] or 0) then invLayoutOk = false; break end
+			end
+		end
 	end
-	if hasShared then
+	if invLayoutOk then
 		for slotIdx, s in pairs(sharedLayout) do
 			local i = tonumber(slotIdx)
 			if i and i >= 1 and i <= SLOT_COUNT_B then
@@ -1202,7 +1216,7 @@ BankInit.OnClientEvent:Connect(function(data)
 			end
 		end
 	else
-		-- Fallback: build z flat contents (pierwsze wejście, brak layoutu)
+		-- Fallback: build z flat contents (pierwsze wejście lub niespójny layout)
 		local ii = 1
 		for _, r in ipairs(RARITY_ORDER) do
 			if (data.backpackContents[r] or 0) > 0 and ii <= SLOT_COUNT_B then
