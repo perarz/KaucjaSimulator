@@ -1202,6 +1202,13 @@ BankResult.OnClientEvent:Connect(function(result)
 			currentUpgCost  = tonumber(result.bankUpgradeCost) or currentUpgCost
 			upgradeBtn.Text = string.format("ULEPSZ — %d zł", currentUpgCost)
 		end
+		-- ULEPSZ to tylko zmiana pojemności — NIC nie przenosi w slotach. Odpowiedź serwera
+		-- nie zawiera eqPets/bankPets, więc resync poniżej wyczyściłby pety z widoku.
+		-- Aktualizujemy tylko licznik X/N (renderAll) i kończymy.
+		if result.upgraded then
+			renderAll()
+			return
+		end
 		-- Najpierw czyścimy pety z obu arrays (server zwraca świeże listy), potem resync butelek
 		for i = 1, SLOT_COUNT_B do
 			if bankSlotArr[i] and isPetSlot(bankSlotArr[i]) then bankSlotArr[i] = nil end
