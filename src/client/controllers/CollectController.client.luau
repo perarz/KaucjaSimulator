@@ -18,6 +18,7 @@ local EmptyBackpackResult = Events:WaitForChild("EmptyBackpackResult")
 local UpdateHUD           = Events:WaitForChild("UpdateHUD")
 
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local Util   = require(ReplicatedStorage:WaitForChild("Util"))
 
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
@@ -138,8 +139,8 @@ local currentInvSubTab = INV_SUBTAB_BOTTLES
 local function getInvSubTab(s: SlotData?): string?
 	if not s or not s.id then return nil end
 	if s.id == MAGNET_ID then return INV_SUBTAB_ACCESSORIES end
+	if s.id == SYRUP_ID  then return INV_SUBTAB_ACCESSORIES end  -- syrop pokazywany w AKCESORIACH (item questowy, nie liczy się do limitu)
 	if isPetSlotId(s.id) then return INV_SUBTAB_PETS end
-	-- Butelki + syrop razem (syrop to quest item, ale logicznie należy do "rzeczy zbierane").
 	return INV_SUBTAB_BOTTLES
 end
 
@@ -438,13 +439,45 @@ local function formatAmount(amount: number): string
 	return string.format("%s.%02d", intStr, fracPart)
 end
 
+-- ── Pojemność per-kategoria (BUTELKI 70% / PETY 20% / AKCESORIA 10%) ───────
+-- Klucze zwracanej tabeli (bottles/pets/accessories) == wartości INV_SUBTAB_* —
+-- dzięki temu caps[currentInvSubTab] działa wprost.
+local function getCategoryCaps(): { bottles: number, pets: number, accessories: number }
+	return Util.getCategoryCaps(hudData.backpackCapacity or 0, Config.BackpackCategorySplit)
+end
+
+-- Liczba itemów danej kategorii w jednostkach POJEMNOŚCI: butelki sumują się
+-- (count w stacku), pet/magnes = 1 każdy. Syrop NIE liczy się (item questowy).
+local function categoryUnitCount(catId: string): number
+	local n = 0
+	for i = 1, SLOT_COUNT do
+		local s = slots[i]
+		if s then
+			if catId == INV_SUBTAB_BOTTLES and string.sub(s.id, 1, 7) == "Bottle_" then
+				n += s.count or 0
+			elseif catId == INV_SUBTAB_PETS and isPetSlotId(s.id) then
+				n += 1
+			elseif catId == INV_SUBTAB_ACCESSORIES and s.id == MAGNET_ID then
+				n += 1
+			end
+		end
+	end
+	return n
+end
+
+-- Licznik X/Y w nagłówku EQ — ilość dla AKTUALNEJ zakładki (kategorii).
+local function updateCategoryCounter()
+	if not invCountLbl then return end
+	local caps = getCategoryCaps()
+	local cap  = caps[currentInvSubTab] or 0
+	invCountLbl.Text = string.format("%d/%d", categoryUnitCount(currentInvSubTab), cap)
+end
+
 local function updateHud()
 	if walletLabel then
 		walletLabel.Text = formatAmount(hudData.zlotowki) .. " PLN"
 	end
-	if invCountLbl then
-		invCountLbl.Text = string.format("%d/%d", hudData.bottlesCarried, hudData.backpackCapacity)
-	end
+	updateCategoryCounter()
 end
 
 -- Hookup zewnętrznego Money ScreenGui — wykonywany PO definicji formatAmount/updateHud
@@ -1477,17 +1510,73 @@ local scheduleLayoutSync: () -> ()
 
 -- Filter sub-zakładek (BUTELKI/AKCESORIA/PETY) — ustawia slotFrames[i].Visible.
 -- Pusty slot widoczny we wszystkich zakładkach (żeby user widział wolne miejsce).
+-- Pozycja komórki w packed gridzie (AnchorPoint slotu = 0.5,0.5 → środek komórki).
+local function packedSlotPosition(packIdx: number): UDim2  -- packIdx 0-based
+	local col = packIdx % SLOTS_PER_ROW
+	local row = math.floor(packIdx / SLOTS_PER_ROW)
+	return UDim2.new(0,
+		col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2,
+		0,
+		row * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2)
+end
+
+-- Layout aktualnej zakładki: itemy danej kategorii pakowane od lewego-górnego rogu,
+-- potem PUSTE komórki do pojemności kategorii (70/20/10). Reszta slotów ukryta.
+-- Pozycje przeliczane dynamicznie — drag używa hover per-frame (hoveredSlot), więc
+-- repozycjonowanie ramek slotów jest bezpieczne i nie psuje przeciągania.
 local function applyInvSubTabFilter()
-	-- Safety: jeśli sub-tab UI nie wystartowało (np. error przy Instance.new), nie ukrywaj nic —
-	-- gracz dostaje stary widok pełnego mixed inventory zamiast pustego EQ.
+	-- Safety: jeśli sub-tab UI nie wystartowało (np. error przy Instance.new), nie ruszaj layoutu.
 	if #subTabBtns < #SUB_TAB_DEFS then return end
+
+	local caps = getCategoryCaps()
+	local cap  = caps[currentInvSubTab] or 0
+
+	-- Zbierz indeksy: itemy aktualnej kategorii (w kolejności slotów) + puste sloty.
+	local itemIdx: { number }  = {}
+	local emptyIdx: { number } = {}
 	for i = 1, SLOT_COUNT do
-		local sf = slotFrames[i]
-		if sf then
-			local cat = getInvSubTab(slots[i])
-			sf.Visible = (cat == nil) or (cat == currentInvSubTab)
+		local s = slots[i]
+		if s == nil then
+			table.insert(emptyIdx, i)
+		elseif getInvSubTab(s) == currentInvSubTab then
+			table.insert(itemIdx, i)
 		end
 	end
+
+	-- Komórki = pojemność kategorii, nie mniej niż liczba itemów (legacy overflow nie znika).
+	local totalCells  = math.max(#itemIdx, cap)
+	local emptyNeeded = math.max(0, totalCells - #itemIdx)
+
+	-- Ukryj wszystko, potem pokaż+ustaw pozycje: najpierw itemy, potem puste komórki.
+	for i = 1, SLOT_COUNT do
+		if slotFrames[i] then slotFrames[i].Visible = false end
+	end
+
+	local pack = 0
+	for _, i in ipairs(itemIdx) do
+		local sf = slotFrames[i]
+		if sf then
+			sf.Position = packedSlotPosition(pack)
+			sf.Visible  = true
+			pack += 1
+		end
+	end
+	for k = 1, emptyNeeded do
+		local i = emptyIdx[k]
+		if not i then break end
+		local sf = slotFrames[i]
+		if sf then
+			sf.Position = packedSlotPosition(pack)
+			sf.Visible  = true
+			pack += 1
+		end
+	end
+
+	-- CanvasSize wg liczby rzędów pokazanych komórek (scroll gdy > VISIBLE_ROWS).
+	local rows   = math.max(1, math.ceil(pack / SLOTS_PER_ROW))
+	slotsContainer.CanvasSize = UDim2.fromOffset(0, rows * SLOT_SIZE + (rows - 1) * SLOT_GAP)
+
+	updateCategoryCounter()
 end
 
 local function setInvSubTab(idx: number)

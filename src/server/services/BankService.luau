@@ -218,6 +218,21 @@ local function handleTransfer(player: Player, rawBp: any, rawBk: any, eqPetIds: 
 	}
 	if Util.getCarriedCount(simulated) > cap then return false, "overCapacity" end
 
+	-- Limity per-kategoria plecaka (BUTELKI 70% / PETY 20%) — spójne ze zbieraniem/jajkami.
+	-- Non-regressive: blokujemy tylko gdy transfer ZWIĘKSZA kategorię powyżej limitu
+	-- (newCount > cap AND newCount > oldCount). Gracze z legacy nadmiarem (sprzed podziału)
+	-- mogą nadal przekładać, byle nie powiększać przepełnionej kategorii. Magnesy nie są
+	-- transferowane przez bank, więc akcesoriów nie sprawdzamy.
+	local caps       = Util.getCategoryCaps(cap, Config.BackpackCategorySplit)
+	local newBottles = Util.getBottleCount(simulated)
+	if newBottles > caps.bottles and newBottles > Util.getBottleCount(pData) then
+		return false, "overCapacity"
+	end
+	local newPets = #eqPetIds
+	if newPets > caps.pets and newPets > #(pData.Pets or {}) then
+		return false, "overCapacity"
+	end
+
 	-- Bank capacity: butelki + pety razem
 	local bankCap = getBankCapacity(pData)
 	local bankTotal = #bankPetIds

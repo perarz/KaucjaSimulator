@@ -429,8 +429,10 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 		return nil
 	end
 
+	-- Limit per-kategoria: pety mogą zająć max 20% pojemności plecaka.
 	local capacity = getCapacity(data)
-	if countCarried(data) + count > capacity then
+	local caps     = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	if Util.getPetCount(data) + count > caps.pets then
 		PetRouletteResult:FireClient(player, { success = false, reason = "full" })
 		return nil
 	end

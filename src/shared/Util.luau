@@ -35,6 +35,37 @@ function Util.getCarriedCount(data: { [string]: any }): number
 	return n
 end
 
+-- Liczba butelek w plecaku (suma BackpackContents). Syrop NIE wlicza się (item questowy).
+function Util.getBottleCount(data: { [string]: any }): number
+	local n = 0
+	if data.BackpackContents then
+		for _, c in pairs(data.BackpackContents) do n += c end
+	end
+	return n
+end
+
+-- Liczba petów w plecaku (EQ, nie skarbiec).
+function Util.getPetCount(data: { [string]: any }): number
+	return #(data.Pets or {})
+end
+
+-- Liczba akcesoriów w plecaku — obecnie tylko magnesy (syrop to item questowy, nie liczy się).
+function Util.getAccessoryCount(data: { [string]: any }): number
+	return data.MagnetCount or 0
+end
+
+-- Podział pojemności plecaka na kategorie wg Config.BackpackCategorySplit.
+-- Zaokrąglenie deterministyczne: bottles=floor(0.7*cap), pets=floor(0.2*cap),
+-- accessories=cap-bottles-pets → suma zawsze == totalCapacity (zero "zgubionych" slotów).
+-- Single source of truth — klient (EQ layout/licznik) i serwer (blokady) liczą identycznie.
+function Util.getCategoryCaps(totalCapacity: number, split: { bottles: number, pets: number, accessories: number }): { bottles: number, pets: number, accessories: number }
+	local cap = math.max(0, math.floor(totalCapacity or 0))
+	local bottles = math.floor(cap * split.bottles)
+	local pets    = math.floor(cap * split.pets)
+	local accessories = cap - bottles - pets
+	return { bottles = bottles, pets = pets, accessories = accessories }
+end
+
 -- Rekurencyjny shallow-by-value deepCopy tabel.
 function Util.deepCopy(t: { [any]: any }): { [any]: any }
 	local copy = {}

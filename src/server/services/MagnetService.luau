@@ -55,8 +55,6 @@ function MagnetService.PushStatus(player: Player)
 	})
 end
 
-local getCarriedCount = Util.getCarriedCount
-
 -- Public API — używane przez AdminService / CodeService / questy.
 -- Respektuje pojemność plecaka (każdy magnes = 1 slot). Zwraca liczbę faktycznie przyznanych.
 function MagnetService.Grant(player: Player, amount: number?): number
@@ -64,8 +62,9 @@ function MagnetService.Grant(player: Player, amount: number?): number
 	local n = math.max(1, math.floor(amount or 1))
 	local data = PlayerDataService.GetData(player)
 	local capacity = Config.BackpackUpgrades[data.BackpackLevel or 1].Capacity
-	local carried  = getCarriedCount(data)
-	local space    = math.max(0, capacity - carried)
+	-- Limit per-kategoria: akcesoria (magnesy) mogą zająć max 10% pojemności plecaka.
+	local caps     = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	local space    = math.max(0, caps.accessories - Util.getAccessoryCount(data))
 	local granted  = math.min(n, space)
 	if granted <= 0 then
 		MagnetService.PushStatus(player)

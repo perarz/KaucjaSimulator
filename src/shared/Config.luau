@@ -283,6 +283,17 @@ return {
 		{ Level = 4, Capacity = 50, Cost = 10000, CostType = "Zlotowki", Name = "Wózek sklepowy" }, -- było 2800
 	},
 
+	-- Podział pojemności plecaka na kategorie (EQ z 3 zakładkami: BUTELKI / PETY / AKCESORIA).
+	-- Butelki 70%, pety 20%, akcesoria (magnesy) 10%. Limity egzekwowane serwerowo
+	-- (BottleService/PetService/MagnetService) + pokazywane per-kategoria w EQ.
+	-- Zaokrąglenie: bottles=floor(0.7*cap), pets=floor(0.2*cap), accessories=reszta — suma==cap.
+	-- Helper: Util.getCategoryCaps(totalCapacity).
+	BackpackCategorySplit = {
+		bottles     = 0.70,
+		pets        = 0.20,
+		accessories = 0.10,
+	},
+
 	-- Kosz — wagi ilości dropu per rzadkość
 	-- Format: { {count, weight}, ... } — wagi nie muszą sumować się do 100
 	-- Zwykla zaczyna od 2 — pojedyncza butelka po 2s trzymania + ruletce jest za słaba
