@@ -393,6 +393,27 @@ local cardEgg = makeCard({
 	imageId = IMG_EGG,
 })
 
+-- ── Paczki złotówek (Developer Products — konsumowalne, zawsze kupowalne) ─────
+local C_MONEY = Color3.fromRGB(110, 205, 120)
+local moneyPacks = Config.BoostShop.MoneyPacks or {}
+local moneyCards: { { card: CardHandles, pack: any } } = {}
+for i, pack in ipairs(moneyPacks) do
+	local card = makeCard({
+		title   = pack.Name,
+		desc    = string.format("Dolicza %s PLN do Twojego salda. Natychmiast po zakupie.",
+			tostring(pack.Amount)),
+		price   = string.format("%d R$", pack.PriceRobux or 0),
+		accent  = C_MONEY,
+		order   = 3 + i,
+		imageId = pack.image,
+	})
+	card.buyBtn.MouseButton1Click:Connect(function()
+		playSfx("Click")
+		PromptBoostPurchase:FireServer(pack.key)
+	end)
+	table.insert(moneyCards, { card = card, pack = pack })
+end
+
 -- ── Stany kart ──────────────────────────────────────────────────────────────
 local ownedVipDeck   = false
 local boostRemaining = 0
@@ -622,4 +643,5 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	if input.KeyCode == Enum.KeyCode.Escape and isOpen then setOpen(false) end
 end)
 
-print("[ShopCatalogController] gotowy — 3 karty (VIP / x2 KASA / Triple Egg)")
+print(string.format("[ShopCatalogController] gotowy — %d kart (VIP / x2 KASA / Triple Egg + %d paczki PLN)",
+	3 + #moneyCards, #moneyCards))

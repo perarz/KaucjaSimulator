@@ -16,6 +16,12 @@ return {
 			Name = "x2 KASA z butelkomatu",
 			PriceRobux = 19, -- info-only (real price jest w Roblox dashboard)
 		},
+		-- Paczki złotówek za Robux (Developer Products — ProcessReceipt jak deska VIP).
+		-- Konsumowalne: zawsze kupowalne, bez stanu "POSIADASZ".
+		MoneyPacks = {
+			{ key = "Money1k",  ProductId = 3606062107, Amount = 1000,  PriceRobux = 19,  Name = "1 000 PLN",  image = "rbxassetid://96938417960817" },
+			{ key = "Money10k", ProductId = 3606062394, Amount = 10000, PriceRobux = 169, Name = "10 000 PLN", image = "rbxassetid://98184141775824" },
+		},
 	},
 
 	-- Deski (skateboardy) — kupowane przy gablotach (workspace.Gabloty.Gablota1..4),
@@ -238,6 +244,16 @@ return {
 		Epicka = Color3.fromRGB(127, 119, 221),
 		Legendarna = Color3.fromRGB(239, 159, 39),
 		Mityczny = Color3.fromRGB(120, 40, 180), -- deep purple — bazowy kolor (slotów/strokeów). Gradient fiolet↔czarny rysuje VFX w slotach
+	},
+
+	-- Tekstury butelek w slotach EQ/banku (jak Config.Pets.Rarities[r].image dla petów).
+	-- Klucze = polskie rzadkości butelek. Preload w LoadingController.
+	BottleImages = {
+		Zwykla     = "rbxassetid://112983880089272",
+		Rzadka     = "rbxassetid://96149302704932",
+		Epicka     = "rbxassetid://114952458579095",
+		Legendarna = "rbxassetid://105678168067263",
+		Mityczny   = "rbxassetid://85772474205462",
 	},
 
 	-- Węzeł bazowy — odblokuj najpierw, żeby mieć dostęp do gałęzi

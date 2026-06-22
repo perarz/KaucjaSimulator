@@ -177,6 +177,21 @@ task.spawn(function()
 		end
 	end
 
+	-- Tekstury butelek w slotach EQ/banku — preload (jw. anty pop-in)
+	if Config.BottleImages then
+		for _, img in pairs(Config.BottleImages) do
+			if type(img) == "string" and img ~= "" then table.insert(assets, img) end
+		end
+	end
+
+	-- Ikony kart sklepu Robux (paczki PLN)
+	local mp = Config.BoostShop and Config.BoostShop.MoneyPacks
+	if mp then
+		for _, pack in ipairs(mp) do
+			if type(pack.image) == "string" and pack.image ~= "" then table.insert(assets, pack.image) end
+		end
+	end
+
 	-- 3) Preload (yielding — zwraca gdy wszystko gotowe)
 	setStatus("preload assetów (" .. #assets .. ")…")
 	if #assets > 0 then

@@ -7,6 +7,7 @@ local ReplicatedStorage  = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local Events             = ReplicatedStorage:WaitForChild("Events")
 local BoostStatusUpdate  = Events:WaitForChild("BoostStatusUpdate")
@@ -51,6 +52,17 @@ local function activateDoubleEarn(player: Player)
 		player.Name, math.floor(doubleEarnUntil[player] - now)))
 end
 
+-- Paczka złotówek za Robux — dolicza PLN do salda gracza (jak deska VIP: ProcessReceipt).
+local function grantMoney(player: Player, amount: number)
+	local data = PlayerDataService.GetData(player)
+	if not data then return end
+	data.Zlotowki    = (data.Zlotowki or 0) + amount
+	data.TotalEarned = (data.TotalEarned or 0) + amount  -- liczy się do leaderboardu
+	PlayerDataService.UpdateLeaderstats(player)
+	PlayerDataService.SaveData(player)
+	print(string.format("[BoostShop] %s otrzymał %d PLN (paczka Robux)", player.Name, amount))
+end
+
 -- ── ProcessReceipt: Roblox wywołuje to po finalizacji zakupu ─────────────────
 MarketplaceService.ProcessReceipt = function(receiptInfo)
 	print(string.format("[BoostShop] ProcessReceipt: PlayerId=%d ProductId=%s",
@@ -64,6 +76,14 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 	if receiptInfo.ProductId == Config.BoostShop.DoubleEarn.ProductId then
 		activateDoubleEarn(player)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
+	end
+
+	-- Paczki złotówek (Developer Products)
+	for _, pack in ipairs(Config.BoostShop.MoneyPacks or {}) do
+		if pack.ProductId ~= 0 and receiptInfo.ProductId == pack.ProductId then
+			grantMoney(player, pack.Amount)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
 	end
 
 	-- Deski w Robux (np. VIP) — DeskaService to standalone Script, więc grant idzie
@@ -95,6 +115,19 @@ PromptBoostPurchase.OnServerEvent:Connect(function(player: Player, productKey: s
 		end
 		print(string.format("[BoostShop] %s → PromptProductPurchase(ProductId=%d)", player.Name, id))
 		MarketplaceService:PromptProductPurchase(player, id)
+		return
+	end
+	-- Paczki złotówek
+	for _, pack in ipairs(Config.BoostShop.MoneyPacks or {}) do
+		if productKey == pack.key then
+			if not pack.ProductId or pack.ProductId == 0 then
+				warn("[BoostShop] Brak ProductId paczki", pack.key)
+				return
+			end
+			print(string.format("[BoostShop] %s → PromptProductPurchase(%s, %d)", player.Name, pack.key, pack.ProductId))
+			MarketplaceService:PromptProductPurchase(player, pack.ProductId)
+			return
+		end
 	end
 end)
 

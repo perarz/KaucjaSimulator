@@ -380,13 +380,13 @@ local bankFrames:   { Frame }      = {}; local bankNameLbls: { TextLabel } = {}
 local bankCntLbls:  { TextLabel }  = {}; local bankStrokes:  { UIStroke }  = {}
 local bankScales:   { UIScale }    = {}; local bankLegGlows: { Frame }     = {}
 local bankLegGrads: { UIGradient } = {}; local bankMytGlows: { Frame }     = {}
-local bankMytGrads: { UIGradient } = {}
+local bankMytGrads: { UIGradient } = {}; local bankImgs:     { ImageLabel } = {}
 
 local invFrames:   { Frame }      = {}; local invNameLbls: { TextLabel } = {}
 local invCntLbls:  { TextLabel }  = {}; local invStrokes:  { UIStroke }  = {}
 local invScales:   { UIScale }    = {}; local invLegGlows: { Frame }     = {}
 local invLegGrads: { UIGradient } = {}; local invMytGlows: { Frame }     = {}
-local invMytGrads: { UIGradient } = {}
+local invMytGrads: { UIGradient } = {}; local invImgs:     { ImageLabel } = {}
 
 local drag = { active = false, panel = "", slotIdx = 0, startPos = Vector2.zero, moved = false, isSplit = false, splitCount = 0 }
 local hovPanel:   string? = nil
@@ -408,11 +408,13 @@ local function lgGs(p: string)    return p == "bank" and bankLegGlows or invLegG
 local function lgGrs(p: string)   return p == "bank" and bankLegGrads or invLegGrads end
 local function mgGs(p: string)    return p == "bank" and bankMytGlows or invMytGlows end
 local function mgGrs(p: string)   return p == "bank" and bankMytGrads or invMytGrads end
+local function imgs(p: string)    return p == "bank" and bankImgs     or invImgs end
 
 -- ── Render ────────────────────────────────────────────────────────────────────
 local function renderSlot(panel: string, i: number)
 	local sf = frms(panel)[i]; if not sf then return end
 	local data = slotArr(panel)[i]
+	local im = imgs(panel)[i]
 	if data and isPetSlot(data) then
 		-- PET — kolor per rzadkość, nazwa = klasa, count ukryty
 		local col = petColor(data.pet.rarity)
@@ -425,6 +427,13 @@ local function renderSlot(panel: string, i: number)
 		ctLbls(panel)[i].TextColor3 = C_WHITE
 		lgGs(panel)[i].Visible      = false
 		mgGs(panel)[i].Visible      = false
+		if im then
+			local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.pet.rarity]) or {}
+			im.Image   = rcfg.image or ""
+			im.Visible = (rcfg.image ~= nil)
+			local sc = (data.pet.rarity == "Huge") and 0.98 or 0.82
+			im.Size = UDim2.fromScale(sc, sc)
+		end
 	elseif data then
 		sf.BackgroundColor3         = darken(RARITY_COLORS[data.rarity], 0.45)
 		stks(panel)[i].Color        = RARITY_COLORS[data.rarity]
@@ -435,6 +444,12 @@ local function renderSlot(panel: string, i: number)
 		ctLbls(panel)[i].TextColor3 = C_WHITE
 		lgGs(panel)[i].Visible      = (data.rarity == "Legendarna")
 		mgGs(panel)[i].Visible      = (data.rarity == "Mityczny")
+		if im then
+			local bimg = Config.BottleImages and Config.BottleImages[data.rarity]
+			im.Image   = bimg or ""
+			im.Visible = (bimg ~= nil)
+			im.Size    = UDim2.fromScale(0.82, 0.82)
+		end
 	else
 		sf.BackgroundColor3      = C_SLOT
 		stks(panel)[i].Color     = C_BORDER_SL
@@ -443,6 +458,7 @@ local function renderSlot(panel: string, i: number)
 		ctLbls(panel)[i].Text    = ""
 		lgGs(panel)[i].Visible   = false
 		mgGs(panel)[i].Visible   = false
+		if im then im.Visible = false end
 	end
 end
 
@@ -595,10 +611,10 @@ local function clearSlotFrames()
 	for _, f in ipairs(invFrames)  do if f.Parent then f:Destroy() end end
 	bankFrames = {}; bankNameLbls = {}; bankCntLbls = {}
 	bankStrokes = {}; bankScales = {}; bankLegGlows = {}; bankLegGrads = {}
-	bankMytGlows = {}; bankMytGrads = {}
+	bankMytGlows = {}; bankMytGrads = {}; bankImgs = {}
 	invFrames = {}; invNameLbls = {}; invCntLbls = {}
 	invStrokes = {}; invScales = {}; invLegGlows = {}; invLegGrads = {}
-	invMytGlows = {}; invMytGrads = {}
+	invMytGlows = {}; invMytGrads = {}; invImgs = {}
 end
 
 local SLOT_TI = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -654,13 +670,25 @@ local function makeSlotInScroll(scroll: ScrollingFrame, i: number)
 		NumberSequenceKeypoint.new(1,   0.15),
 	}); mgr.Parent = mg
 
+	-- Tekstura itemu (pet ALBO butelka) — nad glow (0), pod labelkami (6).
+	local im = Instance.new("ImageLabel")
+	im.Size                   = UDim2.fromScale(0.82, 0.82)
+	im.Position               = UDim2.fromScale(0.5, 0.46)
+	im.AnchorPoint            = Vector2.new(0.5, 0.5)
+	im.BackgroundTransparency = 1
+	im.ScaleType              = Enum.ScaleType.Fit
+	im.Image                  = ""
+	im.Visible                = false
+	im.ZIndex                 = 5
+	im.Parent                 = sf
+
 	local nl = mkLabel(sf, UDim2.new(1, -8, 0, 16), UDim2.new(0, 5, 0, 5), "", 11, C_WHITE)
 	nl.TextStrokeColor3 = Color3.new(0, 0, 0); nl.TextStrokeTransparency = 0.3; nl.ZIndex = 6
 	local cl = mkLabel(sf, UDim2.new(1, -6, 0, 24), UDim2.new(0, 0, 1, -28),
 		"", 22, C_WHITE, Enum.TextXAlignment.Right)
 	cl.TextStrokeColor3 = Color3.new(0, 0, 0); cl.TextStrokeTransparency = 0.2; cl.ZIndex = 6
 
-	return sf, sc, nl, cl, st, lg, lgr, mg, mgr
+	return sf, sc, nl, cl, st, lg, lgr, mg, mgr, im
 end
 
 local function buildSlotFrames(cap: number)
@@ -678,10 +706,10 @@ local function buildSlotFrames(cap: number)
 	for i = 1, cap do
 		local idx = i
 
-		local sf, sc, nl, cl, st, lg, lgr, mg, mgr = makeSlotInScroll(bankScroll, i)
+		local sf, sc, nl, cl, st, lg, lgr, mg, mgr, im = makeSlotInScroll(bankScroll, i)
 		bankFrames[i]=sf; bankScales[i]=sc; bankNameLbls[i]=nl
 		bankCntLbls[i]=cl; bankStrokes[i]=st; bankLegGlows[i]=lg; bankLegGrads[i]=lgr
-		bankMytGlows[i]=mg; bankMytGrads[i]=mgr
+		bankMytGlows[i]=mg; bankMytGrads[i]=mgr; bankImgs[i]=im
 
 		sf.MouseEnter:Connect(function()
 			hovPanel = "bank"; hovSlotIdx = idx
@@ -703,10 +731,10 @@ local function buildSlotFrames(cap: number)
 			end
 		end)
 
-		local sf2, sc2, nl2, cl2, st2, lg2, lgr2, mg2, mgr2 = makeSlotInScroll(invScroll, i)
+		local sf2, sc2, nl2, cl2, st2, lg2, lgr2, mg2, mgr2, im2 = makeSlotInScroll(invScroll, i)
 		invFrames[i]=sf2; invScales[i]=sc2; invNameLbls[i]=nl2
 		invCntLbls[i]=cl2; invStrokes[i]=st2; invLegGlows[i]=lg2; invLegGrads[i]=lgr2
-		invMytGlows[i]=mg2; invMytGrads[i]=mgr2
+		invMytGlows[i]=mg2; invMytGrads[i]=mgr2; invImgs[i]=im2
 
 		sf2.MouseEnter:Connect(function()
 			hovPanel = "inv"; hovSlotIdx = idx
