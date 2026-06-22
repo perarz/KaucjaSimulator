@@ -77,17 +77,22 @@ local PAD              = 30
 local VISIBLE_ROWS     = 4      -- ile rzędów widzimy bez scrollowania (reszta scrolluje)
 local SCROLLBAR_THICK  = 8
 
-local C_BG        = Color3.fromRGB(18, 91, 73)
-local C_PANEL     = Color3.fromRGB(24, 110, 90)
-local C_HEADER    = Color3.fromRGB(0, 53, 39)
-local C_SLOT      = Color3.fromRGB(8, 60, 48)
-local C_SLOT_OC   = Color3.fromRGB(32, 110, 90)
-local C_SLOT_HOV  = Color3.fromRGB(14, 75, 60)
-local C_BORDER    = Color3.fromRGB(5, 25, 20)
-local C_BORDER_SL = Color3.fromRGB(8, 30, 24)
-local C_WHITE     = Color3.fromRGB(255, 255, 255)
-local C_DIMTEXT   = Color3.fromRGB(175, 175, 175)
-local C_ACCENT_GREEN = Color3.fromRGB(170, 221, 102)
+-- Kolory zgrupowane w jednej tabeli (zamiast 11 osobnych lokalnych) — Luau ma limit
+-- 200 rejestrów lokalnych na funkcję, a ciało skryptu to jeden duży chunk. Konsolidacja
+-- stałych w tabele zwalnia rejestry, żeby dodawanie funkcji nie wywalało kompilacji.
+local C = {
+	BG          = Color3.fromRGB(18, 91, 73),
+	PANEL       = Color3.fromRGB(24, 110, 90),
+	HEADER      = Color3.fromRGB(0, 53, 39),
+	SLOT        = Color3.fromRGB(8, 60, 48),
+	SLOT_OC     = Color3.fromRGB(32, 110, 90),
+	SLOT_HOV    = Color3.fromRGB(14, 75, 60),
+	BORDER      = Color3.fromRGB(5, 25, 20),
+	BORDER_SL   = Color3.fromRGB(8, 30, 24),
+	WHITE       = Color3.fromRGB(255, 255, 255),
+	DIMTEXT     = Color3.fromRGB(175, 175, 175),
+	ACCENT_GREEN = Color3.fromRGB(170, 221, 102),
+}
 local FONT_MAIN   = Enum.Font.GothamBlack
 
 -- ── Typy ──────────────────────────────────────────────────────────────────
@@ -104,18 +109,21 @@ local hudData = {
 	hasSyrup         = false,  -- quest item dziadka, zajmuje 1 slot
 }
 
--- Syrop dziadka — kolory i opis dla slotu/detal panelu
-local SYRUP_ID    = "Syrop_Maple"
-local SYRUP_NAME  = "Syrop Dziadka"
-local SYRUP_COLOR = Config.GrandpaQuest and Config.GrandpaQuest.SyrupLight
-	or Color3.fromRGB(200, 130, 60)
-local SYRUP_DESC  = "Syrop klonowy dziadka. Zanieś go staremu — pewnie da ci coś w zamian."
+-- Syrop dziadka — zgrupowane w tabeli (oszczędność rejestrów lokalnych).
+local SYRUP_ID = "Syrop_Maple"
+local SYRUP = {
+	NAME  = "Syrop Dziadka",
+	COLOR = (Config.GrandpaQuest and Config.GrandpaQuest.SyrupLight) or Color3.fromRGB(200, 130, 60),
+	DESC  = "Syrop klonowy dziadka. Zanieś go staremu — pewnie da ci coś w zamian.",
+}
 
--- Magnes — używany item, NIE stackuje się (1 sztuka = 1 slot)
-local MAGNET_ID    = "Magnet"
-local MAGNET_NAME  = (Config.Magnet and Config.Magnet.Name) or "Magnes"
-local MAGNET_COLOR = (Config.Magnet and Config.Magnet.Color) or Color3.fromRGB(220, 90, 90)
-local MAGNET_DESC  = (Config.Magnet and Config.Magnet.Desc) or "Aktywuj, by zbierać butelki automatycznie."
+-- Magnes — używany item, NIE stackuje się (1 sztuka = 1 slot). Zgrupowany w tabeli.
+local MAGNET_ID = "Magnet"
+local MAGNET = {
+	NAME  = (Config.Magnet and Config.Magnet.Name) or "Magnes",
+	COLOR = (Config.Magnet and Config.Magnet.Color) or Color3.fromRGB(220, 90, 90),
+	DESC  = (Config.Magnet and Config.Magnet.Desc) or "Aktywuj, by zbierać butelki automatycznie.",
+}
 
 -- Pet slot id prefix: "Pet_<uuid>". Każdy pet = osobny slot (NIE stackuje się — unikalny UUID).
 local PET_ID_PREFIX = "Pet_"
@@ -186,7 +194,7 @@ local function addSyrupToInventory()
 	end
 	for i = 1, SLOT_COUNT do
 		if not slots[i] then
-			slots[i] = { id = SYRUP_ID, color = SYRUP_COLOR, name = SYRUP_NAME, count = 1 }
+			slots[i] = { id = SYRUP_ID, color = SYRUP.COLOR, name = SYRUP.NAME, count = 1 }
 			return
 		end
 	end
@@ -212,7 +220,7 @@ local function syncMagnetSlots()
 		for i = 1, SLOT_COUNT do
 			if toAdd <= 0 then break end
 			if not slots[i] then
-				slots[i] = { id = MAGNET_ID, color = MAGNET_COLOR, name = MAGNET_NAME, count = 1 }
+				slots[i] = { id = MAGNET_ID, color = MAGNET.COLOR, name = MAGNET.NAME, count = 1 }
 				toAdd -= 1
 			end
 		end
@@ -266,7 +274,7 @@ local function syncPetSlots()
 			for i = 1, SLOT_COUNT do
 				if not slots[i] then
 					local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[p.rarity]) or {}
-					local color = rcfg.color or C_WHITE
+					local color = rcfg.color or C.WHITE
 					slots[i] = {
 						id        = PET_ID_PREFIX .. p.id,
 						color     = color,
@@ -358,7 +366,7 @@ end
 local function mkFrame(parent, size, pos, bg, alpha)
 	local f = Instance.new("Frame")
 	f.Size = size; f.Position = pos
-	f.BackgroundColor3 = bg or C_BG
+	f.BackgroundColor3 = bg or C.BG
 	f.BackgroundTransparency = alpha or 0
 	f.BorderSizePixel = 0; f.Parent = parent
 	return f
@@ -368,7 +376,7 @@ local function mkLabel(parent, size, pos, text, textSize, color, xAlign)
 	local l = Instance.new("TextLabel")
 	l.Size = size; l.Position = pos
 	l.BackgroundTransparency = 1
-	l.TextColor3 = color or C_WHITE
+	l.TextColor3 = color or C.WHITE
 	l.TextSize = textSize or 14
 	l.Font = FONT_MAIN
 	l.Text = text or ""; l.TextXAlignment = xAlign or Enum.TextXAlignment.Left
@@ -378,7 +386,7 @@ end
 
 local function mkStroke(parent, color, thickness)
 	local s = Instance.new("UIStroke")
-	s.Color           = color or C_BORDER
+	s.Color           = color or C.BORDER
 	s.Thickness       = thickness or 1
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	s.Parent          = parent
@@ -568,41 +576,41 @@ local STACK_TOP = -STACK_H / 2
 eqBtn = Instance.new("TextButton")
 eqBtn.Size = UDim2.new(0, BTN_W, 0, BTN_H)
 eqBtn.Position = UDim2.new(0, 16, 0.5, STACK_TOP)
-eqBtn.BackgroundColor3 = C_BG; eqBtn.BackgroundTransparency = 0.05
+eqBtn.BackgroundColor3 = C.BG; eqBtn.BackgroundTransparency = 0.05
 eqBtn.BorderSizePixel = 0; eqBtn.Text = "EKWIPUNEK"; eqBtn.TextSize = 30
-eqBtn.Font = FONT_MAIN; eqBtn.TextColor3 = C_WHITE; eqBtn.AutoButtonColor = false
+eqBtn.Font = FONT_MAIN; eqBtn.TextColor3 = C.WHITE; eqBtn.AutoButtonColor = false
 eqBtn.ZIndex = 2; eqBtn.Parent = hudGui
-mkStroke(eqBtn, C_BORDER, 4)
+mkStroke(eqBtn, C.BORDER, 4)
 mkCorner(eqBtn, 8)
 
 local stBtn = Instance.new("TextButton")
 stBtn.Size = UDim2.new(0, BTN_W, 0, BTN_H)
 stBtn.Position = UDim2.new(0, 16, 0.5, STACK_TOP + BTN_H + BTN_GAP)
-stBtn.BackgroundColor3 = C_BG; stBtn.BackgroundTransparency = 0.05
+stBtn.BackgroundColor3 = C.BG; stBtn.BackgroundTransparency = 0.05
 stBtn.BorderSizePixel = 0; stBtn.Text = "UMIEJĘTNOŚCI"; stBtn.TextSize = 27
-stBtn.Font = FONT_MAIN; stBtn.TextColor3 = C_WHITE; stBtn.AutoButtonColor = false
+stBtn.Font = FONT_MAIN; stBtn.TextColor3 = C.WHITE; stBtn.AutoButtonColor = false
 stBtn.ZIndex = 2; stBtn.Parent = hudGui
-mkStroke(stBtn, C_BORDER, 4)
+mkStroke(stBtn, C.BORDER, 4)
 mkCorner(stBtn, 8)
 
 local qBtn = Instance.new("TextButton")
 qBtn.Size = UDim2.new(0, BTN_W, 0, BTN_H)
 qBtn.Position = UDim2.new(0, 16, 0.5, STACK_TOP + 2 * (BTN_H + BTN_GAP))
-qBtn.BackgroundColor3 = C_BG; qBtn.BackgroundTransparency = 0.05
+qBtn.BackgroundColor3 = C.BG; qBtn.BackgroundTransparency = 0.05
 qBtn.BorderSizePixel = 0; qBtn.Text = "QUESTY"; qBtn.TextSize = 30
-qBtn.Font = FONT_MAIN; qBtn.TextColor3 = C_WHITE; qBtn.AutoButtonColor = false
+qBtn.Font = FONT_MAIN; qBtn.TextColor3 = C.WHITE; qBtn.AutoButtonColor = false
 qBtn.ZIndex = 2; qBtn.Parent = hudGui
-mkStroke(qBtn, C_BORDER, 4)
+mkStroke(qBtn, C.BORDER, 4)
 mkCorner(qBtn, 8)
 
 local setBtn = Instance.new("TextButton")
 setBtn.Size = UDim2.new(0, BTN_W, 0, BTN_H)
 setBtn.Position = UDim2.new(0, 16, 0.5, STACK_TOP + 3 * (BTN_H + BTN_GAP))
-setBtn.BackgroundColor3 = C_BG; setBtn.BackgroundTransparency = 0.05
+setBtn.BackgroundColor3 = C.BG; setBtn.BackgroundTransparency = 0.05
 setBtn.BorderSizePixel = 0; setBtn.Text = "USTAWIENIA"; setBtn.TextSize = 26
-setBtn.Font = FONT_MAIN; setBtn.TextColor3 = C_WHITE; setBtn.AutoButtonColor = false
+setBtn.Font = FONT_MAIN; setBtn.TextColor3 = C.WHITE; setBtn.AutoButtonColor = false
 setBtn.ZIndex = 2; setBtn.Parent = hudGui
-mkStroke(setBtn, C_BORDER, 4)
+mkStroke(setBtn, C.BORDER, 4)
 mkCorner(setBtn, 8)
 
 -- Hover animacja dla przycisków HUD
@@ -694,31 +702,31 @@ local INV_POS_HIDE = UDim2.new(0.5, 0, 0.55, 0)
 local INV_TW_OPEN  = TweenInfo.new(0.30, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local INV_TW_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
-local invPanel = mkFrame(invGui, UDim2.fromOffset(INV_W_COMPACT, INV_H), INV_POS_HIDE, C_PANEL, 0.05)
+local invPanel = mkFrame(invGui, UDim2.fromOffset(INV_W_COMPACT, INV_H), INV_POS_HIDE, C.PANEL, 0.05)
 invPanel.AnchorPoint     = Vector2.new(0.5, 0.5)
 invPanel.ClipsDescendants = true
 invPanel.ZIndex          = 2
-mkStroke(invPanel, C_BORDER, 4)
+mkStroke(invPanel, C.BORDER, 4)
 mkCorner(invPanel, 8)
 
 -- header: UICorner zaokrągla wszystkie rogi; dolne maskujemy prostokątnym fillem
--- + cienki separator C_BORDER jako wizualny rozdział od reszty panelu
+-- + cienki separator C.BORDER jako wizualny rozdział od reszty panelu
 local invHeader = mkFrame(invPanel, UDim2.new(1, 0, 0, INV_HEADER_H), UDim2.fromOffset(0, 0),
-	C_HEADER, 0)
+	C.HEADER, 0)
 invHeader.ZIndex = 3
 mkCorner(invHeader, 8)
 do
-	local fill = mkFrame(invHeader, UDim2.new(1, 0, 0, 10), UDim2.new(0, 0, 1, -10), C_HEADER, 0)
+	local fill = mkFrame(invHeader, UDim2.new(1, 0, 0, 10), UDim2.new(0, 0, 1, -10), C.HEADER, 0)
 	fill.ZIndex = 3
-	local sep = mkFrame(invHeader, UDim2.new(1, 0, 0, 2), UDim2.new(0, 0, 1, -2), C_BORDER, 0)
+	local sep = mkFrame(invHeader, UDim2.new(1, 0, 0, 2), UDim2.new(0, 0, 1, -2), C.BORDER, 0)
 	sep.ZIndex = 5
 end
 local invTitle = mkLabel(invHeader, UDim2.fromOffset(140, 52), UDim2.fromOffset(20, 0),
-	"EKWIPUNEK", 15, C_WHITE, Enum.TextXAlignment.Left)
+	"EKWIPUNEK", 15, C.WHITE, Enum.TextXAlignment.Left)
 invTitle.ZIndex = 4
 
 invCountLbl = mkLabel(invHeader, UDim2.fromOffset(130, 52), UDim2.fromOffset(170, 0),
-	"0/10", 20, C_DIMTEXT, Enum.TextXAlignment.Left)
+	"0/10", 20, C.DIMTEXT, Enum.TextXAlignment.Left)
 invCountLbl.ZIndex = 4
 
 local X_RED        = Color3.fromRGB(220, 70, 70)
@@ -763,7 +771,7 @@ slotsContainer.BackgroundTransparency = 1
 slotsContainer.BorderSizePixel        = 0
 slotsContainer.CanvasSize             = UDim2.fromOffset(0, canvasH)
 slotsContainer.ScrollBarThickness     = SCROLLBAR_THICK
-slotsContainer.ScrollBarImageColor3   = C_BORDER
+slotsContainer.ScrollBarImageColor3   = C.BORDER
 slotsContainer.ScrollingDirection     = Enum.ScrollingDirection.Y
 slotsContainer.ZIndex                 = 3
 slotsContainer.Parent                 = invPanel
@@ -782,159 +790,163 @@ local BOTTLE_DESC = {
 -- gdy panel jest zwinięty, klipuje się 1:1 do prawego brzegu i niczego nie widać
 local INV_DET_X_SHOWN  = INV_W_COMPACT
 
-local invDetPanel = mkFrame(invPanel,
+-- Detail panel: wszystkie referencje (panel/labelki/przyciski/stan) w jednej tabeli D
+-- zamiast 17 osobnych lokalnych — oszczędność rejestrów (limit Luau 200 na chunk).
+local D = {}
+
+D.panel = mkFrame(invPanel,
 	UDim2.fromOffset(INV_DET_W, slotsH),
 	UDim2.fromOffset(INV_DET_X_SHOWN, INV_HEADER_H + PAD),
-	C_BG, 0.05)
-invDetPanel.ZIndex = 4
-mkStroke(invDetPanel, C_BORDER, 4)
-mkCorner(invDetPanel, 10)
+	C.BG, 0.05)
+D.panel.ZIndex = 4
+mkStroke(D.panel, C.BORDER, 4)
+mkCorner(D.panel, 10)
 
 -- Detail close X
-local invDetCloseBtn = Instance.new("TextButton")
-invDetCloseBtn.Size                   = UDim2.fromOffset(30, 30)
-invDetCloseBtn.AnchorPoint            = Vector2.new(1, 0)
-invDetCloseBtn.Position               = UDim2.new(1, -12, 0, 12)
-invDetCloseBtn.BackgroundTransparency = 1
-invDetCloseBtn.BorderSizePixel        = 0
-invDetCloseBtn.Text                   = "X"
-invDetCloseBtn.TextSize               = 22
-invDetCloseBtn.Font                   = FONT_MAIN
-invDetCloseBtn.TextColor3             = X_RED
-invDetCloseBtn.AutoButtonColor        = false
-invDetCloseBtn.ZIndex                 = 6
-invDetCloseBtn.Parent                 = invDetPanel
+D.closeBtn = Instance.new("TextButton")
+D.closeBtn.Size                   = UDim2.fromOffset(30, 30)
+D.closeBtn.AnchorPoint            = Vector2.new(1, 0)
+D.closeBtn.Position               = UDim2.new(1, -12, 0, 12)
+D.closeBtn.BackgroundTransparency = 1
+D.closeBtn.BorderSizePixel        = 0
+D.closeBtn.Text                   = "X"
+D.closeBtn.TextSize               = 22
+D.closeBtn.Font                   = FONT_MAIN
+D.closeBtn.TextColor3             = X_RED
+D.closeBtn.AutoButtonColor        = false
+D.closeBtn.ZIndex                 = 6
+D.closeBtn.Parent                 = D.panel
 do
-	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetCloseBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = D.closeBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	invDetCloseBtn.MouseEnter:Connect(function()
+	D.closeBtn.MouseEnter:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.18 }):Play()
-		invDetCloseBtn.TextColor3 = X_RED_HOVER
+		D.closeBtn.TextColor3 = X_RED_HOVER
 	end)
-	invDetCloseBtn.MouseLeave:Connect(function()
+	D.closeBtn.MouseLeave:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.00 }):Play()
-		invDetCloseBtn.TextColor3 = X_RED
+		D.closeBtn.TextColor3 = X_RED
 	end)
 end
 
 -- Tytuł (nazwa rzadkości)
-local invDetTitle = mkLabel(invDetPanel,
+D.title = mkLabel(D.panel,
 	UDim2.new(1, -56, 0, 32), UDim2.fromOffset(16, 18),
-	"", 22, C_WHITE, Enum.TextXAlignment.Left)
-invDetTitle.ZIndex = 5
+	"", 22, C.WHITE, Enum.TextXAlignment.Left)
+D.title.ZIndex = 5
 
 -- Podtytuł — count
-local invDetCount = mkLabel(invDetPanel,
+D.count = mkLabel(D.panel,
 	UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 52),
-	"", 13, C_DIMTEXT, Enum.TextXAlignment.Left)
-invDetCount.ZIndex = 5
+	"", 13, C.DIMTEXT, Enum.TextXAlignment.Left)
+D.count.ZIndex = 5
 
 -- Separator
-local invDetSep1 = mkFrame(invDetPanel,
-	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 86), C_BORDER, 0)
-invDetSep1.ZIndex = 5
+D.sep1 = mkFrame(D.panel,
+	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 86), C.BORDER, 0)
+D.sep1.ZIndex = 5
 
 -- "Wartość bazowa: X ZŁ za butelkę"
-local invDetBaseLbl = mkLabel(invDetPanel,
+D.baseLbl = mkLabel(D.panel,
 	UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 98),
-	"", 13, C_DIMTEXT, Enum.TextXAlignment.Left)
-invDetBaseLbl.ZIndex = 5
+	"", 13, C.DIMTEXT, Enum.TextXAlignment.Left)
+D.baseLbl.ZIndex = 5
 
 -- Łączna wartość bez multipliera (count × base)
-local invDetTotalLbl = mkLabel(invDetPanel,
+D.totalLbl = mkLabel(D.panel,
 	UDim2.new(1, -32, 0, 24), UDim2.fromOffset(16, 122),
-	"", 16, C_WHITE, Enum.TextXAlignment.Left)
-invDetTotalLbl.ZIndex = 5
+	"", 16, C.WHITE, Enum.TextXAlignment.Left)
+D.totalLbl.ZIndex = 5
 
 -- Z multiplierem
-local invDetMultLbl = mkLabel(invDetPanel,
+D.multLbl = mkLabel(D.panel,
 	UDim2.new(1, -32, 0, 24), UDim2.fromOffset(16, 150),
-	"", 16, C_ACCENT_GREEN, Enum.TextXAlignment.Left)
-invDetMultLbl.ZIndex = 5
+	"", 16, C.ACCENT_GREEN, Enum.TextXAlignment.Left)
+D.multLbl.ZIndex = 5
 
 -- Separator
-local invDetSep2 = mkFrame(invDetPanel,
-	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 188), C_BORDER, 0)
-invDetSep2.ZIndex = 5
+D.sep2 = mkFrame(D.panel,
+	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 188), C.BORDER, 0)
+D.sep2.ZIndex = 5
 
 -- Opis
-local invDetDesc = mkLabel(invDetPanel,
+D.desc = mkLabel(D.panel,
 	UDim2.new(1, -32, 0, 100), UDim2.fromOffset(16, 200),
-	"", 13, C_DIMTEXT, Enum.TextXAlignment.Left)
-invDetDesc.TextWrapped     = true
-invDetDesc.TextYAlignment  = Enum.TextYAlignment.Top
-invDetDesc.ZIndex          = 5
+	"", 13, C.DIMTEXT, Enum.TextXAlignment.Left)
+D.desc.TextWrapped     = true
+D.desc.TextYAlignment  = Enum.TextYAlignment.Top
+D.desc.ZIndex          = 5
 
 -- Przycisk UPUŚĆ (1 sztukę przed graczem) — niedostępny dla syropu (quest item)
 local DropBottleEvt = ReplicatedStorage:WaitForChild("Events"):WaitForChild("DropBottle")
-local invDetDropBtn = Instance.new("TextButton")
-invDetDropBtn.Size                   = UDim2.new(1, -32, 0, 44)
-invDetDropBtn.AnchorPoint            = Vector2.new(0, 1)
-invDetDropBtn.Position               = UDim2.new(0, 16, 1, -16)
-invDetDropBtn.BackgroundColor3       = Color3.fromRGB(180, 70, 70)
-invDetDropBtn.BorderSizePixel        = 0
-invDetDropBtn.Text                   = "UPUŚĆ 1 SZTUKĘ"
-invDetDropBtn.TextSize               = 16
-invDetDropBtn.Font                   = FONT_MAIN
-invDetDropBtn.TextColor3             = C_WHITE
-invDetDropBtn.AutoButtonColor        = false
-invDetDropBtn.ZIndex                 = 6
-invDetDropBtn.Parent                 = invDetPanel
+D.dropBtn = Instance.new("TextButton")
+D.dropBtn.Size                   = UDim2.new(1, -32, 0, 44)
+D.dropBtn.AnchorPoint            = Vector2.new(0, 1)
+D.dropBtn.Position               = UDim2.new(0, 16, 1, -16)
+D.dropBtn.BackgroundColor3       = Color3.fromRGB(180, 70, 70)
+D.dropBtn.BorderSizePixel        = 0
+D.dropBtn.Text                   = "UPUŚĆ 1 SZTUKĘ"
+D.dropBtn.TextSize               = 16
+D.dropBtn.Font                   = FONT_MAIN
+D.dropBtn.TextColor3             = C.WHITE
+D.dropBtn.AutoButtonColor        = false
+D.dropBtn.ZIndex                 = 6
+D.dropBtn.Parent                 = D.panel
 
 -- Przycisk UŻYJ (tylko dla magnesu) — aktywuje 2-min sweep
-local invDetUseBtn = Instance.new("TextButton")
-invDetUseBtn.Size                   = UDim2.new(1, -32, 0, 44)
-invDetUseBtn.AnchorPoint            = Vector2.new(0, 1)
-invDetUseBtn.Position               = UDim2.new(0, 16, 1, -16)
-invDetUseBtn.BackgroundColor3       = MAGNET_COLOR
-invDetUseBtn.BorderSizePixel        = 0
-invDetUseBtn.Text                   = "UŻYJ"
-invDetUseBtn.TextSize               = 18
-invDetUseBtn.Font                   = FONT_MAIN
-invDetUseBtn.TextColor3             = C_WHITE
-invDetUseBtn.AutoButtonColor        = false
-invDetUseBtn.Visible                = false
-invDetUseBtn.ZIndex                 = 6
-invDetUseBtn.Parent                 = invDetPanel
+D.useBtn = Instance.new("TextButton")
+D.useBtn.Size                   = UDim2.new(1, -32, 0, 44)
+D.useBtn.AnchorPoint            = Vector2.new(0, 1)
+D.useBtn.Position               = UDim2.new(0, 16, 1, -16)
+D.useBtn.BackgroundColor3       = MAGNET.COLOR
+D.useBtn.BorderSizePixel        = 0
+D.useBtn.Text                   = "UŻYJ"
+D.useBtn.TextSize               = 18
+D.useBtn.Font                   = FONT_MAIN
+D.useBtn.TextColor3             = C.WHITE
+D.useBtn.AutoButtonColor        = false
+D.useBtn.Visible                = false
+D.useBtn.ZIndex                 = 6
+D.useBtn.Parent                 = D.panel
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetUseBtn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = invDetUseBtn
-	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetUseBtn
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = D.useBtn
+	local s = Instance.new("UIStroke"); s.Color = C.BORDER; s.Thickness = 2; s.Parent = D.useBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = D.useBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	invDetUseBtn.MouseEnter:Connect(function()
+	D.useBtn.MouseEnter:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.04 }):Play()
 	end)
-	invDetUseBtn.MouseLeave:Connect(function()
+	D.useBtn.MouseLeave:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.00 }):Play()
 	end)
 end
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetDropBtn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = invDetDropBtn
-	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetDropBtn
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = D.dropBtn
+	local s = Instance.new("UIStroke"); s.Color = C.BORDER; s.Thickness = 2; s.Parent = D.dropBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = D.dropBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	invDetDropBtn.MouseEnter:Connect(function()
+	D.dropBtn.MouseEnter:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.04 }):Play()
-		invDetDropBtn.BackgroundColor3 = Color3.fromRGB(220, 90, 90)
+		D.dropBtn.BackgroundColor3 = Color3.fromRGB(220, 90, 90)
 	end)
-	invDetDropBtn.MouseLeave:Connect(function()
+	D.dropBtn.MouseLeave:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.00 }):Play()
-		invDetDropBtn.BackgroundColor3 = Color3.fromRGB(180, 70, 70)
+		D.dropBtn.BackgroundColor3 = Color3.fromRGB(180, 70, 70)
 	end)
 end
 
-local invDetVisible: boolean = false
-local invDetCurrentRarity: string? = nil
+D.visible = false
+D.currentRarity = nil
 
-invDetDropBtn.MouseButton1Click:Connect(function()
-	local r = invDetCurrentRarity
+D.dropBtn.MouseButton1Click:Connect(function()
+	local r = D.currentRarity
 	if not r or r == SYRUP_ID or r == MAGNET_ID then return end
 	if (hudData.backpackContents[r] or 0) <= 0 then return end
 	DropBottleEvt:FireServer(r)
 end)
 
-invDetUseBtn.MouseButton1Click:Connect(function()
-	if invDetCurrentRarity ~= MAGNET_ID then return end
+D.useBtn.MouseButton1Click:Connect(function()
+	if D.currentRarity ~= MAGNET_ID then return end
 	local mState = _G["__magnetState"] or { count = 0, active = false }
 	if (mState.count or 0) <= 0 or mState.active then return end
 	playSfx("Click")
@@ -950,54 +962,54 @@ local EquipPetEvt        = PetEvents:WaitForChild("EquipPet")
 local UnequipPetEvt      = PetEvents:WaitForChild("UnequipPet")
 local DiscardPetEvt      = PetEvents:WaitForChild("DiscardPet")
 
-local invDetPetEquipBtn = Instance.new("TextButton")
-invDetPetEquipBtn.Size                   = UDim2.new(1, -32, 0, 44)
-invDetPetEquipBtn.AnchorPoint            = Vector2.new(0, 1)
-invDetPetEquipBtn.Position               = UDim2.new(0, 16, 1, -68)  -- nad WYRZUĆ
-invDetPetEquipBtn.BackgroundColor3       = C_ACCENT_GREEN
-invDetPetEquipBtn.BorderSizePixel        = 0
-invDetPetEquipBtn.Text                   = "ZAŁÓŻ"
-invDetPetEquipBtn.TextSize               = 16
-invDetPetEquipBtn.Font                   = FONT_MAIN
-invDetPetEquipBtn.TextColor3             = Color3.new(0, 0, 0)
-invDetPetEquipBtn.AutoButtonColor        = false
-invDetPetEquipBtn.Visible                = false
-invDetPetEquipBtn.ZIndex                 = 6
-invDetPetEquipBtn.Parent                 = invDetPanel
+D.petEquipBtn = Instance.new("TextButton")
+D.petEquipBtn.Size                   = UDim2.new(1, -32, 0, 44)
+D.petEquipBtn.AnchorPoint            = Vector2.new(0, 1)
+D.petEquipBtn.Position               = UDim2.new(0, 16, 1, -68)  -- nad WYRZUĆ
+D.petEquipBtn.BackgroundColor3       = C.ACCENT_GREEN
+D.petEquipBtn.BorderSizePixel        = 0
+D.petEquipBtn.Text                   = "ZAŁÓŻ"
+D.petEquipBtn.TextSize               = 16
+D.petEquipBtn.Font                   = FONT_MAIN
+D.petEquipBtn.TextColor3             = Color3.new(0, 0, 0)
+D.petEquipBtn.AutoButtonColor        = false
+D.petEquipBtn.Visible                = false
+D.petEquipBtn.ZIndex                 = 6
+D.petEquipBtn.Parent                 = D.panel
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetPetEquipBtn
-	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetPetEquipBtn
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = D.petEquipBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = D.petEquipBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	invDetPetEquipBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
-	invDetPetEquipBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
+	D.petEquipBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
+	D.petEquipBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
 end
 
-local invDetPetDiscardBtn = Instance.new("TextButton")
-invDetPetDiscardBtn.Size                   = UDim2.new(1, -32, 0, 44)
-invDetPetDiscardBtn.AnchorPoint            = Vector2.new(0, 1)
-invDetPetDiscardBtn.Position               = UDim2.new(0, 16, 1, -16)
-invDetPetDiscardBtn.BackgroundColor3       = Color3.fromRGB(180, 70, 70)
-invDetPetDiscardBtn.BorderSizePixel        = 0
-invDetPetDiscardBtn.Text                   = "WYRZUĆ"
-invDetPetDiscardBtn.TextSize               = 16
-invDetPetDiscardBtn.Font                   = FONT_MAIN
-invDetPetDiscardBtn.TextColor3             = C_WHITE
-invDetPetDiscardBtn.AutoButtonColor        = false
-invDetPetDiscardBtn.Visible                = false
-invDetPetDiscardBtn.ZIndex                 = 6
-invDetPetDiscardBtn.Parent                 = invDetPanel
+D.petDiscardBtn = Instance.new("TextButton")
+D.petDiscardBtn.Size                   = UDim2.new(1, -32, 0, 44)
+D.petDiscardBtn.AnchorPoint            = Vector2.new(0, 1)
+D.petDiscardBtn.Position               = UDim2.new(0, 16, 1, -16)
+D.petDiscardBtn.BackgroundColor3       = Color3.fromRGB(180, 70, 70)
+D.petDiscardBtn.BorderSizePixel        = 0
+D.petDiscardBtn.Text                   = "WYRZUĆ"
+D.petDiscardBtn.TextSize               = 16
+D.petDiscardBtn.Font                   = FONT_MAIN
+D.petDiscardBtn.TextColor3             = C.WHITE
+D.petDiscardBtn.AutoButtonColor        = false
+D.petDiscardBtn.Visible                = false
+D.petDiscardBtn.ZIndex                 = 6
+D.petDiscardBtn.Parent                 = D.panel
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = invDetPetDiscardBtn
-	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = invDetPetDiscardBtn
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = D.petDiscardBtn
+	local sc = Instance.new("UIScale"); sc.Scale = 1; sc.Parent = D.petDiscardBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	invDetPetDiscardBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
-	invDetPetDiscardBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
+	D.petDiscardBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.04 }):Play() end)
+	D.petDiscardBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
 end
 
 -- Pet click handlers (PO definicji buttonów żeby uniknąć order bug)
-invDetPetEquipBtn.MouseButton1Click:Connect(function()
-	if not isPetSlotId(invDetCurrentRarity) then return end
-	local uuid = string.sub(invDetCurrentRarity, #PET_ID_PREFIX + 1)
+D.petEquipBtn.MouseButton1Click:Connect(function()
+	if not isPetSlotId(D.currentRarity) then return end
+	local uuid = string.sub(D.currentRarity, #PET_ID_PREFIX + 1)
 	local state = _G["__petsState"]
 	local equippedId = (state and state.equippedId) or ""
 	playSfx("Click")
@@ -1008,9 +1020,9 @@ invDetPetEquipBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
-invDetPetDiscardBtn.MouseButton1Click:Connect(function()
-	if not isPetSlotId(invDetCurrentRarity) then return end
-	local uuid = string.sub(invDetCurrentRarity, #PET_ID_PREFIX + 1)
+D.petDiscardBtn.MouseButton1Click:Connect(function()
+	if not isPetSlotId(D.currentRarity) then return end
+	local uuid = string.sub(D.currentRarity, #PET_ID_PREFIX + 1)
 	playSfx("Click")
 	DiscardPetEvt:FireServer(uuid)
 	hideInvDetail()
@@ -1030,18 +1042,18 @@ local function getMultiplier(): number
 end
 
 local function refreshInvDetail()
-	if not invDetCurrentRarity then return end
-	local rarity = invDetCurrentRarity
+	if not D.currentRarity then return end
+	local rarity = D.currentRarity
 
 	-- Quest item: syrop dziadka — inny widok (bez wartości / mnożnika)
 	if rarity == SYRUP_ID then
-		invDetTitle.Text       = SYRUP_NAME
-		invDetTitle.TextColor3 = SYRUP_COLOR
-		invDetCount.Text       = "Posiadasz: 1 sztukę"
-		invDetBaseLbl.Text     = "Przedmiot zadania"
-		invDetTotalLbl.Text    = "Nie sprzedasz tego w butelkomacie"
-		invDetMultLbl.Text     = ""
-		invDetDesc.Text        = SYRUP_DESC
+		D.title.Text       = SYRUP.NAME
+		D.title.TextColor3 = SYRUP.COLOR
+		D.count.Text       = "Posiadasz: 1 sztukę"
+		D.baseLbl.Text     = "Przedmiot zadania"
+		D.totalLbl.Text    = "Nie sprzedasz tego w butelkomacie"
+		D.multLbl.Text     = ""
+		D.desc.Text        = SYRUP.DESC
 		return
 	end
 
@@ -1056,149 +1068,149 @@ local function refreshInvDetail()
 			if p.id == uuid then pet = p; break end
 		end
 		if not pet then
-			invDetTitle.Text = "Pet"
-			invDetCount.Text = "(usunięty)"
-			invDetBaseLbl.Text = ""
-			invDetTotalLbl.Text = ""
-			invDetMultLbl.Text = ""
-			invDetDesc.Text = ""
+			D.title.Text = "Pet"
+			D.count.Text = "(usunięty)"
+			D.baseLbl.Text = ""
+			D.totalLbl.Text = ""
+			D.multLbl.Text = ""
+			D.desc.Text = ""
 			return
 		end
 		local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[pet.rarity]) or {}
 		local ccfg = (Config.Pets and Config.Pets.Classes and Config.Pets.Classes[pet.class]) or {}
-		local color = rcfg.color or C_WHITE
+		local color = rcfg.color or C.WHITE
 		local rname = rcfg.displayName or pet.rarity
 
-		invDetTitle.Text       = string.format("%s %s", rname, pet.class)
-		invDetTitle.TextColor3 = color
-		invDetCount.Text       = (uuid == equippedId) and "WYPOSAŻONY ✓" or "1 sztuka"
-		invDetCount.TextColor3 = (uuid == equippedId) and C_ACCENT_GREEN or C_DIMTEXT
-		invDetBaseLbl.Text     = string.format("Mnożnik kasy: ×%.1f", rcfg.moneyMul or 1)
+		D.title.Text       = string.format("%s %s", rname, pet.class)
+		D.title.TextColor3 = color
+		D.count.Text       = (uuid == equippedId) and "WYPOSAŻONY ✓" or "1 sztuka"
+		D.count.TextColor3 = (uuid == equippedId) and C.ACCENT_GREEN or C.DIMTEXT
+		D.baseLbl.Text     = string.format("Mnożnik kasy: ×%.1f", rcfg.moneyMul or 1)
 		local bonus = (ccfg.bonuses and ccfg.bonuses[pet.rarity]) or 0
 		if ccfg.effect == "speed" then
-			invDetTotalLbl.Text = string.format("Speed bonus: +%d (chodzenie i deska)", bonus)
+			D.totalLbl.Text = string.format("Speed bonus: +%d (chodzenie i deska)", bonus)
 		elseif ccfg.effect == "hp" then
-			invDetTotalLbl.Text = string.format("HP bonus: +%d", bonus)
+			D.totalLbl.Text = string.format("HP bonus: +%d", bonus)
 		else
-			invDetTotalLbl.Text = ""
+			D.totalLbl.Text = ""
 		end
-		invDetMultLbl.Text = ""
-		invDetDesc.Text    = "Tylko 1 pet może być wyposażony naraz. Wyrzucenie usuwa pet na stałe."
+		D.multLbl.Text = ""
+		D.desc.Text    = "Tylko 1 pet może być wyposażony naraz. Wyrzucenie usuwa pet na stałe."
 		return
 	end
 
 	-- Magnes — każdy slot to OSOBNA sztuka (count zawsze 1, klikany pojedynczo)
 	if rarity == MAGNET_ID then
 		local mState = _G["__magnetState"] or { count = 0, active = false, secondsLeft = 0 }
-		invDetTitle.Text       = MAGNET_NAME
-		invDetTitle.TextColor3 = MAGNET_COLOR
-		invDetCount.Text       = "1 sztuka"
-		invDetBaseLbl.Text     = string.format("Czas działania: %d s", Config.Magnet.DurationSec)
-		invDetTotalLbl.Text    = string.format("Promień: ×%.1f", Config.Magnet.RadiusMultiplier)
+		D.title.Text       = MAGNET.NAME
+		D.title.TextColor3 = MAGNET.COLOR
+		D.count.Text       = "1 sztuka"
+		D.baseLbl.Text     = string.format("Czas działania: %d s", Config.Magnet.DurationSec)
+		D.totalLbl.Text    = string.format("Promień: ×%.1f", Config.Magnet.RadiusMultiplier)
 		if mState.active then
-			invDetMultLbl.Text = string.format("AKTYWNY — zostało %ds", math.ceil(mState.secondsLeft or 0))
-			invDetMultLbl.TextColor3 = MAGNET_COLOR
+			D.multLbl.Text = string.format("AKTYWNY — zostało %ds", math.ceil(mState.secondsLeft or 0))
+			D.multLbl.TextColor3 = MAGNET.COLOR
 		else
-			invDetMultLbl.Text = ""
+			D.multLbl.Text = ""
 		end
-		invDetDesc.Text        = MAGNET_DESC
+		D.desc.Text        = MAGNET.DESC
 		return
 	end
 
 	local count = hudData.backpackContents[rarity] or 0
-	local color = RARITY_COLORS[rarity] or C_WHITE
+	local color = RARITY_COLORS[rarity] or C.WHITE
 	local baseVal = Config.BottleValues[rarity] or 0
 	local mult = getMultiplier()
 
-	invDetTitle.Text       = rarity
-	invDetTitle.TextColor3 = color
-	invDetCount.Text       = "Posiadasz: " .. count .. " sztuk"
-	invDetBaseLbl.Text     = "Wartość bazowa: " .. formatAmount(baseVal) .. " ZŁ / sztukę"
+	D.title.Text       = rarity
+	D.title.TextColor3 = color
+	D.count.Text       = "Posiadasz: " .. count .. " sztuk"
+	D.baseLbl.Text     = "Wartość bazowa: " .. formatAmount(baseVal) .. " ZŁ / sztukę"
 	local total = count * baseVal
-	invDetTotalLbl.Text    = "Razem (×1): " .. formatAmount(total) .. " ZŁ"
+	D.totalLbl.Text    = "Razem (×1): " .. formatAmount(total) .. " ZŁ"
 	local totalMult = total * mult
-	invDetMultLbl.Text     = string.format("Z mnożnikiem (×%.1f): %s ZŁ", mult, formatAmount(totalMult))
-	invDetDesc.Text        = BOTTLE_DESC[rarity] or ""
+	D.multLbl.Text     = string.format("Z mnożnikiem (×%.1f): %s ZŁ", mult, formatAmount(totalMult))
+	D.desc.Text        = BOTTLE_DESC[rarity] or ""
 end
 
 -- Placeholder pokazywany w detail panelu gdy żaden item nie jest wybrany
-local invDetPlaceholder = Instance.new("TextLabel")
-invDetPlaceholder.AnchorPoint            = Vector2.new(0.5, 0.5)
-invDetPlaceholder.Position               = UDim2.fromScale(0.5, 0.5)
-invDetPlaceholder.Size                   = UDim2.new(1, -32, 0, 120)
-invDetPlaceholder.BackgroundTransparency = 1
-invDetPlaceholder.Text                   = "Kliknij item\naby zobaczyć szczegóły"
-invDetPlaceholder.Font                   = FONT_MAIN
-invDetPlaceholder.TextSize               = 16
-invDetPlaceholder.TextColor3             = C_DIMTEXT
-invDetPlaceholder.TextXAlignment         = Enum.TextXAlignment.Center
-invDetPlaceholder.TextYAlignment         = Enum.TextYAlignment.Center
-invDetPlaceholder.TextWrapped            = true
-invDetPlaceholder.ZIndex                 = 5
-invDetPlaceholder.Parent                 = invDetPanel
+D.placeholder = Instance.new("TextLabel")
+D.placeholder.AnchorPoint            = Vector2.new(0.5, 0.5)
+D.placeholder.Position               = UDim2.fromScale(0.5, 0.5)
+D.placeholder.Size                   = UDim2.new(1, -32, 0, 120)
+D.placeholder.BackgroundTransparency = 1
+D.placeholder.Text                   = "Kliknij item\naby zobaczyć szczegóły"
+D.placeholder.Font                   = FONT_MAIN
+D.placeholder.TextSize               = 16
+D.placeholder.TextColor3             = C.DIMTEXT
+D.placeholder.TextXAlignment         = Enum.TextXAlignment.Center
+D.placeholder.TextYAlignment         = Enum.TextYAlignment.Center
+D.placeholder.TextWrapped            = true
+D.placeholder.ZIndex                 = 5
+D.placeholder.Parent                 = D.panel
 
 local function setInvDetailContentVisible(visible: boolean)
-	invDetTitle.Visible    = visible
-	invDetCount.Visible    = visible
-	invDetSep1.Visible     = visible
-	invDetBaseLbl.Visible  = visible
-	invDetTotalLbl.Visible = visible
-	invDetMultLbl.Visible  = visible
-	invDetSep2.Visible     = visible
-	invDetDesc.Visible     = visible
-	invDetCloseBtn.Visible = visible
-	local isPet = visible and isPetSlotId(invDetCurrentRarity)
+	D.title.Visible    = visible
+	D.count.Visible    = visible
+	D.sep1.Visible     = visible
+	D.baseLbl.Visible  = visible
+	D.totalLbl.Visible = visible
+	D.multLbl.Visible  = visible
+	D.sep2.Visible     = visible
+	D.desc.Visible     = visible
+	D.closeBtn.Visible = visible
+	local isPet = visible and isPetSlotId(D.currentRarity)
 	-- DROP: tylko dla butelek (nie syrop, nie magnes, nie pet)
-	invDetDropBtn.Visible  = visible
-		and invDetCurrentRarity ~= SYRUP_ID
-		and invDetCurrentRarity ~= MAGNET_ID
+	D.dropBtn.Visible  = visible
+		and D.currentRarity ~= SYRUP_ID
+		and D.currentRarity ~= MAGNET_ID
 		and not isPet
 	-- UŻYJ: tylko dla magnesu
-	invDetUseBtn.Visible   = visible and invDetCurrentRarity == MAGNET_ID
-	if invDetUseBtn.Visible then
+	D.useBtn.Visible   = visible and D.currentRarity == MAGNET_ID
+	if D.useBtn.Visible then
 		local mState = _G["__magnetState"] or { count = 0, active = false }
 		local canUse = (mState.count or 0) > 0 and not mState.active
-		invDetUseBtn.BackgroundColor3 = canUse and MAGNET_COLOR or Color3.fromRGB(90, 90, 90)
-		invDetUseBtn.Text = mState.active and "AKTYWNY…" or (canUse and "UŻYJ" or "BRAK MAGNESÓW")
-		invDetUseBtn.AutoButtonColor = false
+		D.useBtn.BackgroundColor3 = canUse and MAGNET.COLOR or Color3.fromRGB(90, 90, 90)
+		D.useBtn.Text = mState.active and "AKTYWNY…" or (canUse and "UŻYJ" or "BRAK MAGNESÓW")
+		D.useBtn.AutoButtonColor = false
 	end
 	-- PET: ZAŁÓŻ/ZDEJMIJ + WYRZUĆ
-	invDetPetEquipBtn.Visible   = isPet
-	invDetPetDiscardBtn.Visible = isPet
+	D.petEquipBtn.Visible   = isPet
+	D.petDiscardBtn.Visible = isPet
 	if isPet then
-		local uuid = string.sub(invDetCurrentRarity, #PET_ID_PREFIX + 1)
+		local uuid = string.sub(D.currentRarity, #PET_ID_PREFIX + 1)
 		local state = _G["__petsState"]
 		local equippedId = (state and state.equippedId) or ""
 		if uuid == equippedId then
-			invDetPetEquipBtn.Text            = "ZDEJMIJ"
-			invDetPetEquipBtn.BackgroundColor3 = Color3.fromRGB(190, 150, 60)
-			invDetPetEquipBtn.TextColor3       = C_WHITE
+			D.petEquipBtn.Text            = "ZDEJMIJ"
+			D.petEquipBtn.BackgroundColor3 = Color3.fromRGB(190, 150, 60)
+			D.petEquipBtn.TextColor3       = C.WHITE
 		else
-			invDetPetEquipBtn.Text            = "ZAŁÓŻ"
-			invDetPetEquipBtn.BackgroundColor3 = C_ACCENT_GREEN
-			invDetPetEquipBtn.TextColor3       = Color3.new(0, 0, 0)
+			D.petEquipBtn.Text            = "ZAŁÓŻ"
+			D.petEquipBtn.BackgroundColor3 = C.ACCENT_GREEN
+			D.petEquipBtn.TextColor3       = Color3.new(0, 0, 0)
 		end
 	end
-	invDetPlaceholder.Visible = not visible
+	D.placeholder.Visible = not visible
 end
 
 local function showInvDetail(rarity: string)
 	-- Zawsze pokazuj detale klikniętego itemu (bez toggle na tej samej rzadkości).
 	-- Chowanie: tylko X w detail panelu albo zamknięcie ekwipunku.
-	invDetCurrentRarity = rarity
+	D.currentRarity = rarity
 	refreshInvDetail()
 	setInvDetailContentVisible(true)
-	invDetVisible = true
+	D.visible = true
 end
 
 local function hideInvDetail()
-	if not invDetVisible then return end
-	invDetVisible = false
-	invDetCurrentRarity = nil
+	if not D.visible then return end
+	D.visible = false
+	D.currentRarity = nil
 	setInvDetailContentVisible(false)
 end
 
-invDetCloseBtn.MouseButton1Click:Connect(function() playSfx("Click"); hideInvDetail() end)
+D.closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); hideInvDetail() end)
 
 -- Initial state — placeholder widoczny, X i content schowane
 setInvDetailContentVisible(false)
@@ -1233,18 +1245,18 @@ invCountLbl.Parent   = inventoryWrap
 invCountLbl.Position = UDim2.fromOffset(0, 0)
 invCountLbl.Size     = UDim2.fromOffset(slotsW, INV_TOP_LBL_H)
 invCountLbl.TextXAlignment = Enum.TextXAlignment.Left
-invCountLbl.TextColor3 = C_DIMTEXT
+invCountLbl.TextColor3 = C.DIMTEXT
 
 -- Sub-tab pill bar (BUTELKI / AKCESORIA / PETY) — pod count label, nad slotami.
 local subTabBar = Instance.new("Frame")
 subTabBar.Size                   = UDim2.fromOffset(slotsW, INV_SUBTAB_H)
 subTabBar.Position               = UDim2.fromOffset(0, INV_TOP_LBL_H)
-subTabBar.BackgroundColor3       = C_HEADER
+subTabBar.BackgroundColor3       = C.HEADER
 subTabBar.BorderSizePixel        = 0
 subTabBar.Parent                 = inventoryWrap
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, INV_SUBTAB_H / 2); c.Parent = subTabBar
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = subTabBar
+	local s = Instance.new("UIStroke"); s.Color = C.BORDER; s.Thickness = 2; s.Parent = subTabBar
 end
 
 local SUB_TAB_DEFS = {
@@ -1261,7 +1273,7 @@ local subCellW    = subInnerW / #SUB_TAB_DEFS
 local subBubble = Instance.new("Frame")
 subBubble.Size                   = UDim2.fromOffset(subCellW, INV_SUBTAB_H - SUB_PAD * 2)
 subBubble.Position               = UDim2.fromOffset(SUB_PAD, SUB_PAD)
-subBubble.BackgroundColor3       = C_ACCENT_GREEN
+subBubble.BackgroundColor3       = C.ACCENT_GREEN
 subBubble.BorderSizePixel        = 0
 subBubble.ZIndex                 = 2
 subBubble.Parent                 = subTabBar
@@ -1278,7 +1290,7 @@ for i, def in ipairs(SUB_TAB_DEFS) do
 	btn.Text                   = def.label
 	btn.Font                   = FONT_MAIN
 	btn.TextSize               = 17
-	btn.TextColor3             = C_DIMTEXT
+	btn.TextColor3             = C.DIMTEXT
 	btn.AutoButtonColor        = false
 	btn.ZIndex                 = 3
 	btn.Parent                 = subTabBar
@@ -1288,26 +1300,30 @@ end
 slotsContainer.Parent   = inventoryWrap
 slotsContainer.Position = UDim2.fromOffset(0, INV_CONTENT_Y_OFF)
 
-invDetPanel.Parent   = inventoryWrap
-invDetPanel.Position = UDim2.fromOffset(slotsW + INV_DET_GAP, INV_CONTENT_Y_OFF)
+D.panel.Parent   = inventoryWrap
+D.panel.Position = UDim2.fromOffset(slotsW + INV_DET_GAP, INV_CONTENT_Y_OFF)
 
 -- (Eksport _G["__inventoryWrap"] przeniesiony wyżej — patrz po inventoryWrap.Parent = invPanel.)
 
 -- ── Slot frames ───────────────────────────────────────────────────────────
 
-local slotFrames:    { Frame }     = {}
-local slotAccents:   { Frame }     = {}    -- ukryty (legacy, używany w startDrag)
-local slotNameLbls:  { TextLabel } = {}
-local slotCountLbls: { TextLabel } = {}
-local slotScales:    { UIScale }   = {}
-local slotStrokes:   { UIStroke }  = {}
-local slotPetGlows:  { Frame }     = {}    -- gradient overlay dla petów (diagonalna animacja)
-local slotPetGrads:  { UIGradient } = {}
-local slotPetImgs:   { ImageLabel } = {}   -- tekstura peta (obrazek per rzadkość)
-local slotLegGlows:  { Frame }     = {}
-local slotLegGrads:  { UIGradient } = {}
-local slotMytGlows:  { Frame }     = {}
-local slotMytGrads:  { UIGradient } = {}
+-- Tablice referencji per-slot zgrupowane w jednej tabeli SL (zamiast 13 osobnych
+-- lokalnych) — oszczędność rejestrów lokalnych (limit Luau 200 na chunk).
+local SL = {
+	frames   = {},   -- { Frame }
+	accents  = {},   -- { Frame } (legacy, używane w startDrag)
+	names    = {},   -- { TextLabel }
+	counts   = {},   -- { TextLabel }
+	scales   = {},   -- { UIScale }
+	strokes  = {},   -- { UIStroke }
+	petGlows = {},   -- { Frame } gradient overlay dla petów
+	petGrads = {},   -- { UIGradient }
+	petImgs  = {},   -- { ImageLabel } tekstura peta per rzadkość
+	legGlows = {},   -- { Frame }
+	legGrads = {},   -- { UIGradient }
+	mytGlows = {},   -- { Frame }
+	mytGrads = {},   -- { UIGradient }
+}
 
 local function darken(c: Color3, mix: number): Color3
 	return Color3.new(c.R * (1 - mix), c.G * (1 - mix), c.B * (1 - mix))
@@ -1324,11 +1340,11 @@ for i = 1, SLOT_COUNT do
 			col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE/2,
 			0,
 			row * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE/2),
-		C_SLOT, 0)
+		C.SLOT, 0)
 	sf.AnchorPoint = Vector2.new(0.5, 0.5)
 	sf.ClipsDescendants = true
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = C_BORDER_SL; stroke.Thickness = 3
+	stroke.Color = C.BORDER_SL; stroke.Thickness = 3
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	stroke.Parent = sf
 	mkCorner(sf, 12)
@@ -1364,27 +1380,27 @@ for i = 1, SLOT_COUNT do
 	legGrad.Parent = legGlow
 
 	-- Legacy "accent" — niewidoczny ale potrzebny dla startDrag
-	local accent = mkFrame(sf, UDim2.new(0, 1, 0, 1), UDim2.new(0, 0, 0, 0), C_WHITE, 1)
+	local accent = mkFrame(sf, UDim2.new(0, 1, 0, 1), UDim2.new(0, 0, 0, 0), C.WHITE, 1)
 	accent.Visible = false
 
-	local nameLbl = mkLabel(sf, UDim2.new(1, -16, 0, 22), UDim2.new(0, 12, 0, 8), "", 17, C_WHITE)
+	local nameLbl = mkLabel(sf, UDim2.new(1, -16, 0, 22), UDim2.new(0, 12, 0, 8), "", 17, C.WHITE)
 	nameLbl.TextStrokeColor3       = Color3.new(0, 0, 0)
 	nameLbl.TextStrokeTransparency = 0.3
 	nameLbl.ZIndex = 2
 	local cntLbl  = mkLabel(sf, UDim2.new(1, -12, 0, 40), UDim2.new(0, 0, 1, -46),
-		"", 32, C_WHITE, Enum.TextXAlignment.Right)
+		"", 32, C.WHITE, Enum.TextXAlignment.Right)
 	cntLbl.TextStrokeColor3       = Color3.new(0, 0, 0)
 	cntLbl.TextStrokeTransparency = 0.2
 	cntLbl.ZIndex = 2
 
-	slotFrames[i]    = sf
-	slotAccents[i]   = accent
-	slotNameLbls[i]  = nameLbl
-	slotCountLbls[i] = cntLbl
-	slotScales[i]    = scale
-	slotStrokes[i]   = stroke
-	slotLegGlows[i]  = legGlow
-	slotLegGrads[i]  = legGrad
+	SL.frames[i]    = sf
+	SL.accents[i]   = accent
+	SL.names[i]  = nameLbl
+	SL.counts[i] = cntLbl
+	SL.scales[i]    = scale
+	SL.strokes[i]   = stroke
+	SL.legGlows[i]  = legGlow
+	SL.legGrads[i]  = legGrad
 
 	-- Mythic glow overlay (fiolet ↔ czarny) — taka sama mechanika jak Legendary
 	local mytGlow = Instance.new("Frame")
@@ -1410,8 +1426,8 @@ for i = 1, SLOT_COUNT do
 	})
 	mytGrad.Rotation = 0
 	mytGrad.Parent = mytGlow
-	slotMytGlows[i] = mytGlow
-	slotMytGrads[i] = mytGrad
+	SL.mytGlows[i] = mytGlow
+	SL.mytGrads[i] = mytGrad
 
 	-- Pet glow overlay — diagonalny gradient (45°) z kolorem peta + bielą.
 	-- Rotuje wolniej niż Legendary/Mythic, transparency mniej intensywna — subtelniejszy efekt.
@@ -1438,8 +1454,8 @@ for i = 1, SLOT_COUNT do
 	})
 	petGrad.Rotation = 45
 	petGrad.Parent = petGlow
-	slotPetGlows[i] = petGlow
-	slotPetGrads[i] = petGrad
+	SL.petGlows[i] = petGlow
+	SL.petGrads[i] = petGrad
 
 	-- Tekstura peta — obrazek per rzadkość, mieści się w kwadracie slotu (z marginesem).
 	-- Nad glow/tłem, pod tekstem (nazwa klasy / count mają wyższy ZIndex).
@@ -1453,7 +1469,7 @@ for i = 1, SLOT_COUNT do
 	petImg.Visible                = false
 	petImg.ZIndex                 = 1  -- nad glow (0), pod tekstem nazwy/count (2)
 	petImg.Parent                 = sf
-	slotPetImgs[i] = petImg
+	SL.petImgs[i] = petImg
 end
 
 -- ── Render ────────────────────────────────────────────────────────────────
@@ -1461,54 +1477,54 @@ end
 local function renderSlot(i: number)
 	local data = slots[i]
 	if data then
-		slotFrames[i].BackgroundColor3 = darken(data.color, 0.45)
-		slotStrokes[i].Color           = data.color
-		slotStrokes[i].Thickness       = 3
-		slotNameLbls[i].Text           = data.name
-		slotNameLbls[i].TextColor3     = C_WHITE
-		slotCountLbls[i].Text          = tostring(data.count)
-		slotCountLbls[i].TextColor3    = C_WHITE
-		slotLegGlows[i].Visible        = (data.name == "Legendarna")
-		slotMytGlows[i].Visible        = (data.name == "Mityczny")
+		SL.frames[i].BackgroundColor3 = darken(data.color, 0.45)
+		SL.strokes[i].Color           = data.color
+		SL.strokes[i].Thickness       = 3
+		SL.names[i].Text           = data.name
+		SL.names[i].TextColor3     = C.WHITE
+		SL.counts[i].Text          = tostring(data.count)
+		SL.counts[i].TextColor3    = C.WHITE
+		SL.legGlows[i].Visible        = (data.name == "Legendarna")
+		SL.mytGlows[i].Visible        = (data.name == "Mityczny")
 		-- Pet slot — pokaż diagonalny gradient w kolorze peta
 		local isPet = isPetSlotId(data.id)
-		slotPetGlows[i].Visible = isPet
+		SL.petGlows[i].Visible = isPet
 		if isPet then
 			-- ColorSequence: kolor rzadkości → biel → kolor rzadkości
-			slotPetGrads[i].Color = ColorSequence.new({
+			SL.petGrads[i].Color = ColorSequence.new({
 				ColorSequenceKeypoint.new(0,   data.color),
 				ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
 				ColorSequenceKeypoint.new(1,   data.color),
 			})
 			-- Ukryj zwykły count (1) dla peta — pokażemy emoji klasy
-			-- (slotNameLbls jest "Sprinter"/"Tank", count "1" pomijamy bo każdy pet = 1)
-			slotCountLbls[i].Text = ""
+			-- (SL.names jest "Sprinter"/"Tank", count "1" pomijamy bo każdy pet = 1)
+			SL.counts[i].Text = ""
 			-- Tekstura peta per rzadkość
 			local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.petRarity]) or {}
-			if slotPetImgs[i] then
-				slotPetImgs[i].Image   = rcfg.image or ""
-				slotPetImgs[i].Visible = (rcfg.image ~= nil)
+			if SL.petImgs[i] then
+				SL.petImgs[i].Image   = rcfg.image or ""
+				SL.petImgs[i].Visible = (rcfg.image ~= nil)
 			end
-		elseif slotPetImgs[i] then
-			slotPetImgs[i].Visible = false
+		elseif SL.petImgs[i] then
+			SL.petImgs[i].Visible = false
 		end
 	else
-		slotFrames[i].BackgroundColor3 = C_SLOT
-		slotStrokes[i].Color           = C_BORDER_SL
-		slotStrokes[i].Thickness       = 3
-		slotNameLbls[i].Text           = ""
-		slotCountLbls[i].Text          = ""
-		slotLegGlows[i].Visible        = false
-		slotMytGlows[i].Visible        = false
-		slotPetGlows[i].Visible        = false
-		if slotPetImgs[i] then slotPetImgs[i].Visible = false end
+		SL.frames[i].BackgroundColor3 = C.SLOT
+		SL.strokes[i].Color           = C.BORDER_SL
+		SL.strokes[i].Thickness       = 3
+		SL.names[i].Text           = ""
+		SL.counts[i].Text          = ""
+		SL.legGlows[i].Visible        = false
+		SL.mytGlows[i].Visible        = false
+		SL.petGlows[i].Visible        = false
+		if SL.petImgs[i] then SL.petImgs[i].Visible = false end
 	end
 end
 
 -- Forward: scheduleLayoutSync używany przez updateInventory, definicja niżej
 local scheduleLayoutSync: () -> ()
 
--- Filter sub-zakładek (BUTELKI/AKCESORIA/PETY) — ustawia slotFrames[i].Visible.
+-- Filter sub-zakładek (BUTELKI/AKCESORIA/PETY) — ustawia SL.frames[i].Visible.
 -- Pusty slot widoczny we wszystkich zakładkach (żeby user widział wolne miejsce).
 -- Pozycja komórki w packed gridzie (AnchorPoint slotu = 0.5,0.5 → środek komórki).
 local function packedSlotPosition(packIdx: number): UDim2  -- packIdx 0-based
@@ -1549,12 +1565,12 @@ local function applyInvSubTabFilter()
 
 	-- Ukryj wszystko, potem pokaż+ustaw pozycje: najpierw itemy, potem puste komórki.
 	for i = 1, SLOT_COUNT do
-		if slotFrames[i] then slotFrames[i].Visible = false end
+		if SL.frames[i] then SL.frames[i].Visible = false end
 	end
 
 	local pack = 0
 	for _, i in ipairs(itemIdx) do
-		local sf = slotFrames[i]
+		local sf = SL.frames[i]
 		if sf then
 			sf.Position = packedSlotPosition(pack)
 			sf.Visible  = true
@@ -1564,7 +1580,7 @@ local function applyInvSubTabFilter()
 	for k = 1, emptyNeeded do
 		local i = emptyIdx[k]
 		if not i then break end
-		local sf = slotFrames[i]
+		local sf = SL.frames[i]
 		if sf then
 			sf.Position = packedSlotPosition(pack)
 			sf.Visible  = true
@@ -1596,7 +1612,7 @@ local function setInvSubTab(idx: number)
 	}):Play()
 	-- Tab text colors
 	for i, b in ipairs(subTabBtns) do
-		b.TextColor3 = (i == idx) and Color3.new(0, 0, 0) or C_DIMTEXT
+		b.TextColor3 = (i == idx) and Color3.new(0, 0, 0) or C.DIMTEXT
 	end
 
 	-- Zamknij detail panel — mógł pokazywać item z innej kategorii (teraz ukryty).
@@ -1674,7 +1690,7 @@ _G["__inventorySetLayout"] = function(layout: { [number]: { rarity: string, coun
 				slots[i] = {
 					id    = "Bottle_" .. s.rarity,
 					name  = s.rarity,
-					color = RARITY_COLORS[s.rarity] or C_WHITE,
+					color = RARITY_COLORS[s.rarity] or C.WHITE,
 					count = s.count,
 				}
 			end
@@ -1721,7 +1737,7 @@ _G["__inventorySetStacks"] = function(stacks: { { rarity: string, count: number 
 				slots[idx] = {
 					id    = "Bottle_" .. s.rarity,
 					name  = s.rarity,
-					color = RARITY_COLORS[s.rarity] or C_WHITE,
+					color = RARITY_COLORS[s.rarity] or C.WHITE,
 					count = s.count,
 				}
 				placed = true
@@ -1733,7 +1749,7 @@ _G["__inventorySetStacks"] = function(stacks: { { rarity: string, count: number 
 					slots[j] = {
 						id    = "Bottle_" .. s.rarity,
 						name  = s.rarity,
-						color = RARITY_COLORS[s.rarity] or C_WHITE,
+						color = RARITY_COLORS[s.rarity] or C.WHITE,
 						count = s.count,
 					}
 					break
@@ -1752,26 +1768,26 @@ RunService.Heartbeat:Connect(function(dt)
 		local data = slots[i]
 		if data and data.name == "Legendarna" then
 			local pulse = (math.sin(t * 4.5) + 1) * 0.5  -- 0..1
-			slotStrokes[i].Color = Color3.fromRGB(
+			SL.strokes[i].Color = Color3.fromRGB(
 				255,
 				200 + math.floor(pulse * 55),
 				60  + math.floor(pulse * 195))
-			slotStrokes[i].Thickness = 3 + pulse * 2.5
-			slotLegGrads[i].Rotation = (slotLegGrads[i].Rotation + 80 * dt) % 360
+			SL.strokes[i].Thickness = 3 + pulse * 2.5
+			SL.legGrads[i].Rotation = (SL.legGrads[i].Rotation + 80 * dt) % 360
 		elseif data and data.name == "Mityczny" then
 			local pulse = (math.sin(t * 4.0) + 1) * 0.5
-			slotStrokes[i].Color = Color3.fromRGB(
+			SL.strokes[i].Color = Color3.fromRGB(
 				80  + math.floor(pulse * 100),
 				20  + math.floor(pulse * 60),
 				140 + math.floor(pulse * 100))
-			slotStrokes[i].Thickness = 3 + pulse * 2.5
-			slotMytGrads[i].Rotation = (slotMytGrads[i].Rotation + 60 * dt) % 360
+			SL.strokes[i].Thickness = 3 + pulse * 2.5
+			SL.mytGrads[i].Rotation = (SL.mytGrads[i].Rotation + 60 * dt) % 360
 		elseif data and isPetSlotId(data.id) then
 			-- Pet: diagonalny shimmer (45° wolniej niż legendary) — odróżnia od butelek
-			slotPetGrads[i].Rotation = (slotPetGrads[i].Rotation + 45 * dt) % 360
+			SL.petGrads[i].Rotation = (SL.petGrads[i].Rotation + 45 * dt) % 360
 			-- Subtelny pulse stroke w kolorze peta
 			local pulse = (math.sin(t * 3.0) + 1) * 0.5  -- 0..1
-			slotStrokes[i].Thickness = 3 + pulse * 1.5
+			SL.strokes[i].Thickness = 3 + pulse * 1.5
 		end
 	end
 end)
@@ -1794,13 +1810,13 @@ end
 local function setSlotHighlight(i: number, on: boolean)
 	if drag.active and i == drag.fromSlot then return end
 	if on then
-		slotFrames[i].BackgroundColor3 = C_SLOT_HOV
-		local hoverStroke = slotFrames[i]:FindFirstChildOfClass("UIStroke") :: UIStroke
-		if hoverStroke then hoverStroke.Color = C_BORDER_SL end
+		SL.frames[i].BackgroundColor3 = C.SLOT_HOV
+		local hoverStroke = SL.frames[i]:FindFirstChildOfClass("UIStroke") :: UIStroke
+		if hoverStroke then hoverStroke.Color = C.BORDER_SL end
 	else
 		renderSlot(i)
-		local s = slotFrames[i]:FindFirstChildOfClass("UIStroke") :: UIStroke
-		if s then s.Color = C_BORDER end
+		local s = SL.frames[i]:FindFirstChildOfClass("UIStroke") :: UIStroke
+		if s then s.Color = C.BORDER end
 	end
 end
 
@@ -1808,16 +1824,16 @@ end
 local SLOT_TI = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 for i = 1, SLOT_COUNT do
 	local idx = i
-	slotFrames[i].MouseEnter:Connect(function()
+	SL.frames[i].MouseEnter:Connect(function()
 		hoveredSlot = idx
-		TweenService:Create(slotScales[idx], SLOT_TI, { Scale = 1.06 }):Play()
+		TweenService:Create(SL.scales[idx], SLOT_TI, { Scale = 1.06 }):Play()
 		if drag.active then
 			setSlotHighlight(idx, true)
 		end
 	end)
-	slotFrames[i].MouseLeave:Connect(function()
+	SL.frames[i].MouseLeave:Connect(function()
 		if hoveredSlot == idx then hoveredSlot = nil end
-		TweenService:Create(slotScales[idx], SLOT_TI, { Scale = 1.00 }):Play()
+		TweenService:Create(SL.scales[idx], SLOT_TI, { Scale = 1.00 }):Play()
 		if drag.active then
 			setSlotHighlight(idx, false)
 		end
@@ -1837,7 +1853,7 @@ local function buildGhost(data: SlotData)
 	local g = mkFrame(ghostGui,
 		UDim2.new(0, SLOT_SIZE, 0, SLOT_SIZE),
 		ghostPositionFromMouse(),
-		C_SLOT_OC, 0.05)
+		C.SLOT_OC, 0.05)
 	g.ZIndex  = 100
 	g.Active  = false   -- przepuszcza eventy do slotów poniżej
 	mkStroke(g, data.color, 2)
@@ -1847,7 +1863,7 @@ local function buildGhost(data: SlotData)
 	local nl = mkLabel(g, UDim2.new(1, -8, 0, 13), UDim2.new(0, 6, 0, 4), data.name, 9, data.color)
 	nl.ZIndex = 101
 	local cl = mkLabel(g, UDim2.new(1, -5, 0, 20), UDim2.new(0, 0, 1, -22),
-		tostring(data.count), 17, C_WHITE, Enum.TextXAlignment.Right)
+		tostring(data.count), 17, C.WHITE, Enum.TextXAlignment.Right)
 	cl.ZIndex = 101
 	cl.TextStrokeColor3 = Color3.new(0, 0, 0); cl.TextStrokeTransparency = 0.3
 
@@ -1883,10 +1899,10 @@ local function startDrag(slotIdx: number)
 	drag.moved    = false
 
 	-- Ukryj zawartość source slotu
-	slotFrames[slotIdx].BackgroundColor3        = C_SLOT
-	slotAccents[slotIdx].Visible                = false
-	slotNameLbls[slotIdx].Visible               = false
-	slotCountLbls[slotIdx].Visible              = false
+	SL.frames[slotIdx].BackgroundColor3        = C.SLOT
+	SL.accents[slotIdx].Visible                = false
+	SL.names[slotIdx].Visible               = false
+	SL.counts[slotIdx].Visible              = false
 
 	ghost = buildGhost(slots[slotIdx] :: SlotData)
 end
@@ -1908,7 +1924,7 @@ local function endDrag()
 			if slots[fromIdx] then
 				slots[fromIdx].count += splitN
 			elseif rarityId then
-				slots[fromIdx] = { id = rarityId, name = src and src.name or "", color = src and src.color or C_WHITE, count = splitN }
+				slots[fromIdx] = { id = rarityId, name = src and src.name or "", color = src and src.color or C.WHITE, count = splitN }
 			end
 		end
 
@@ -1963,9 +1979,9 @@ local function endDrag()
 	end
 
 	-- Przywróć widoczność source slotu
-	slotAccents[fromIdx].Visible   = true
-	slotNameLbls[fromIdx].Visible  = true
-	slotCountLbls[fromIdx].Visible = true
+	SL.accents[fromIdx].Visible   = true
+	SL.names[fromIdx].Visible  = true
+	SL.counts[fromIdx].Visible = true
 
 	if ghost then ghost:Destroy(); ghost = nil end
 
@@ -2002,7 +2018,7 @@ end
 
 for i = 1, SLOT_COUNT do
 	local idx = i
-	slotFrames[i].InputBegan:Connect(function(input)
+	SL.frames[i].InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			startDrag(idx)
 		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -2050,8 +2066,8 @@ local function setInventoryOpen(open: boolean)
 		TweenService:Create(invOverlay, INV_TW_OPEN, { BackgroundTransparency = 0.30 }):Play()
 	else
 		-- Reset detail panelu
-		invDetVisible = false
-		invDetCurrentRarity = nil
+		D.visible = false
+		D.currentRarity = nil
 		invPanel.Size = UDim2.fromOffset(INV_W_COMPACT, INV_H)
 
 		TweenService:Create(invPanel,   INV_TW_CLOSE, { Position = INV_POS_HIDE }):Play()
@@ -2062,7 +2078,7 @@ local function setInventoryOpen(open: boolean)
 		tw:Play()
 	end
 
-	eqBtn.TextColor3             = C_WHITE
+	eqBtn.TextColor3             = C.WHITE
 	eqBtn.BackgroundTransparency = 0.05
 end
 
@@ -2376,7 +2392,7 @@ local function playDepositEffects(breakdown: { [string]: number }, finalTotal: n
 				if hudData.hasSyrup then total += 1 end  -- syrop nie sprzedaje się w butelkomacie
 				hudData.bottlesCarried = total
 				updateHud(); updateInventory()
-				if invDetVisible then refreshInvDetail() end
+				if D.visible then refreshInvDetail() end
 			end)
 			delay += 0.35
 		end
@@ -2443,7 +2459,7 @@ UpdateHUD.OnClientEvent:Connect(function(data)
 		syncSlotsFromContents()
 	end
 	updateHud(); updateInventory()
-	if invDetVisible then refreshInvDetail() end
+	if D.visible then refreshInvDetail() end
 end)
 
 CollectBottleResult.OnClientEvent:Connect(function(result)
@@ -2453,8 +2469,8 @@ CollectBottleResult.OnClientEvent:Connect(function(result)
 		hudData.backpackContents[result.rarity] += 1
 		addToInventory(result.rarity)
 		updateHud(); updateInventory()
-		if invDetVisible then refreshInvDetail() end
-		showFloatingText(result.rarity, RARITY_COLORS[result.rarity] or C_WHITE)
+		if D.visible then refreshInvDetail() end
+		showFloatingText(result.rarity, RARITY_COLORS[result.rarity] or C.WHITE)
 		playSfx("PickingUp")
 	else
 		if result.reason == "full" then
@@ -2480,7 +2496,7 @@ local SyrupPickupResult = ReplicatedStorage.Events:WaitForChild("SyrupPickupResu
 SyrupPickupResult.OnClientEvent:Connect(function(result)
 	if result.success then
 		-- UpdateHUD już zaktualizował hudData.hasSyrup + bottlesCarried
-		showFloatingText("SYROP DZIADKA", SYRUP_COLOR)
+		showFloatingText("SYROP DZIADKA", SYRUP.COLOR)
 		playSfx("PickingUp")
 	else
 		if result.reason == "full" then
@@ -2582,7 +2598,7 @@ PetStatusUpdateEvt.OnClientEvent:Connect(function(data)
 	hudData.bottlesCarried = total
 	updateHud()
 	updateInventory()
-	if invDetVisible and isPetSlotId(invDetCurrentRarity) then
+	if D.visible and isPetSlotId(D.currentRarity) then
 		refreshInvDetail()
 		setInvDetailContentVisible(true)
 	end
@@ -2613,7 +2629,7 @@ task.spawn(function()
 
 		syncMagnetSlots()
 		updateInventory()
-		if invDetVisible and invDetCurrentRarity == MAGNET_ID then
+		if D.visible and D.currentRarity == MAGNET_ID then
 			refreshInvDetail()
 			setInvDetailContentVisible(true)
 		end
