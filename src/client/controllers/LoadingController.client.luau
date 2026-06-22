@@ -192,6 +192,11 @@ task.spawn(function()
 		end
 	end
 
+	-- Tekstura magnesu w slocie EQ
+	if Config.Magnet and type(Config.Magnet.Image) == "string" and Config.Magnet.Image ~= "" then
+		table.insert(assets, Config.Magnet.Image)
+	end
+
 	-- 3) Preload (yielding — zwraca gdy wszystko gotowe)
 	setStatus("preload assetów (" .. #assets .. ")…")
 	if #assets > 0 then

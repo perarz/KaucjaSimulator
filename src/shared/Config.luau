@@ -148,6 +148,7 @@ return {
 		Name             = "Magnes",
 		Color            = Color3.fromRGB(220, 90, 90),
 		Desc             = "Aktywuj na 2 minuty. Automatycznie zbiera wszystkie butelki wokół ciebie w zwiększonym promieniu (×1.5).",
+		Image            = "rbxassetid://109129872039457",  -- tekstura w slocie EQ
 	},
 
 	-- Sklep "Żabka" (workspace.blok_zabki.KasjerZabka) — sprzedaje magnesy za zł.
