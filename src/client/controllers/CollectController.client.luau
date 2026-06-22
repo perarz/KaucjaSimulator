@@ -123,6 +123,7 @@ local MAGNET = {
 	NAME  = (Config.Magnet and Config.Magnet.Name) or "Magnes",
 	COLOR = (Config.Magnet and Config.Magnet.Color) or Color3.fromRGB(220, 90, 90),
 	DESC  = (Config.Magnet and Config.Magnet.Desc) or "Aktywuj, by zbierać butelki automatycznie.",
+	IMAGE = Config.Magnet and Config.Magnet.Image,
 }
 
 -- Pet slot id prefix: "Pet_<uuid>". Każdy pet = osobny slot (NIE stackuje się — unikalny UUID).
@@ -1510,11 +1511,15 @@ local function renderSlot(i: number)
 				img.Size = UDim2.fromScale(sc, sc)
 			end
 		elseif img then
-			-- Butelka — tekstura per rzadkość. Syrop/magnes nie mają obrazka.
-			local bimg = (string.sub(data.id, 1, 7) == "Bottle_")
-				and Config.BottleImages and Config.BottleImages[data.name]
-			if bimg then
-				img.Image   = bimg
+			-- Butelka — tekstura per rzadkość; magnes — tekstura z Config. Syrop bez obrazka.
+			local itemImg
+			if string.sub(data.id, 1, 7) == "Bottle_" then
+				itemImg = Config.BottleImages and Config.BottleImages[data.name]
+			elseif data.id == MAGNET_ID then
+				itemImg = MAGNET.IMAGE
+			end
+			if itemImg then
+				img.Image   = itemImg
 				img.Visible = true
 				img.Size    = UDim2.fromScale(0.82, 0.82)
 			else
