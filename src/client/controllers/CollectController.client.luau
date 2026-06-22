@@ -1489,6 +1489,7 @@ local function renderSlot(i: number)
 		-- Pet slot — pokaż diagonalny gradient w kolorze peta
 		local isPet = isPetSlotId(data.id)
 		SL.petGlows[i].Visible = isPet
+		local img = SL.petImgs[i]  -- generyczny ImageLabel slotu (pet ALBO tekstura butelki)
 		if isPet then
 			-- ColorSequence: kolor rzadkości → biel → kolor rzadkości
 			SL.petGrads[i].Color = ColorSequence.new({
@@ -1501,12 +1502,24 @@ local function renderSlot(i: number)
 			SL.counts[i].Text = ""
 			-- Tekstura peta per rzadkość
 			local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.petRarity]) or {}
-			if SL.petImgs[i] then
-				SL.petImgs[i].Image   = rcfg.image or ""
-				SL.petImgs[i].Visible = (rcfg.image ~= nil)
+			if img then
+				img.Image   = rcfg.image or ""
+				img.Visible = (rcfg.image ~= nil)
+				-- Huge ma natywnie mniejszą grafikę — powiększamy żeby pasował do butelek
+				local sc = (data.petRarity == "Huge") and 0.98 or 0.82
+				img.Size = UDim2.fromScale(sc, sc)
 			end
-		elseif SL.petImgs[i] then
-			SL.petImgs[i].Visible = false
+		elseif img then
+			-- Butelka — tekstura per rzadkość. Syrop/magnes nie mają obrazka.
+			local bimg = (string.sub(data.id, 1, 7) == "Bottle_")
+				and Config.BottleImages and Config.BottleImages[data.name]
+			if bimg then
+				img.Image   = bimg
+				img.Visible = true
+				img.Size    = UDim2.fromScale(0.82, 0.82)
+			else
+				img.Visible = false
+			end
 		end
 	else
 		SL.frames[i].BackgroundColor3 = C.SLOT
