@@ -519,12 +519,20 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
+-- Stare 4 przyciski HUD (zastąpione przyciskiem MENU) — zawijamy w `do end` żeby ich
+-- lokalne (BTN_*, STACK_*, stBtn/qBtn/setBtn, attachBtnHover) NIE zajmowały rejestrów
+-- głównego chunku. Luau ma limit 200 lokalnych na funkcję; bez tego dodanie sub-zakładek
+-- EQ przekraczało limit i CAŁY CollectController nie kompilował się
+-- ("Out of local registers ... exceeded limit 200"), przez co EKWIPUNEK nie ładował się.
+-- eqBtn jest używany później (toggle EQ), więc deklarujemy go na zewnątrz.
+local eqBtn: TextButton
+do
 local BTN_W, BTN_H, BTN_GAP = 300, 90, 16
 -- 4 przyciski w pionie, wycentrowane na Y=0.5
 local STACK_H   = 4 * BTN_H + 3 * BTN_GAP
 local STACK_TOP = -STACK_H / 2
 
-local eqBtn = Instance.new("TextButton")
+eqBtn = Instance.new("TextButton")
 eqBtn.Size = UDim2.new(0, BTN_W, 0, BTN_H)
 eqBtn.Position = UDim2.new(0, 16, 0.5, STACK_TOP)
 eqBtn.BackgroundColor3 = C_BG; eqBtn.BackgroundTransparency = 0.05
@@ -610,6 +618,7 @@ setBtn.MouseButton1Click:Connect(function()
 		_G["__settingsToggle"]()
 	end
 end)
+end  -- koniec do-block starych przycisków HUD (zwalnia rejestry lokalnych)
 
 -- ── Inventory ScreenGui ───────────────────────────────────────────────────
 
