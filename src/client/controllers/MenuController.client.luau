@@ -443,14 +443,36 @@ task.defer(function()
 	panel.Visible = false  -- ukryj z powrotem
 end)
 
+-- ── Handshake z kontrolerami: czekaj aż ustawią swój _G ready flag ────────
+-- NIE poddajemy się po stałym oknie czasowym. Ciężkie kontrolery (CollectController
+-- buduje 60 slotów EQ + kilka GUI synchronnie, PO blokującym workspace:WaitForChild("SFX"))
+-- potrafią skończyć ładowanie po >10s na wolnym kliencie / cold-starcie w Studio.
+-- Wcześniej twardy timeout 10s sprawiał, że port się poddawał NA ZAWSZE i zakładka
+-- (najczęściej EKWIPUNEK — najcięższy kontroler przegrywa wyścig) zostawała na
+-- placeholderze "wkrótce" do końca sesji. Teraz pollujemy dalej, z miękkim ostrzeżeniem
+-- po 10s i twardym bezpiecznikiem po 60s (wtedy kontroler naprawdę padł przy ładowaniu).
+local function waitForReady(readyKey: string, label: string): boolean
+	local elapsed = 0
+	local warned = false
+	while not _G[readyKey] do
+		task.wait(0.1)
+		elapsed += 0.1
+		if not warned and elapsed >= 10 then
+			warned = true
+			warn(string.format("[MenuController] %s wciąż nie gotowe po 10s — czekam dalej", label))
+		end
+		if elapsed >= 60 then
+			warn(string.format("[MenuController] %s nie załadowane po 60s — poddaję się", label))
+			return false
+		end
+	end
+	return true
+end
+
 -- ── Port: Ekwipunek do zakładki 1 (EKWIPUNEK) ─────────────────────────────
 -- CollectController eksportuje wrapper (count label + sloty + detail panel).
 task.spawn(function()
-	local elapsed = 0
-	while not _G["__inventoryReady"] and elapsed < 10 do
-		task.wait(0.1)
-		elapsed += 0.1
-	end
+	if not waitForReady("__inventoryReady", "EKWIPUNEK / CollectController") then return end
 	local invWrap = _G["__inventoryWrap"] :: Frame?
 	if not invWrap then
 		warn("[MenuController] _G.__inventoryWrap not available — EKWIPUNEK zakładka pusta")
@@ -493,11 +515,7 @@ end
 
 -- ── Port: Questy do zakładki 3 (QUESTY) ───────────────────────────────────
 task.spawn(function()
-	local elapsed = 0
-	while not _G["__questsReady"] and elapsed < 10 do
-		task.wait(0.1)
-		elapsed += 0.1
-	end
+	if not waitForReady("__questsReady", "QUESTY / QuestController") then return end
 	local qPanel = _G["__questsPanel"] :: Frame?
 	if not qPanel then
 		warn("[MenuController] _G.__questsPanel not available — QUESTY zakładka pusta")
@@ -517,11 +535,7 @@ end)
 
 -- ── Port: Ustawienia do zakładki 4 (USTAWIENIA) ──────────────────────────
 task.spawn(function()
-	local elapsed = 0
-	while not _G["__settingsReady"] and elapsed < 10 do
-		task.wait(0.1)
-		elapsed += 0.1
-	end
+	if not waitForReady("__settingsReady", "USTAWIENIA / SettingsController") then return end
 	local setPanel = _G["__settingsPanel"] :: Frame?
 	if not setPanel then
 		warn("[MenuController] _G.__settingsPanel not available — USTAWIENIA zakładka pusta")
@@ -542,12 +556,7 @@ end)
 -- SkillTreeController eksportuje wrapper (canvas + detail panel obok siebie).
 -- Reparentujemy go bezpośrednio do contentFrames[2] — bez własnej ramki/headera.
 task.spawn(function()
-	local timeout = 10
-	local elapsed = 0
-	while not _G["__skillTreeReady"] and elapsed < timeout do
-		task.wait(0.1)
-		elapsed += 0.1
-	end
+	if not waitForReady("__skillTreeReady", "UMIEJĘTNOŚCI / SkillTreeController") then return end
 	local stWrap = _G["__skillTreeWrap"] :: Frame?
 	if not stWrap then
 		warn("[MenuController] _G.__skillTreeWrap not available — UMIEJĘTNOŚCI zakładka pusta")

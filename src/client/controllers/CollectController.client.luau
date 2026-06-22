@@ -23,7 +23,17 @@ local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
 
 -- ── SFX ───────────────────────────────────────────────────────────────────
-local SFX_FOLDER = workspace:WaitForChild("SFX")
+-- SFX_FOLDER rozwiązywane LENIWIE — NIE blokujemy głównego wątku na replikację
+-- workspace.SFX. Wcześniej WaitForChild bez timeoutu mógł opóźnić (lub przy braku
+-- folderu zawiesić na zawsze) cały kontroler, a wraz z nim eksport _G.__inventoryWrap,
+-- którego MenuController potrzebuje do zamontowania zakładki EKWIPUNEK.
+local sfxFolderCache: Instance? = workspace:FindFirstChild("SFX")
+local function getSfxFolder(): Instance?
+	if not sfxFolderCache then
+		sfxFolderCache = workspace:FindFirstChild("SFX")
+	end
+	return sfxFolderCache
+end
 
 local function getOrCreateSfxGroup(): SoundGroup
 	local existing = SoundService:FindFirstChild("SfxGroup")
@@ -37,7 +47,9 @@ end
 local SFX_GROUP = getOrCreateSfxGroup()
 
 local function playSfx(name: string)
-	local template = SFX_FOLDER:FindFirstChild(name)
+	local folder = getSfxFolder()
+	if not folder then return end
+	local template = folder:FindFirstChild(name)
 	if not template or not template:IsA("Sound") then return end
 	local s = template:Clone()
 	s.SoundGroup = SFX_GROUP
