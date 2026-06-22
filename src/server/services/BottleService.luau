@@ -713,7 +713,10 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 	local capacity = Config.BackpackUpgrades[data.BackpackLevel].Capacity
 	local carried  = Util.getCarriedCount(data)
 
-	if carried >= capacity then
+	-- Limit per-kategoria: butelki mogą zająć max 70% pojemności plecaka (reszta dla petów/akcesoriów).
+	local caps        = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	local bottleCount = Util.getBottleCount(data)
+	if bottleCount >= caps.bottles then
 		if not opts.silent then
 			CollectBottleResult:FireClient(player, { success = false, reason = "full" })
 		end
