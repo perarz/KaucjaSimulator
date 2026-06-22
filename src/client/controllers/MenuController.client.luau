@@ -75,11 +75,13 @@ gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.DisplayOrder   = 30
 gui.Parent         = playerGui
 
--- ── Przycisk MENU (po lewej, środek pionowo) — ImageButton z ikoną ──────────
+-- ── Przycisk MENU (środek dolnej krawędzi ekranu) — ImageButton z ikoną ─────
+-- Po reorganizacji HUD: środek dół. SKLEP po lewo od MENU, hoverboard zostaje po lewej.
+local HUD_BTN_BOTTOM_OFFSET = 20  -- piksele nad dolną krawędzią
 local menuBtn = Instance.new("ImageButton")
 menuBtn.Name                   = "MenuButton"
-menuBtn.AnchorPoint            = Vector2.new(0, 0.5)
-menuBtn.Position               = UDim2.new(0, -10, 0.35, 0)
+menuBtn.AnchorPoint            = Vector2.new(0.5, 1)
+menuBtn.Position               = UDim2.new(0.5, 0, 1, -HUD_BTN_BOTTOM_OFFSET)
 menuBtn.Size                   = UDim2.fromOffset(203, 135)
 menuBtn.BackgroundTransparency = 1
 menuBtn.BorderSizePixel        = 0
@@ -130,29 +132,35 @@ mkCorner(panel, 12)
 mkStroke(panel, C_BORDER, 5)
 
 -- Close button (X) w prawym górnym rogu
+-- X-close: czerwone wypełnione kółko z białym X. Wcześniej był sam czerwony tekst na
+-- transparentnym tle — przy UIScale <1 (np. monitor 1280×1024 dostaje scale 0.865)
+-- robił się na tyle drobny i niekontrastowy że gracze go nie widzieli i nie umieli
+-- zamknąć menu (skarga z Discorda — "musze klikac samouczek zeby zamknac").
 local closeBtn = Instance.new("TextButton")
 closeBtn.AnchorPoint        = Vector2.new(1, 0)
 closeBtn.Position           = UDim2.new(1, -16, 0, 14)
-closeBtn.Size               = UDim2.fromOffset(44, 44)
-closeBtn.BackgroundTransparency = 1
+closeBtn.Size               = UDim2.fromOffset(52, 52)
+closeBtn.BackgroundColor3   = Color3.fromRGB(200, 55, 55)
 closeBtn.BorderSizePixel    = 0
 closeBtn.Text               = "X"
 closeBtn.Font               = FONT_MAIN
-closeBtn.TextSize           = 28
-closeBtn.TextColor3         = Color3.fromRGB(220, 70, 70)
+closeBtn.TextSize           = 32
+closeBtn.TextColor3         = Color3.new(1, 1, 1)
 closeBtn.AutoButtonColor    = false
 closeBtn.ZIndex             = 10
 closeBtn.Parent             = panel
 do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = closeBtn
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = closeBtn
 	local sc = Instance.new("UIScale")
 	sc.Parent = closeBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
 	closeBtn.MouseEnter:Connect(function()
-		closeBtn.TextColor3 = Color3.fromRGB(255, 110, 110)
-		TweenService:Create(sc, ti, { Scale = 1.18 }):Play()
+		closeBtn.BackgroundColor3 = Color3.fromRGB(235, 80, 80)
+		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		closeBtn.TextColor3 = Color3.fromRGB(220, 70, 70)
+		closeBtn.BackgroundColor3 = Color3.fromRGB(200, 55, 55)
 		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
 	end)
 end
@@ -177,11 +185,11 @@ mkCorner(bubble, (TABBAR_H - TABBAR_PAD * 2) / 2)
 -- ── Zakładki ───────────────────────────────────────────────────────────────
 type TabDef = { id: string, label: string, color: Color3 }
 
+-- 4 zakładki. SKLEP jest osobnym GUI (ShopCatalogController) — przycisk w HUD obok MENU.
 local TABS: { TabDef } = {
 	{ id = "inventory", label = "EKWIPUNEK",    color = C_ACCENT_GREEN },
 	{ id = "skills",    label = "UMIEJĘTNOŚCI", color = C_ACCENT_GREEN },
 	{ id = "quests",    label = "QUESTY",       color = C_ACCENT_GREEN },
-	{ id = "shop",      label = "SKLEP",        color = C_ACCENT_GREEN },
 	{ id = "settings",  label = "USTAWIENIA",   color = C_ACCENT_GREEN },
 }
 
@@ -389,13 +397,31 @@ end
 
 menuBtn.MouseButton1Click:Connect(function() playSfx("Click"); setMenuOpen(not isMenuOpen) end)
 closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setMenuOpen(false) end)
+
+-- Ikona MENU znika gdy inne UI otwarte (Bank/Sklep/itp). Wyłączam tylko zewnętrzny lock —
+-- gdy mój panel jest otwarty, count zawiera mój własny lock — odejmuję go.
+do
+	local RunService = game:GetService("RunService")
+	local lastVis = true
+	RunService.RenderStepped:Connect(function()
+		local count = tonumber(_G["__moveLockCount"]) or 0
+		local externalLock = count - (isMenuOpen and 1 or 0)
+		local shouldShow = externalLock <= 0
+		if shouldShow ~= lastVis then
+			menuBtn.Visible = shouldShow
+			lastVis = shouldShow
+		end
+	end)
+end
 -- Klik w overlay (tło) NIE zamyka menu — zamykanie wyłącznie przyciskiem X lub ESC
 
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end
 	if input.KeyCode == Enum.KeyCode.Escape and isMenuOpen then
 		setMenuOpen(false)
-	elseif input.KeyCode == Enum.KeyCode.Tab then
+	elseif input.KeyCode == Enum.KeyCode.Tab or input.KeyCode == Enum.KeyCode.M then
+		-- M = drugi toggle obok TAB; dodany po skardze gracza z 1280×1024 że nie umiał
+		-- znaleźć X-close. ESC zamyka, TAB/M toggluje.
 		setMenuOpen(not isMenuOpen)
 	end
 end)
@@ -441,6 +467,30 @@ task.spawn(function()
 	invWrap.Position    = UDim2.fromScale(0.5, 0.5)
 end)
 
+-- ── Auto-fit helper: skaluje mały panel do rozmiaru contentFrame, aspect-ratio preserved.
+-- Panele Quests/Settings mają fixed offsety (560×580 / 480×600), a contentArea ~1384×730 —
+-- bez tego zajmują ~22% pola zakładki. UIScale powiększa wszystko proporcjonalnie.
+local function fitPanelToContent(target: GuiObject, contentFrame: Frame, maxScale: number)
+	local s = Instance.new("UIScale")
+	s.Scale  = 1
+	s.Parent = target
+	local function recalc()
+		local cs = contentFrame.AbsoluteSize
+		if cs.X <= 0 or cs.Y <= 0 then return end
+		-- AbsoluteSize uwzględnia UIScale, więc dzielimy żeby uzyskać rozmiar niesklejony.
+		local ts = target.AbsoluteSize
+		if ts.X <= 0 or ts.Y <= 0 then return end
+		local ux = ts.X / s.Scale
+		local uy = ts.Y / s.Scale
+		local fit = math.min(cs.X / ux, cs.Y / uy) * 0.96  -- 4% margines na padding
+		fit = math.clamp(fit, 0.6, maxScale)
+		s.Scale = fit
+	end
+	contentFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(recalc)
+	task.defer(recalc)
+	task.delay(0.1, recalc)   -- po pełnym layout cyklu
+end
+
 -- ── Port: Questy do zakładki 3 (QUESTY) ───────────────────────────────────
 task.spawn(function()
 	local elapsed = 0
@@ -462,6 +512,7 @@ task.spawn(function()
 	qPanel.Parent      = contentFrames[3]
 	qPanel.AnchorPoint = Vector2.new(0.5, 0.5)
 	qPanel.Position    = UDim2.fromScale(0.5, 0.5)
+	fitPanelToContent(qPanel, contentFrames[3], 1.7)
 end)
 
 -- ── Port: Ustawienia do zakładki 4 (USTAWIENIA) ──────────────────────────
@@ -477,34 +528,14 @@ task.spawn(function()
 		return
 	end
 
-	-- Ukryj placeholder labels w zakładce 5 (USTAWIENIA)
-	for _, child in ipairs(contentFrames[5]:GetChildren()) do
-		if child:IsA("TextLabel") then child.Visible = false end
-	end
-
-	setPanel.Parent      = contentFrames[5]
-	setPanel.AnchorPoint = Vector2.new(0.5, 0.5)
-	setPanel.Position    = UDim2.fromScale(0.5, 0.5)
-end)
-
--- ── Port: Sklep (BoostShop) do zakładki 4 (SKLEP) ─────────────────────────
-task.spawn(function()
-	local elapsed = 0
-	while not _G["__boostShopReady"] and elapsed < 10 do
-		task.wait(0.1); elapsed += 0.1
-	end
-	local shopWrap = _G["__boostShopWrap"] :: Frame?
-	if not shopWrap then
-		warn("[MenuController] _G.__boostShopWrap not available — SKLEP zakładka pusta")
-		return
-	end
 	for _, child in ipairs(contentFrames[4]:GetChildren()) do
 		if child:IsA("TextLabel") then child.Visible = false end
 	end
-	shopWrap.Parent      = contentFrames[4]
-	shopWrap.AnchorPoint = Vector2.new(0.5, 0.5)
-	shopWrap.Position    = UDim2.fromScale(0.5, 0.5)
-	print("[MenuController] SKLEP zakładka — wrap przeniesiony do contentFrames[4]")
+
+	setPanel.Parent      = contentFrames[4]
+	setPanel.AnchorPoint = Vector2.new(0.5, 0.5)
+	setPanel.Position    = UDim2.fromScale(0.5, 0.5)
+	fitPanelToContent(setPanel, contentFrames[4], 1.7)
 end)
 
 -- ── Port: Skill Tree do zakładki 2 (UMIEJĘTNOŚCI) ─────────────────────────

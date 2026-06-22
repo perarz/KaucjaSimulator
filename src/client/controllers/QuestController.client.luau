@@ -87,15 +87,17 @@ end
 
 -- ── ScreenGui ─────────────────────────────────────────────────────────────
 
-local PANEL_W  = 560
+-- Panel mieszka w zakładce MenuController (contentArea ~1384×730). Wcześniej 560×580 —
+-- karty wyglądały na "minimapę questów". Powiększone żeby wypełnić zakładkę.
+local PANEL_W  = 900
 -- HEADER_H = 0 — panel mieszka w zakładce MenuController, własny header schowany.
 -- Pozycje children referencują HEADER_H jako offset Y, więc samo wyzerowanie
 -- shifuje całość do góry.
 local HEADER_H = 0
-local CARD_H   = 110
+local CARD_H   = 130
 local CARD_GAP = 12
 local PAD      = 22
-local SECTION_LBL_H = 26
+local SECTION_LBL_H = 32
 local SECTION_GAP   = 6   -- między section label a pierwszą kartą
 local DAILY_AREA = Config.QuestActiveCount * CARD_H + (Config.QuestActiveCount - 1) * CARD_GAP
 
@@ -124,14 +126,14 @@ overlay.AutoButtonColor        = false
 overlay.ZIndex                 = 1
 overlay.Parent                 = gui
 
--- Maksymalna widoczna wysokość panelu — content menu MenuController ma ~610px,
+-- Maksymalna widoczna wysokość panelu — content menu MenuController ma ~730px,
 -- zostawiamy bufor 30px. Powyżej tego włącza się scroll.
-local MAX_VISIBLE_H = 580
+local MAX_VISIBLE_H = 700
 
 local panel = Instance.new("ScrollingFrame")
 panel.Size                  = UDim2.fromOffset(PANEL_W, MAX_VISIBLE_H)
 panel.AnchorPoint           = Vector2.new(0.5, 0.5)
-panel.Position              = UDim2.new(0.5, 0, 0.55, 0)
+panel.Position              = UDim2.fromScale(0.5, 0.5)
 panel.BackgroundTransparency = 1
 panel.BorderSizePixel       = 0
 panel.ClipsDescendants      = true
@@ -187,7 +189,7 @@ local refreshLbl = Instance.new("TextLabel")
 refreshLbl.AnchorPoint            = Vector2.new(1, 0)
 refreshLbl.BackgroundTransparency = 1
 refreshLbl.Text                   = ""
-refreshLbl.TextSize               = 14
+refreshLbl.TextSize               = 18
 refreshLbl.Font                   = FONT
 refreshLbl.TextColor3             = C_DIMTEXT
 refreshLbl.TextXAlignment         = Enum.TextXAlignment.Right
@@ -244,7 +246,7 @@ grandpaLbl.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD)
 grandpaLbl.BackgroundTransparency = 1
 grandpaLbl.Text                   = "DZIADEK"
 grandpaLbl.Font                   = FONT
-grandpaLbl.TextSize               = 16
+grandpaLbl.TextSize               = 22
 grandpaLbl.TextColor3             = C_SYRUP
 grandpaLbl.TextXAlignment         = Enum.TextXAlignment.Left
 grandpaLbl.ZIndex                 = 3
@@ -265,7 +267,7 @@ storyLbl.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD)  -- usta
 storyLbl.BackgroundTransparency = 1
 storyLbl.Text                   = "FABUŁA"
 storyLbl.Font                   = FONT
-storyLbl.TextSize               = 16
+storyLbl.TextSize               = 22
 storyLbl.TextColor3             = C_GOLD
 storyLbl.TextXAlignment         = Enum.TextXAlignment.Left
 storyLbl.ZIndex                 = 3
@@ -302,11 +304,11 @@ do
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = frame
 
 	local descLbl = Instance.new("TextLabel")
-	descLbl.Size                   = UDim2.new(1, -224, 0, 28)
-	descLbl.Position               = UDim2.fromOffset(16, 14)
+	descLbl.Size                   = UDim2.new(1, -280, 0, 36)
+	descLbl.Position               = UDim2.fromOffset(20, 16)
 	descLbl.BackgroundTransparency = 1
 	descLbl.Font                   = FONT
-	descLbl.TextSize               = 16
+	descLbl.TextSize               = 22
 	descLbl.TextColor3             = C_WHITE
 	descLbl.TextXAlignment         = Enum.TextXAlignment.Left
 	descLbl.TextYAlignment         = Enum.TextYAlignment.Top
@@ -317,8 +319,8 @@ do
 	storyCard.descLbl = descLbl
 
 	local progBarBG = Instance.new("Frame")
-	progBarBG.Size = UDim2.new(1, -224, 0, 14)
-	progBarBG.Position = UDim2.new(0, 16, 1, -34)
+	progBarBG.Size = UDim2.new(1, -280, 0, 18)
+	progBarBG.Position = UDim2.new(0, 20, 1, -42)
 	progBarBG.BackgroundColor3 = Color3.fromRGB(8, 50, 35)
 	progBarBG.BorderSizePixel = 0
 	progBarBG.ZIndex = 4
@@ -338,7 +340,7 @@ do
 	local progLbl = Instance.new("TextLabel")
 	progLbl.Size = UDim2.new(1, 0, 1, 0)
 	progLbl.BackgroundTransparency = 1
-	progLbl.Font = FONT; progLbl.TextSize = 11
+	progLbl.Font = FONT; progLbl.TextSize = 14
 	progLbl.TextColor3 = C_WHITE
 	progLbl.TextStrokeColor3 = Color3.new(0, 0, 0); progLbl.TextStrokeTransparency = 0.4
 	progLbl.Text = "0 / 0"
@@ -347,11 +349,11 @@ do
 	storyCard.progLbl = progLbl
 
 	local rewardLbl = Instance.new("TextLabel")
-	rewardLbl.Size = UDim2.fromOffset(190, 28)
+	rewardLbl.Size = UDim2.fromOffset(240, 32)
 	rewardLbl.AnchorPoint = Vector2.new(1, 0)
-	rewardLbl.Position = UDim2.new(1, -210, 0, 14)
+	rewardLbl.Position = UDim2.new(1, -260, 0, 16)
 	rewardLbl.BackgroundTransparency = 1
-	rewardLbl.Font = FONT; rewardLbl.TextSize = 16
+	rewardLbl.Font = FONT; rewardLbl.TextSize = 22
 	rewardLbl.TextColor3 = C_GOLD
 	rewardLbl.TextXAlignment = Enum.TextXAlignment.Right
 	rewardLbl.Text = "+0 zł"
@@ -361,12 +363,12 @@ do
 
 	-- Status/Claim: TextButton (klik = ODBIERZ gdy gotowy)
 	local statusLbl = Instance.new("TextButton")
-	statusLbl.Size = UDim2.fromOffset(190, 50)
+	statusLbl.Size = UDim2.fromOffset(240, 60)
 	statusLbl.AnchorPoint = Vector2.new(1, 1)
-	statusLbl.Position = UDim2.new(1, -14, 1, -14)
+	statusLbl.Position = UDim2.new(1, -18, 1, -16)
 	statusLbl.BackgroundColor3 = C_BG; statusLbl.BorderSizePixel = 0
 	statusLbl.Text = "W TRAKCIE"
-	statusLbl.TextSize = 15
+	statusLbl.TextSize = 20
 	statusLbl.Font = FONT
 	statusLbl.TextColor3 = C_DIMTEXT
 	statusLbl.AutoButtonColor = false
@@ -394,7 +396,7 @@ dailyLbl.Position               = UDim2.fromOffset(PAD,
 dailyLbl.BackgroundTransparency = 1
 dailyLbl.Text                   = "ZADANIA DZIENNE"
 dailyLbl.Font                   = FONT
-dailyLbl.TextSize               = 16
+dailyLbl.TextSize               = 22
 dailyLbl.TextColor3             = C_GREEN
 dailyLbl.TextXAlignment         = Enum.TextXAlignment.Left
 dailyLbl.ZIndex                 = 3
@@ -430,11 +432,11 @@ local function buildCard(slot: number): CardHandle
 
 	-- Opis questa
 	local descLbl = Instance.new("TextLabel")
-	descLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 28)
-	descLbl.Position               = UDim2.fromOffset(16, 12)
+	descLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 280, 0, 36)
+	descLbl.Position               = UDim2.fromOffset(20, 14)
 	descLbl.BackgroundTransparency = 1
 	descLbl.Text                   = ""
-	descLbl.TextSize               = 16
+	descLbl.TextSize               = 22
 	descLbl.Font                   = FONT
 	descLbl.TextColor3             = C_WHITE
 	descLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -445,8 +447,8 @@ local function buildCard(slot: number): CardHandle
 
 	-- Pasek progresu — tło
 	local progBarBG = Instance.new("Frame")
-	progBarBG.Size            = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 14)
-	progBarBG.Position        = UDim2.fromOffset(16, 56)
+	progBarBG.Size            = UDim2.new(0, PANEL_W - PAD*2 - 280, 0, 18)
+	progBarBG.Position        = UDim2.fromOffset(20, 68)
 	progBarBG.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
 	progBarBG.BorderSizePixel = 0
 	progBarBG.ZIndex          = 4
@@ -468,11 +470,11 @@ local function buildCard(slot: number): CardHandle
 
 	-- Tekst progresu "X/Y"
 	local progLbl = Instance.new("TextLabel")
-	progLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 18)
-	progLbl.Position               = UDim2.fromOffset(16, 76)
+	progLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 280, 0, 22)
+	progLbl.Position               = UDim2.fromOffset(20, 92)
 	progLbl.BackgroundTransparency = 1
 	progLbl.Text                   = ""
-	progLbl.TextSize               = 12
+	progLbl.TextSize               = 16
 	progLbl.Font                   = FONT
 	progLbl.TextColor3             = C_DIMTEXT
 	progLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -481,12 +483,12 @@ local function buildCard(slot: number): CardHandle
 
 	-- Nagroda label
 	local rewardLbl = Instance.new("TextLabel")
-	rewardLbl.Size                   = UDim2.fromOffset(190, 24)
+	rewardLbl.Size                   = UDim2.fromOffset(240, 30)
 	rewardLbl.AnchorPoint            = Vector2.new(1, 0)
-	rewardLbl.Position               = UDim2.new(1, -14, 0, 14)
+	rewardLbl.Position               = UDim2.new(1, -18, 0, 16)
 	rewardLbl.BackgroundTransparency = 1
 	rewardLbl.Text                   = ""
-	rewardLbl.TextSize               = 16
+	rewardLbl.TextSize               = 22
 	rewardLbl.Font                   = FONT
 	rewardLbl.TextColor3             = C_GREEN
 	rewardLbl.TextXAlignment         = Enum.TextXAlignment.Right
@@ -495,13 +497,13 @@ local function buildCard(slot: number): CardHandle
 
 	-- Przycisk KUP/CLAIM
 	local claimBtn = Instance.new("TextButton")
-	claimBtn.Size                 = UDim2.fromOffset(190, 50)
+	claimBtn.Size                 = UDim2.fromOffset(240, 60)
 	claimBtn.AnchorPoint          = Vector2.new(1, 1)
-	claimBtn.Position             = UDim2.new(1, -14, 1, -14)
+	claimBtn.Position             = UDim2.new(1, -18, 1, -16)
 	claimBtn.BackgroundColor3     = C_BG
 	claimBtn.BorderSizePixel      = 0
 	claimBtn.Text                 = "TRWA…"
-	claimBtn.TextSize             = 15
+	claimBtn.TextSize             = 20
 	claimBtn.Font                 = FONT
 	claimBtn.TextColor3           = C_DIMTEXT
 	claimBtn.AutoButtonColor      = false
@@ -570,11 +572,11 @@ do
 
 	-- Opis
 	local descLbl = Instance.new("TextLabel")
-	descLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 28)
-	descLbl.Position               = UDim2.fromOffset(16, 12)
+	descLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 280, 0, 36)
+	descLbl.Position               = UDim2.fromOffset(20, 14)
 	descLbl.BackgroundTransparency = 1
 	descLbl.Text                   = grandpaQuest.desc
-	descLbl.TextSize               = 16
+	descLbl.TextSize               = 22
 	descLbl.Font                   = FONT
 	descLbl.TextColor3             = C_WHITE
 	descLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -586,8 +588,8 @@ do
 
 	-- Pasek progresu
 	local progBarBG = Instance.new("Frame")
-	progBarBG.Size            = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 14)
-	progBarBG.Position        = UDim2.fromOffset(16, 56)
+	progBarBG.Size            = UDim2.new(0, PANEL_W - PAD*2 - 280, 0, 18)
+	progBarBG.Position        = UDim2.fromOffset(20, 68)
 	progBarBG.BackgroundColor3 = Color3.fromRGB(28, 28, 28)
 	progBarBG.BorderSizePixel = 0
 	progBarBG.ZIndex          = 4
@@ -608,11 +610,11 @@ do
 
 	-- Tekst progresu "0/1"
 	local progLbl = Instance.new("TextLabel")
-	progLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 220, 0, 18)
-	progLbl.Position               = UDim2.fromOffset(16, 76)
+	progLbl.Size                   = UDim2.new(0, PANEL_W - PAD*2 - 280, 0, 22)
+	progLbl.Position               = UDim2.fromOffset(20, 92)
 	progLbl.BackgroundTransparency = 1
 	progLbl.Text                   = "0 / 1"
-	progLbl.TextSize               = 12
+	progLbl.TextSize               = 16
 	progLbl.Font                   = FONT
 	progLbl.TextColor3             = C_DIMTEXT
 	progLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -622,12 +624,12 @@ do
 
 	-- Nagroda
 	local rewardLbl = Instance.new("TextLabel")
-	rewardLbl.Size                   = UDim2.fromOffset(190, 24)
+	rewardLbl.Size                   = UDim2.fromOffset(240, 30)
 	rewardLbl.AnchorPoint            = Vector2.new(1, 0)
-	rewardLbl.Position               = UDim2.new(1, -14, 0, 14)
+	rewardLbl.Position               = UDim2.new(1, -18, 0, 16)
 	rewardLbl.BackgroundTransparency = 1
 	rewardLbl.Text                   = "Nagroda: " .. grandpaQuest.reward .. " ZŁ"
-	rewardLbl.TextSize               = 16
+	rewardLbl.TextSize               = 22
 	rewardLbl.Font                   = FONT
 	rewardLbl.TextColor3             = C_GREEN
 	rewardLbl.TextXAlignment         = Enum.TextXAlignment.Right
@@ -637,13 +639,13 @@ do
 
 	-- Status label zamiast przycisku claim
 	local statusLbl = Instance.new("TextLabel")
-	statusLbl.Size                   = UDim2.fromOffset(190, 50)
+	statusLbl.Size                   = UDim2.fromOffset(240, 60)
 	statusLbl.AnchorPoint            = Vector2.new(1, 1)
-	statusLbl.Position               = UDim2.new(1, -14, 1, -14)
+	statusLbl.Position               = UDim2.new(1, -18, 1, -16)
 	statusLbl.BackgroundColor3       = C_BG
 	statusLbl.BorderSizePixel        = 0
 	statusLbl.Text                   = "ZNAJDŹ"
-	statusLbl.TextSize               = 15
+	statusLbl.TextSize               = 20
 	statusLbl.Font                   = FONT
 	statusLbl.TextColor3             = C_DIMTEXT
 	statusLbl.ZIndex                 = 4
@@ -658,7 +660,7 @@ do
 	emptyLbl.Position               = UDim2.fromOffset(16, 12)
 	emptyLbl.BackgroundTransparency = 1
 	emptyLbl.Text                   = ""
-	emptyLbl.TextSize               = 14
+	emptyLbl.TextSize               = 18
 	emptyLbl.Font                   = FONT
 	emptyLbl.TextColor3             = C_DIMTEXT
 	emptyLbl.TextXAlignment         = Enum.TextXAlignment.Center

@@ -6,6 +6,7 @@ local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(script.Parent.PlayerDataService)
 local MagnetService     = require(script.Parent.MagnetService)
 
@@ -17,21 +18,21 @@ local UpdateHUD            = Events:WaitForChild("UpdateHUD")
 
 local cfg = Config.Zabka
 
--- Priorytet anchor'a: Head > HRP > UpperTorso/Torso > PrimaryPart > dowolny BasePart
-local function findAnchor(model: Instance): BasePart?
-	if model:IsA("BasePart") then return model :: BasePart end
-	if not model:IsA("Model") then return nil end
-	for _, name in ipairs({ "Head", "HumanoidRootPart", "UpperTorso", "Torso" }) do
-		local p = model:FindFirstChild(name)
-		if p and p:IsA("BasePart") then return p :: BasePart end
-	end
-	local pp = (model :: Model).PrimaryPart
-	if pp then return pp end
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then return d :: BasePart end
-	end
-	return nil
+-- Anchor + throttle do walidacji BuyZabkaMagnet (anti-exploit)
+local zabkaAnchor: BasePart? = nil
+local ZABKA_MAX_DIST = 15
+local lastBuyAt: { [Player]: number } = {}
+local BUY_THROTTLE = 0.5
+local function isNearZabka(player: Player): boolean
+	if not zabkaAnchor then return false end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	return ((hrp :: BasePart).Position - zabkaAnchor.Position).Magnitude <= ZABKA_MAX_DIST
 end
+Players.PlayerRemoving:Connect(function(p) lastBuyAt[p] = nil end)
+
+local findAnchor = Util.findAnchor
 
 -- ── ProximityPrompt na workspace.KasjerZabka ───────────────────────────────
 task.spawn(function()
@@ -75,6 +76,7 @@ task.spawn(function()
 	end
 	print(string.format("[ZabkaService] Anchor wybrany: %s (size=%s, pos=%s)",
 		anchor:GetFullName(), tostring(anchor.Size), tostring(anchor.Position)))
+	zabkaAnchor = anchor  -- cache do walidacji dystansu w BuyZabkaMagnet
 
 	-- Usuń stary prompt jeśli był (np. po hot-reload)
 	local removedCount = 0
@@ -110,19 +112,20 @@ task.spawn(function()
 		anchor:GetFullName(), prompt.ActionText, prompt.MaxActivationDistance))
 end)
 
--- ── Pojemność: magnes/syrop zajmuje 1 slot ──────────────────────────────────
-local function getCarried(data): number
-	local n = 0
-	for _, c in pairs(data.BackpackContents) do n += c end
-	if data.Grandpa and data.Grandpa.hasSyrup then n += 1 end
-	n += data.MagnetCount or 0
-	n += #(data.Pets or {})       -- pet = 1 slot
-	return n
-end
+local getCarried = Util.getCarriedCount
 
 -- ── Zakup magnesu ───────────────────────────────────────────────────────────
 BuyZabkaMagnet.OnServerEvent:Connect(function(player: Player)
 	if not player or not player.Parent then return end
+	-- Throttle + dystans od KasjerZabka
+	local now = os.clock()
+	if lastBuyAt[player] and now - lastBuyAt[player] < BUY_THROTTLE then return end
+	lastBuyAt[player] = now
+	if not isNearZabka(player) then
+		BuyZabkaMagnetResult:FireClient(player, { success = false, reason = "tooFar" })
+		return
+	end
+
 	local data = PlayerDataService.GetData(player)
 
 	local cost = cfg.MagnetCost or 1000

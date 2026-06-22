@@ -12,6 +12,7 @@ local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
 local BottleService     = require(ServerScriptService:WaitForChild("BottleService"))
 
@@ -54,14 +55,7 @@ function MagnetService.PushStatus(player: Player)
 	})
 end
 
-local function getCarriedCount(data): number
-	local carried = 0
-	for _, c in pairs(data.BackpackContents) do carried += c end
-	if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end
-	carried += data.MagnetCount or 0
-	carried += #(data.Pets or {})       -- pet = 1 slot
-	return carried
-end
+local getCarriedCount = Util.getCarriedCount
 
 -- Public API — używane przez AdminService / CodeService / questy.
 -- Respektuje pojemność plecaka (każdy magnes = 1 slot). Zwraca liczbę faktycznie przyznanych.

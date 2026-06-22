@@ -148,6 +148,37 @@ AdminAction.OnServerEvent:Connect(function(player: Player, payload)
 		local target = Players:FindFirstChild(tostring(payload.target or ""))
 		if target then target:Kick("[Admin] " .. tostring(payload.reason or "Kick")) end
 
+	elseif action == "resetBank" then
+		-- Zeruje skarbiec dla wskazanego gracza. Online: usuwa też pety w EQ banku
+		-- przez ResetFor (cache + DataStore). Offline: resolve UserId po nazwie i nadpisuje
+		-- DataStore pustym rekordem; po zalogowaniu loadBank zwróci pusty skarbiec.
+		local name = tostring(payload.target or "")
+		if #name == 0 or #name > 32 then return end
+		local ok, BankService = pcall(function() return require(script.Parent.BankService) end)
+		if not (ok and BankService) then
+			warn("[AdminService] resetBank: BankService require failed")
+			return
+		end
+		local target = Players:FindFirstChild(name)
+		if target then
+			BankService.ResetFor(target)
+			print(string.format("[AdminService] %s zresetował skarbiec %s (online)", player.Name, target.Name))
+		else
+			-- Offline: rozwiąż UserId po nazwie
+			task.spawn(function()
+				local ok2, uid = pcall(function() return Players:GetUserIdFromNameAsync(name) end)
+				if not ok2 or type(uid) ~= "number" then
+					warn("[AdminService] resetBank: nie udało się rozwiązać UserId dla", name)
+					return
+				end
+				local cleared = BankService.ResetByUserId(uid)
+				if cleared then
+					print(string.format("[AdminService] %s zresetował skarbiec %s (offline, uid=%d)",
+						player.Name, name, uid))
+				end
+			end)
+		end
+
 	elseif action == "addCode" then
 		-- Dodaje globalny kod promocyjny. CodeService czyta Config.Codes server-side,
 		-- więc mutacja tu działa lokalnie. Dodatkowo: utrwalamy w DataStore (serwery
@@ -174,6 +205,34 @@ AdminAction.OnServerEvent:Connect(function(player: Player, payload)
 			end)
 		end)
 		print(string.format("[AdminService] %s dodał kod (global) %s = %d zł", player.Name, code, reward))
+
+	elseif action == "resetGamepass" then
+		-- Reset gamepass'ów dla self (testowy override, sesja). Roblox-side gamepass NIE jest revokowany —
+		-- przy następnym join checkGamepass znowu wykryje. Tu po prostu czyścimy serwerowy cache + state.
+		local data = PlayerDataService.GetData(player)
+		-- VIP deska (Gamepass)
+		if data.OwnedDecks and data.OwnedDecks.VIP then
+			data.OwnedDecks.VIP = nil
+			if data.EquippedDeck == "VIP" then data.EquippedDeck = "" end
+			-- Force dismount jeśli aktualnie jeździ
+			local ev = ServerScriptService:FindFirstChild("ForceDeskDismountEvent")
+			if ev and ev:IsA("BindableEvent") then ev:Fire(player) end
+			-- Push DeckStatus (DeskaService nasłuchuje wewnętrznie, ale my pchamy ręcznie żeby od razu zobaczył)
+		end
+		-- Triple Egg (Gamepass) — reset PetService cache
+		local okP, PetService = pcall(function() return require(script.Parent.PetService) end)
+		if okP and PetService and PetService.SetGamepassCache then
+			PetService.SetGamepassCache(player, false)
+		end
+		-- DeckStatus push (przez DeskaService — pushStatus jest internal, ale Status RemoteEvent jest dostępne)
+		local DeckStatus = ReplicatedStorage:WaitForChild("Events"):FindFirstChild("DeckStatus")
+		if DeckStatus then
+			DeckStatus:FireClient(player, {
+				owned = data.OwnedDecks or {},
+				equipped = data.EquippedDeck or "",
+			})
+		end
+		print(string.format("[AdminService] %s zresetował gamepass'y (sesja)", player.Name))
 	end
 end)
 

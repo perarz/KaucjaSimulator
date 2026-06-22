@@ -17,6 +17,18 @@ local GrandpaState   = Events:WaitForChild("GrandpaState")
 
 local cfg = Config.GrandpaQuest
 
+-- Anchor dziadka + dystans do walidacji GrandpaAccept/TurnIn (anti-exploit:
+-- bez tego klient mógł wysłać FireServer z dowolnego miejsca i odebrać reward zdalnie).
+local grandpaAnchor: BasePart? = nil
+local GRANDPA_MAX_DIST = 15
+local function isNearGrandpa(player: Player): boolean
+	if not grandpaAnchor then return false end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	return ((hrp :: BasePart).Position - grandpaAnchor.Position).Magnitude <= GRANDPA_MAX_DIST
+end
+
 -- Wysyła aktualny stan questa do klienta (UI questów + cokolwiek innego co słucha)
 local function pushState(player: Player)
 	local data = PlayerDataService.GetData(player)
@@ -83,6 +95,8 @@ local function setupGrandpa()
 		return
 	end
 
+	grandpaAnchor = hrp  -- cache do walidacji dystansu w GrandpaAccept/TurnIn
+
 	if not hrp:FindFirstChildOfClass("ProximityPrompt") then
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText            = "Porozmawiaj"
@@ -109,6 +123,7 @@ end)
 
 -- Gracz przyjmuje questa
 GrandpaAccept.OnServerEvent:Connect(function(player)
+	if not isNearGrandpa(player) then return end  -- anti-exploit: musi stać przy dziadku
 	local data = PlayerDataService.GetData(player)
 	if data.Grandpa.state ~= "none" then return end  -- już w trakcie / skończony
 
@@ -132,6 +147,7 @@ end)
 
 -- Gracz oddaje syrop dziadkowi
 GrandpaTurnIn.OnServerEvent:Connect(function(player)
+	if not isNearGrandpa(player) then return end  -- anti-exploit: musi stać przy dziadku
 	local data = PlayerDataService.GetData(player)
 	if data.Grandpa.state ~= "active" then return end
 	if not data.Grandpa.hasSyrup then return end

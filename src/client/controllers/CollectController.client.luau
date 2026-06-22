@@ -113,6 +113,24 @@ end
 local slots: { SlotData? } = {}
 for i = 1, SLOT_COUNT do slots[i] = nil end
 
+-- ── EQ sub-tabs (BUTELKI / AKCESORIA / PETY) ───────────────────────────────
+-- Filter visualny: każdy slot z itemem należy do jednej z 3 kategorii. Pusty slot
+-- jest widoczny we WSZYSTKICH zakładkach (żeby user wiedział że ma wolne miejsce).
+-- Drag/auto-fill operuje na globalnych pozycjach 1..SLOT_COUNT, więc kategoryzacja
+-- to TYLKO warstwa wizualna — nie zmienia logiki addToInventory/syncMagnetSlots/etc.
+local INV_SUBTAB_BOTTLES     = "bottles"
+local INV_SUBTAB_ACCESSORIES = "accessories"
+local INV_SUBTAB_PETS        = "pets"
+local currentInvSubTab = INV_SUBTAB_BOTTLES
+
+local function getInvSubTab(s: SlotData?): string?
+	if not s or not s.id then return nil end
+	if s.id == MAGNET_ID then return INV_SUBTAB_ACCESSORIES end
+	if isPetSlotId(s.id) then return INV_SUBTAB_PETS end
+	-- Butelki + syrop razem (syrop to quest item, ale logicznie należy do "rzeczy zbierane").
+	return INV_SUBTAB_BOTTLES
+end
+
 -- ── Zarządzanie slotami ───────────────────────────────────────────────────
 
 local function addToInventory(rarity: string)
@@ -439,10 +457,10 @@ local function hookupWallet(moneyGui: ScreenGui)
 		warn("[CollectController] Brak Money.Ramka — wallet HUD nie pokaże złotówek")
 		return
 	end
-	-- Wyśrodkuj ramkę wysoko na górze ekranu — negatywny Y żeby Ramka wjechała wyżej
-	-- (PLN siedzi pod Ramką, więc gdy Ramka idzie w górę, PLN też się podnosi razem z nią)
+	-- Wyśrodkuj ramkę na górze ekranu. Wcześniej Y=-60 wjeżdżał poza ekran na telefonie
+	-- (IgnoreGuiInset=true → brak buforu na notch/status bar), Y=12 daje mały margines pod krawędzią.
 	ramka.AnchorPoint = Vector2.new(0.5, 0)
-	ramka.Position    = UDim2.new(0.5, 0, 0, -60)
+	ramka.Position    = UDim2.new(0.5, 0, 0, 12)
 
 	local plnLbl = ramka:WaitForChild("PLN", 10)
 	if not plnLbl or not plnLbl:IsA("TextLabel") then
@@ -1135,13 +1153,24 @@ setInvDetailContentVisible(false)
 -- Mounted bez własnej ramki/headera — pasek zakładek menu już to robi.
 -- Layout: count label "X/Y" u góry, sloty po lewej, detail panel po prawej.
 local INV_TOP_LBL_H = 28
+local INV_SUBTAB_H  = 44   -- pasek sub-zakładek BUTELKI / AKCESORIA / PETY
+local INV_SUBTAB_GAP = 10  -- gap pod sub-tabami przed slotsContainerem
+local INV_CONTENT_Y_OFF = INV_TOP_LBL_H + INV_SUBTAB_H + INV_SUBTAB_GAP
+
 local inventoryWrap = Instance.new("Frame")
-inventoryWrap.Size                   = UDim2.fromOffset(slotsW + INV_DET_GAP + INV_DET_W, slotsH + INV_TOP_LBL_H)
+inventoryWrap.Size                   = UDim2.fromOffset(slotsW + INV_DET_GAP + INV_DET_W,
+	slotsH + INV_CONTENT_Y_OFF)
 inventoryWrap.BackgroundTransparency = 1
 inventoryWrap.BorderSizePixel        = 0
 inventoryWrap.AnchorPoint            = Vector2.new(0.5, 0.5)
 inventoryWrap.Position               = UDim2.fromScale(0.5, 0.5)
 inventoryWrap.Parent                 = invPanel  -- domyślnie w hidden invGui
+
+-- Eksport NATYCHMIASTOWY — MenuController czeka maks 10s, jeśli UI poniżej erroruje
+-- (np. nowe sub-zakładki), EQ i tak będzie widoczne w menu. Pety/butelki ładują się
+-- przez updateInventory() niezależnie od sub-tab bara.
+_G["__inventoryWrap"]  = inventoryWrap
+_G["__inventoryReady"] = true
 
 -- Reparent + reposition: header niewidoczny, content w wrapie
 invHeader.Visible    = false
@@ -1152,15 +1181,63 @@ invCountLbl.Size     = UDim2.fromOffset(slotsW, INV_TOP_LBL_H)
 invCountLbl.TextXAlignment = Enum.TextXAlignment.Left
 invCountLbl.TextColor3 = C_DIMTEXT
 
+-- Sub-tab pill bar (BUTELKI / AKCESORIA / PETY) — pod count label, nad slotami.
+local subTabBar = Instance.new("Frame")
+subTabBar.Size                   = UDim2.fromOffset(slotsW, INV_SUBTAB_H)
+subTabBar.Position               = UDim2.fromOffset(0, INV_TOP_LBL_H)
+subTabBar.BackgroundColor3       = C_HEADER
+subTabBar.BorderSizePixel        = 0
+subTabBar.Parent                 = inventoryWrap
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, INV_SUBTAB_H / 2); c.Parent = subTabBar
+	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = subTabBar
+end
+
+local SUB_TAB_DEFS = {
+	{ id = INV_SUBTAB_BOTTLES,     label = "BUTELKI" },
+	{ id = INV_SUBTAB_ACCESSORIES, label = "AKCESORIA" },
+	{ id = INV_SUBTAB_PETS,        label = "PETY" },
+}
+local subTabBtns: { TextButton } = {}
+local SUB_PAD     = 6
+local subInnerW   = slotsW - SUB_PAD * 2
+local subCellW    = subInnerW / #SUB_TAB_DEFS
+
+-- Bubble indicator (active highlight)
+local subBubble = Instance.new("Frame")
+subBubble.Size                   = UDim2.fromOffset(subCellW, INV_SUBTAB_H - SUB_PAD * 2)
+subBubble.Position               = UDim2.fromOffset(SUB_PAD, SUB_PAD)
+subBubble.BackgroundColor3       = C_ACCENT_GREEN
+subBubble.BorderSizePixel        = 0
+subBubble.ZIndex                 = 2
+subBubble.Parent                 = subTabBar
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, (INV_SUBTAB_H - SUB_PAD * 2) / 2); c.Parent = subBubble
+end
+
+for i, def in ipairs(SUB_TAB_DEFS) do
+	local btn = Instance.new("TextButton")
+	btn.Size                   = UDim2.fromOffset(subCellW, INV_SUBTAB_H - SUB_PAD * 2)
+	btn.Position               = UDim2.fromOffset(SUB_PAD + (i - 1) * subCellW, SUB_PAD)
+	btn.BackgroundTransparency = 1
+	btn.BorderSizePixel        = 0
+	btn.Text                   = def.label
+	btn.Font                   = FONT_MAIN
+	btn.TextSize               = 17
+	btn.TextColor3             = C_DIMTEXT
+	btn.AutoButtonColor        = false
+	btn.ZIndex                 = 3
+	btn.Parent                 = subTabBar
+	subTabBtns[i] = btn
+end
+
 slotsContainer.Parent   = inventoryWrap
-slotsContainer.Position = UDim2.fromOffset(0, INV_TOP_LBL_H)
+slotsContainer.Position = UDim2.fromOffset(0, INV_CONTENT_Y_OFF)
 
 invDetPanel.Parent   = inventoryWrap
-invDetPanel.Position = UDim2.fromOffset(slotsW + INV_DET_GAP, INV_TOP_LBL_H)
+invDetPanel.Position = UDim2.fromOffset(slotsW + INV_DET_GAP, INV_CONTENT_Y_OFF)
 
--- Eksport dla MenuController
-_G["__inventoryWrap"]  = inventoryWrap
-_G["__inventoryReady"] = true
+-- (Eksport _G["__inventoryWrap"] przeniesiony wyżej — patrz po inventoryWrap.Parent = invPanel.)
 
 -- ── Slot frames ───────────────────────────────────────────────────────────
 
@@ -1377,8 +1454,56 @@ end
 -- Forward: scheduleLayoutSync używany przez updateInventory, definicja niżej
 local scheduleLayoutSync: () -> ()
 
+-- Filter sub-zakładek (BUTELKI/AKCESORIA/PETY) — ustawia slotFrames[i].Visible.
+-- Pusty slot widoczny we wszystkich zakładkach (żeby user widział wolne miejsce).
+local function applyInvSubTabFilter()
+	-- Safety: jeśli sub-tab UI nie wystartowało (np. error przy Instance.new), nie ukrywaj nic —
+	-- gracz dostaje stary widok pełnego mixed inventory zamiast pustego EQ.
+	if #subTabBtns < #SUB_TAB_DEFS then return end
+	for i = 1, SLOT_COUNT do
+		local sf = slotFrames[i]
+		if sf then
+			local cat = getInvSubTab(slots[i])
+			sf.Visible = (cat == nil) or (cat == currentInvSubTab)
+		end
+	end
+end
+
+local function setInvSubTab(idx: number)
+	local def = SUB_TAB_DEFS[idx]
+	if not def then return end
+	if currentInvSubTab == def.id then
+		-- Nawet bez zmiany — odśwież filter (np. po przeładowaniu petów/butelek po stronie serwera)
+		applyInvSubTabFilter()
+		return
+	end
+	currentInvSubTab = def.id
+
+	-- Bubble move
+	local ti = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	TweenService:Create(subBubble, ti, {
+		Position = UDim2.fromOffset(SUB_PAD + (idx - 1) * subCellW, SUB_PAD),
+	}):Play()
+	-- Tab text colors
+	for i, b in ipairs(subTabBtns) do
+		b.TextColor3 = (i == idx) and Color3.new(0, 0, 0) or C_DIMTEXT
+	end
+
+	-- Zamknij detail panel — mógł pokazywać item z innej kategorii (teraz ukryty).
+	hideInvDetail()
+	applyInvSubTabFilter()
+end
+
+-- Initial: tab 1 (BUTELKI) aktywny, czarny tekst na zielonym bubbliem.
+subTabBtns[1].TextColor3 = Color3.new(0, 0, 0)
+for i, btn in ipairs(subTabBtns) do
+	local idx = i
+	btn.MouseButton1Click:Connect(function() playSfx("Click"); setInvSubTab(idx) end)
+end
+
 local function updateInventory()
 	for i = 1, SLOT_COUNT do renderSlot(i) end
+	applyInvSubTabFilter()
 	scheduleLayoutSync()
 end
 

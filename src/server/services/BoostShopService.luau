@@ -53,6 +53,8 @@ end
 
 -- ── ProcessReceipt: Roblox wywołuje to po finalizacji zakupu ─────────────────
 MarketplaceService.ProcessReceipt = function(receiptInfo)
+	print(string.format("[BoostShop] ProcessReceipt: PlayerId=%d ProductId=%s",
+		receiptInfo.PlayerId, tostring(receiptInfo.ProductId)))
 	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
 	if not player then
 		-- Gracz wyszedł przed odbiorem — Roblox spróbuje ponownie później
@@ -91,6 +93,7 @@ PromptBoostPurchase.OnServerEvent:Connect(function(player: Player, productKey: s
 			warn("[BoostShop] Brak ProductId w Config — wpisz swój z dashboard Roblox")
 			return
 		end
+		print(string.format("[BoostShop] %s → PromptProductPurchase(ProductId=%d)", player.Name, id))
 		MarketplaceService:PromptProductPurchase(player, id)
 	end
 end)

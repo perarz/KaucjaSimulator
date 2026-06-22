@@ -298,6 +298,7 @@ do
 	end)
 end
 
+
 local menuOverlay = Instance.new("TextButton")
 menuOverlay.Size = UDim2.fromScale(1, 1)
 menuOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
@@ -317,6 +318,24 @@ menuPanel.BorderSizePixel = 0
 menuPanel.Visible = false
 menuPanel.Parent = menuGui
 mkCorner(menuPanel, 8); mkStroke(menuPanel, C_BORDER, 4)
+
+-- Hoverboard ikona znika gdy inne UI otwarte (Menu/Sklep/Bank/itp).
+-- Odejmujemy własne lock'i (menuPanel + buyGui) z count'a żeby ikona pozostała widoczna gdy
+-- otwarte jest TYLKO moje UI desek.
+do
+	local RunService = game:GetService("RunService")
+	local lastVis = true
+	RunService.RenderStepped:Connect(function()
+		local count = tonumber(_G["__moveLockCount"]) or 0
+		local myLock = (menuPanel.Visible and 1 or 0) + (buyGui.Enabled and 1 or 0)
+		local externalLock = count - myLock
+		local shouldShow = externalLock <= 0
+		if shouldShow ~= lastVis then
+			hoverBtn.Visible = shouldShow
+			lastVis = shouldShow
+		end
+	end)
+end
 
 local menuHeader = Instance.new("Frame")
 menuHeader.Size = UDim2.new(1, 0, 0, 64)

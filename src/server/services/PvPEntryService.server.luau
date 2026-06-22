@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
 
 local COST = Config.PvPEntry.Cost
@@ -64,16 +65,7 @@ Players.PlayerRemoving:Connect(function(p) lastAction[p] = nil end)
 
 -- ── Opcjonalny ProximityPrompt na KasjerPVP (alternative entry punkt) ────────
 -- Gracz może kupić bilet u NPC przed wejściem do strefy, nie musi wpaść by zobaczyć GUI.
-local function pickAnchor(rig: Instance): BasePart?
-	if rig:IsA("BasePart") then return rig :: BasePart end
-	if rig:IsA("Model") then
-		return rig:FindFirstChild("Head") :: BasePart?
-			or rig:FindFirstChild("HumanoidRootPart") :: BasePart?
-			or rig.PrimaryPart
-			or rig:FindFirstChildWhichIsA("BasePart", true)
-	end
-	return nil
-end
+local pickAnchor = Util.findAnchor
 
 local kasjerHooked = false
 local function attachKasjer(rig: Instance)

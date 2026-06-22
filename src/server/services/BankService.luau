@@ -3,6 +3,7 @@ local Players           = game:GetService("Players")
 local DataStoreService  = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local RARITIES = { "Zwykla", "Rzadka", "Epicka", "Legendarna", "Mityczny" }
@@ -21,6 +22,27 @@ end
 
 local cache: { [Player]: { [string]: number } } = {}
 
+-- Anchor bankiera + dystans do walidacji handlerów (anti-exploit: gracz musi stać przy bankierze).
+-- XZ-only distance — ignorujemy Y, bo Util.findAnchor preferuje Head dla R15 (Head jest ~5 studs nad
+-- podłogą, HRP gracza ~3 studs). 3D distance łatwo przekraczało budżet przy bankierze na rampie.
+local bankAnchor: BasePart? = nil
+local BANK_MAX_DIST = 15  -- studs (XZ)
+local function isNearBank(player: Player): boolean
+	if not bankAnchor then return false end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	local d = (hrp :: BasePart).Position - bankAnchor.Position
+	local horizSq = d.X * d.X + d.Z * d.Z
+	return horizSq <= BANK_MAX_DIST * BANK_MAX_DIST
+end
+
+-- Throttle (per-player) na transfery/upgrade — anti-spam
+local lastTransferAt: { [Player]: number } = {}
+local lastUpgradeAt:  { [Player]: number } = {}
+local TRANSFER_THROTTLE = 0.3
+local UPGRADE_THROTTLE  = 0.5
+
 local Events      = ReplicatedStorage:WaitForChild("Events")
 local BankInit    = Events:WaitForChild("BankInit")
 local BankDeposit = Events:WaitForChild("BankDeposit")
@@ -29,23 +51,33 @@ local BankResult  = Events:WaitForChild("BankResult")
 local UpgradeBank = Events:WaitForChild("UpgradeBank")
 local UpdateHUD   = Events:WaitForChild("UpdateHUD")
 
-local function deepCopy(t: { [string]: any }): { [string]: any }
-	local c = {}
-	for k, v in pairs(t) do c[k] = type(v) == "table" and deepCopy(v) or v end
-	return c
-end
+local deepCopy = Util.deepCopy
+
+-- Retry z exponential backoff (DataStore throttle/transient errors)
+local RETRY_DELAYS = { 0.5, 1.5, 3 }
 
 local function loadBank(player: Player): { [string]: number }
-	if cache[player] then return cache[player] end
+	-- Jeśli poprzedni load failnął (__loadFailed=true), spróbuj znowu — DataStore mógł
+	-- już wyzdrowieć. Bez tego cache "zablokowany pusty" trzymał się do końca sesji.
+	if cache[player] and not cache[player].__loadFailed then return cache[player] end
 	local key = "BankData_v1_" .. player.UserId
-	local ok, res = pcall(function() return BANK_DS:GetAsync(key) end)
+	local lastErr: any = nil
+	local ok, res = false, nil
+	for attempt = 0, #RETRY_DELAYS do
+		ok, res = pcall(function() return BANK_DS:GetAsync(key) end)
+		if ok then break end
+		lastErr = res
+		if attempt < #RETRY_DELAYS then task.wait(RETRY_DELAYS[attempt + 1]) end
+	end
 	local data = { Zwykla = 0, Rzadka = 0, Epicka = 0, Legendarna = 0, Mityczny = 0 }
 	if ok and type(res) == "table" then
 		for _, r in ipairs(RARITIES) do
 			if type(res[r]) == "number" then data[r] = math.max(0, math.floor(res[r])) end
 		end
 	elseif not ok then
-		warn("[BankService] GetAsync failed:", res)
+		warn("[BankService] GetAsync failed po 3 próbach:", lastErr,
+			"— skarbiec zostanie zainicjowany pusty, ale SaveBank zablokowany")
+		data.__loadFailed = true  -- gate w saveBank
 	end
 	cache[player] = data
 	return data
@@ -54,9 +86,16 @@ end
 local function saveBank(player: Player)
 	local d = cache[player]
 	if not d then return end
+	if d.__loadFailed then return end  -- nie nadpisuj pustym jeśli load failnął
 	local key = "BankData_v1_" .. player.UserId
-	local ok, err = pcall(function() BANK_DS:SetAsync(key, d) end)
-	if not ok then warn("[BankService] SetAsync failed:", err) end
+	local lastErr: any = nil
+	for attempt = 0, #RETRY_DELAYS do
+		local ok, err = pcall(function() BANK_DS:SetAsync(key, d) end)
+		if ok then return end
+		lastErr = err
+		if attempt < #RETRY_DELAYS then task.wait(RETRY_DELAYS[attempt + 1]) end
+	end
+	warn("[BankService] SetAsync failed po 3 próbach:", lastErr)
 end
 
 -- ── ProximityPrompt na workspace.BANK.Bankier ─────────────────────────────
@@ -73,6 +112,7 @@ task.spawn(function()
 		anchor = bankier :: BasePart
 	end
 	if not anchor then warn("[BankService] Bankier nie ma BasePart") return end
+	bankAnchor = anchor  -- cache do walidacji dystansu w handlerach
 
 	local prompt = anchor:FindFirstChildOfClass("ProximityPrompt")
 	if not prompt then
@@ -161,17 +201,22 @@ local function handleTransfer(player: Player, rawBp: any, rawBk: any, eqPetIds: 
 		if not (newEqSet[uuid] or newBankSet[uuid]) then return false, "conservation" end
 	end
 
-	-- Capacity check: nowy plecak nie przekracza pojemności
-	-- Pety w nowym EQ liczą się do carried (każdy = 1 slot)
+	-- Capacity check: nowy plecak nie przekracza pojemności.
+	-- Budujemy hipotetyczny snapshot (po transferze) i liczymy przez Util.getCarriedCount —
+	-- single source of truth (syrop + magnesy + pety + butelki).
 	local hasSyrup = pData.Grandpa and pData.Grandpa.hasSyrup or false
 	local cap      = Config.BackpackUpgrades[pData.BackpackLevel].Capacity
-	local carried  = hasSyrup and 1 or 0
-	carried += pData.MagnetCount or 0
-	carried += #eqPetIds
+	local newBpContents = {}
 	for _, r in ipairs(RARITIES) do
-		carried += math.floor(math.max(0, tonumber(rawBp[r] or 0) or 0))
+		newBpContents[r] = math.floor(math.max(0, tonumber(rawBp[r] or 0) or 0))
 	end
-	if carried > cap then return false, "overCapacity" end
+	local simulated = {
+		BackpackContents = newBpContents,
+		Grandpa          = { hasSyrup = hasSyrup },
+		MagnetCount      = pData.MagnetCount or 0,
+		Pets             = eqPetIds,  -- lista UUIDów, Util używa #, więc liczba slotów się zgadza
+	}
+	if Util.getCarriedCount(simulated) > cap then return false, "overCapacity" end
 
 	-- Bank capacity: butelki + pety razem
 	local bankCap = getBankCapacity(pData)
@@ -198,8 +243,10 @@ local function handleTransfer(player: Player, rawBp: any, rawBk: any, eqPetIds: 
 		pData.EquippedPet = ""
 	end
 
-	PlayerDataService.SaveData(player)
-	saveBank(player)
+	-- BEZ SaveData/saveBank tutaj — SetAsync yielduje 1-2s i blokuje BankResult
+	-- (gracz widzi "ZAPISYWANIE..." aż serwer odpowie). Persystencja przez auto-save 60s
+	-- + PlayerRemoving + BindToClose. Akceptowalne ryzyko utraty <60s przy crashu (zgodnie
+	-- z konwencją "BEZ SaveData w hot path" stosowaną w innych serwisach).
 
 	UpdateHUD:FireClient(player, {
 		backpackContents = deepCopy(pData.BackpackContents),
@@ -236,8 +283,25 @@ local function fireTransferResult(player: Player, ok: boolean, a, b, c, eqPets, 
 	end
 end
 
+local function guardBankRequest(player: Player, throttleTable, throttleSec: number, denyReason: string): boolean
+	local now = os.clock()
+	if throttleTable[player] and now - throttleTable[player] < throttleSec then
+		-- WAŻNE: zawsze FireClient żeby klient mógł zresetować "ZAPISYWANIE..." — bez tego
+		-- przy szybkim double-click POTWIERDŹ drugi request był cicho ignorowany i klient utykał.
+		BankResult:FireClient(player, { success = false, reason = "throttled" })
+		return false
+	end
+	throttleTable[player] = now
+	if not isNearBank(player) then
+		BankResult:FireClient(player, { success = false, reason = denyReason })
+		return false
+	end
+	return true
+end
+
 BankDeposit.OnServerEvent:Connect(function(player: Player, payload)
 	if type(payload) ~= "table" then return end
+	if not guardBankRequest(player, lastTransferAt, TRANSFER_THROTTLE, "tooFar") then return end
 	fireTransferResult(player, handleTransfer(player,
 		payload.newBackpackContents, payload.newBankContents,
 		payload.newEqPetIds, payload.newBankPetIds))
@@ -245,6 +309,7 @@ end)
 
 BankWithdraw.OnServerEvent:Connect(function(player: Player, payload)
 	if type(payload) ~= "table" then return end
+	if not guardBankRequest(player, lastTransferAt, TRANSFER_THROTTLE, "tooFar") then return end
 	fireTransferResult(player, handleTransfer(player,
 		payload.newBackpackContents, payload.newBankContents,
 		payload.newEqPetIds, payload.newBankPetIds))
@@ -252,6 +317,7 @@ end)
 
 -- ── Ulepszanie pojemności skarbca ─────────────────────────────────────────────
 UpgradeBank.OnServerEvent:Connect(function(player: Player)
+	if not guardBankRequest(player, lastUpgradeAt, UPGRADE_THROTTLE, "tooFar") then return end
 	local pData = PlayerDataService.GetData(player)
 	if (pData.BaseLevel or 0) < 1 then
 		BankResult:FireClient(player, { success = false, reason = "locked" })
@@ -286,15 +352,61 @@ UpgradeBank.OnServerEvent:Connect(function(player: Player)
 	})
 end)
 
--- Auto-save co 60s
+-- Auto-save co 60s (równolegle per gracz — analogicznie do PlayerDataService)
 task.spawn(function()
 	while true do
 		task.wait(60)
-		for p in pairs(cache) do saveBank(p) end
+		for p in pairs(cache) do task.spawn(saveBank, p) end
 	end
 end)
 
-Players.PlayerRemoving:Connect(function(p) saveBank(p); cache[p] = nil end)
-game:BindToClose(function() for p in pairs(cache) do saveBank(p) end end)
+Players.PlayerRemoving:Connect(function(p)
+	saveBank(p); cache[p] = nil
+	lastTransferAt[p] = nil; lastUpgradeAt[p] = nil
+end)
+-- BindToClose równolegle (jak PlayerDataService): sekwencyjnie nie zdąży przy 10+ graczach
+game:BindToClose(function()
+	local pending = 0
+	local done = Instance.new("BindableEvent")
+	for p in pairs(cache) do
+		pending += 1
+		task.spawn(function()
+			saveBank(p)
+			pending -= 1
+			if pending == 0 then done:Fire() end
+		end)
+	end
+	if pending > 0 then
+		task.delay(25, function() if pending > 0 then done:Fire() end end)
+		done.Event:Wait()
+	end
+end)
 
-return {}
+local BankService = {}
+
+-- Wywoływane przez PlayerDataService.ResetProgress — czyści osobny DataStore BankData_v1
+-- (PlayerData_v7 reset go nie obejmuje). Bez tego po resecie postępu butelki w skarbcu
+-- zostawały na starym koncie.
+function BankService.ResetFor(player: Player)
+	cache[player] = { Zwykla = 0, Rzadka = 0, Epicka = 0, Legendarna = 0, Mityczny = 0 }
+	BankService.ResetByUserId(player.UserId)
+end
+
+-- Wariant nie wymagający obiektu Player — używany przez AdminService gdy admin
+-- chce wyczyścić skarbiec offline'owemu graczowi. Po zalogowaniu loadBank pobierze pustą tabelę.
+function BankService.ResetByUserId(userId: number)
+	local key = "BankData_v1_" .. tostring(userId)
+	local empty = { Zwykla = 0, Rzadka = 0, Epicka = 0, Legendarna = 0, Mityczny = 0 }
+	for attempt = 0, #RETRY_DELAYS do
+		local ok, err = pcall(function() BANK_DS:SetAsync(key, empty) end)
+		if ok then return true end
+		if attempt < #RETRY_DELAYS then task.wait(RETRY_DELAYS[attempt + 1]) end
+		if attempt == #RETRY_DELAYS then
+			warn("[BankService] ResetByUserId SetAsync failed:", err)
+			return false
+		end
+	end
+	return false
+end
+
+return BankService

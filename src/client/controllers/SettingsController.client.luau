@@ -51,8 +51,11 @@ local X_RED_HOVER  = Color3.fromRGB(255, 110, 110)
 
 -- ── ScreenGui ─────────────────────────────────────────────────────────────
 
-local PANEL_W  = 480
-local PANEL_H  = 600
+-- Panel mieszka w zakładce MenuController (contentArea ~1384×730). Wcześniej był 480×600
+-- przez co content zajmował ~22% pola — input kodu, etykiety i przycisk reset wyglądały na
+-- "drobny druk". Powiększone żeby wypełnić zakładkę.
+local PANEL_W  = 900
+local PANEL_H  = 700
 -- HEADER_H = 0 — panel mieszka w zakładce MenuController, własny header schowany.
 -- Wszystkie pozycje children w tym pliku liczą się od HEADER_H + PAD,
 -- więc samo wyzerowanie tego stałej shifuje content do góry.
@@ -80,7 +83,7 @@ overlay.Parent                 = gui
 local panel = Instance.new("Frame")
 panel.Size                  = UDim2.fromOffset(PANEL_W, PANEL_H)
 panel.AnchorPoint           = Vector2.new(0.5, 0.5)
-panel.Position              = UDim2.new(0.5, 0, 0.55, 0)
+panel.Position              = UDim2.fromScale(0.5, 0.5)
 -- Bez własnej ramki/tła — content siedzi w zakładce MenuController który
 -- zapewnia ramę. Jeśli kiedyś będzie używany solo, można zmienić tu transparency.
 panel.BackgroundTransparency = 1
@@ -161,7 +164,7 @@ sectionLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 24)
 sectionLbl.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD)
 sectionLbl.BackgroundTransparency = 1
 sectionLbl.Text                   = "TUTORIAL"
-sectionLbl.TextSize               = 14
+sectionLbl.TextSize               = 20
 sectionLbl.Font                   = FONT
 sectionLbl.TextColor3             = C_DIMTEXT
 sectionLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -169,11 +172,11 @@ sectionLbl.ZIndex                 = 3
 sectionLbl.Parent                 = panel
 
 local desc = Instance.new("TextLabel")
-desc.Size                   = UDim2.new(1, -PAD * 2, 0, 36)
-desc.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD + 28)
+desc.Size                   = UDim2.new(1, -PAD * 2, 0, 44)
+desc.Position               = UDim2.fromOffset(PAD, HEADER_H + PAD + 30)
 desc.BackgroundTransparency = 1
 desc.Text                   = "Odtwórz cutscenę intro od nowa — pokazuje jak zbierać, oddawać i ulepszać."
-desc.TextSize               = 13
+desc.TextSize               = 18
 desc.Font                   = FONT
 desc.TextColor3             = C_DIMTEXT
 desc.TextXAlignment         = Enum.TextXAlignment.Left
@@ -182,13 +185,13 @@ desc.ZIndex                 = 3
 desc.Parent                 = panel
 
 local replayBtn = Instance.new("TextButton")
-replayBtn.Size                 = UDim2.new(1, -PAD * 2, 0, 56)
-replayBtn.Position             = UDim2.fromOffset(PAD, HEADER_H + PAD + 80)
+replayBtn.Size                 = UDim2.new(1, -PAD * 2, 0, 64)
+replayBtn.Position             = UDim2.fromOffset(PAD, HEADER_H + PAD + 86)
 replayBtn.BackgroundColor3     = C_ACCENT
 replayBtn.BackgroundTransparency = 0
 replayBtn.BorderSizePixel      = 0
 replayBtn.Text                 = "ZOBACZ INTRO PONOWNIE"
-replayBtn.TextSize             = 18
+replayBtn.TextSize             = 26
 replayBtn.Font                 = FONT
 replayBtn.TextColor3           = C_WHITE
 replayBtn.AutoButtonColor      = false
@@ -206,17 +209,17 @@ end
 
 -- ── Sekcja Dźwięk ───────────────────────────────────────────────────────
 
-local SFX_Y      = HEADER_H + PAD + 80 + 56 + PAD + 8   -- pod replayBtn
+local SFX_Y      = HEADER_H + PAD + 86 + 64 + PAD + 8   -- pod replayBtn
 local SLIDER_W   = PANEL_W - PAD * 2
 local TRACK_H    = 10
 local KNOB_SIZE  = 26
 
 local sfxLbl = Instance.new("TextLabel")
-sfxLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 24)
+sfxLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 28)
 sfxLbl.Position               = UDim2.fromOffset(PAD, SFX_Y)
 sfxLbl.BackgroundTransparency = 1
 sfxLbl.Text                   = "DŹWIĘK"
-sfxLbl.TextSize               = 14
+sfxLbl.TextSize               = 20
 sfxLbl.Font                   = FONT
 sfxLbl.TextColor3             = C_DIMTEXT
 sfxLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -224,11 +227,11 @@ sfxLbl.ZIndex                 = 3
 sfxLbl.Parent                 = panel
 
 local sfxRow = Instance.new("TextLabel")
-sfxRow.Size                   = UDim2.new(1, -PAD * 2, 0, 24)
-sfxRow.Position               = UDim2.fromOffset(PAD, SFX_Y + 26)
+sfxRow.Size                   = UDim2.new(1, -PAD * 2, 0, 28)
+sfxRow.Position               = UDim2.fromOffset(PAD, SFX_Y + 30)
 sfxRow.BackgroundTransparency = 1
 sfxRow.Text                   = "Głośność SFX"
-sfxRow.TextSize               = 16
+sfxRow.TextSize               = 22
 sfxRow.Font                   = FONT
 sfxRow.TextColor3             = C_WHITE
 sfxRow.TextXAlignment         = Enum.TextXAlignment.Left
@@ -236,12 +239,12 @@ sfxRow.ZIndex                 = 3
 sfxRow.Parent                 = panel
 
 local valueLbl = Instance.new("TextLabel")
-valueLbl.Size                   = UDim2.new(0, 70, 0, 24)
+valueLbl.Size                   = UDim2.new(0, 100, 0, 28)
 valueLbl.AnchorPoint            = Vector2.new(1, 0)
-valueLbl.Position               = UDim2.new(1, -PAD, 0, SFX_Y + 26)
+valueLbl.Position               = UDim2.new(1, -PAD, 0, SFX_Y + 30)
 valueLbl.BackgroundTransparency = 1
 valueLbl.Text                   = "100%"
-valueLbl.TextSize               = 16
+valueLbl.TextSize               = 22
 valueLbl.Font                   = FONT
 valueLbl.TextColor3             = Color3.fromRGB(170, 221, 102)
 valueLbl.TextXAlignment         = Enum.TextXAlignment.Right
@@ -250,8 +253,8 @@ valueLbl.Parent                 = panel
 
 -- Track (klikalny obszar 40px wysoki — łatwo trafić palcem)
 local trackHit = Instance.new("TextButton")
-trackHit.Size                   = UDim2.new(1, -PAD * 2, 0, 40)
-trackHit.Position               = UDim2.fromOffset(PAD, SFX_Y + 60)
+trackHit.Size                   = UDim2.new(1, -PAD * 2, 0, 48)
+trackHit.Position               = UDim2.fromOffset(PAD, SFX_Y + 66)
 trackHit.BackgroundTransparency = 1
 trackHit.Text                   = ""
 trackHit.AutoButtonColor        = false
@@ -333,36 +336,36 @@ end)
 
 -- ── Sekcja Kody promocyjne ──────────────────────────────────────────────
 
-local CODES_Y      = SFX_Y + 60 + 40 + PAD
+local CODES_Y      = SFX_Y + 66 + 48 + PAD
 local C_OK_GREEN   = Color3.fromRGB(170, 221, 102)
 local C_ERR_RED    = Color3.fromRGB(255, 90, 90)
 local C_INPUT_BG   = Color3.fromRGB(8, 60, 48)
 
 local codesLbl = Instance.new("TextLabel")
-codesLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 24)
+codesLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 28)
 codesLbl.Position               = UDim2.fromOffset(PAD, CODES_Y)
 codesLbl.BackgroundTransparency = 1
 codesLbl.Text                   = "KODY"
-codesLbl.TextSize               = 14
+codesLbl.TextSize               = 20
 codesLbl.Font                   = FONT
 codesLbl.TextColor3             = C_DIMTEXT
 codesLbl.TextXAlignment         = Enum.TextXAlignment.Left
 codesLbl.ZIndex                 = 3
 codesLbl.Parent                 = panel
 
-local CODE_INPUT_H = 48
-local CODE_BTN_W   = 140
+local CODE_INPUT_H = 64
+local CODE_BTN_W   = 220
 
 local codeBox = Instance.new("TextBox")
-codeBox.Size                   = UDim2.new(1, -PAD * 2 - CODE_BTN_W - 10, 0, CODE_INPUT_H)
-codeBox.Position               = UDim2.fromOffset(PAD, CODES_Y + 28)
+codeBox.Size                   = UDim2.new(1, -PAD * 2 - CODE_BTN_W - 12, 0, CODE_INPUT_H)
+codeBox.Position               = UDim2.fromOffset(PAD, CODES_Y + 34)
 codeBox.BackgroundColor3       = C_INPUT_BG
 codeBox.BackgroundTransparency = 0
 codeBox.BorderSizePixel        = 0
 codeBox.Text                   = ""
 codeBox.PlaceholderText        = "Wpisz kod…"
 codeBox.PlaceholderColor3      = C_DIMTEXT
-codeBox.TextSize               = 18
+codeBox.TextSize               = 28
 codeBox.Font                   = FONT
 codeBox.TextColor3             = C_WHITE
 codeBox.ClearTextOnFocus       = false
@@ -377,11 +380,11 @@ end
 local codeBtn = Instance.new("TextButton")
 codeBtn.Size                   = UDim2.fromOffset(CODE_BTN_W, CODE_INPUT_H)
 codeBtn.AnchorPoint            = Vector2.new(1, 0)
-codeBtn.Position               = UDim2.new(1, -PAD, 0, CODES_Y + 28)
+codeBtn.Position               = UDim2.new(1, -PAD, 0, CODES_Y + 34)
 codeBtn.BackgroundColor3       = C_OK_GREEN
 codeBtn.BorderSizePixel        = 0
 codeBtn.Text                   = "AKTYWUJ"
-codeBtn.TextSize               = 18
+codeBtn.TextSize               = 28
 codeBtn.Font                   = FONT
 codeBtn.TextColor3             = Color3.fromRGB(0, 0, 0)
 codeBtn.AutoButtonColor        = false
@@ -397,11 +400,11 @@ do
 end
 
 local codeStatus = Instance.new("TextLabel")
-codeStatus.Size                   = UDim2.new(1, -PAD * 2, 0, 20)
-codeStatus.Position               = UDim2.fromOffset(PAD, CODES_Y + 28 + CODE_INPUT_H + 6)
+codeStatus.Size                   = UDim2.new(1, -PAD * 2, 0, 24)
+codeStatus.Position               = UDim2.fromOffset(PAD, CODES_Y + 34 + CODE_INPUT_H + 6)
 codeStatus.BackgroundTransparency = 1
 codeStatus.Text                   = ""
-codeStatus.TextSize               = 14
+codeStatus.TextSize               = 18
 codeStatus.Font                   = FONT
 codeStatus.TextColor3             = C_DIMTEXT
 codeStatus.TextXAlignment         = Enum.TextXAlignment.Left
@@ -449,14 +452,14 @@ end)
 
 local C_DANGER       = Color3.fromRGB(180, 60, 60)
 local C_DANGER_HOVER = Color3.fromRGB(220, 80, 80)
-local RESET_Y        = CODES_Y + 28 + CODE_INPUT_H + 6 + 20 + PAD
+local RESET_Y        = CODES_Y + 34 + CODE_INPUT_H + 6 + 24 + PAD
 
 local resetLbl = Instance.new("TextLabel")
-resetLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 24)
+resetLbl.Size                   = UDim2.new(1, -PAD * 2, 0, 28)
 resetLbl.Position               = UDim2.fromOffset(PAD, RESET_Y)
 resetLbl.BackgroundTransparency = 1
 resetLbl.Text                   = "POSTĘP"
-resetLbl.TextSize               = 14
+resetLbl.TextSize               = 20
 resetLbl.Font                   = FONT
 resetLbl.TextColor3             = C_DIMTEXT
 resetLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -464,12 +467,12 @@ resetLbl.ZIndex                 = 3
 resetLbl.Parent                 = panel
 
 local resetBtn = Instance.new("TextButton")
-resetBtn.Size                   = UDim2.new(1, -PAD * 2, 0, 48)
-resetBtn.Position               = UDim2.fromOffset(PAD, RESET_Y + 28)
+resetBtn.Size                   = UDim2.new(1, -PAD * 2, 0, 64)
+resetBtn.Position               = UDim2.fromOffset(PAD, RESET_Y + 34)
 resetBtn.BackgroundColor3       = C_DANGER
 resetBtn.BorderSizePixel        = 0
 resetBtn.Text                   = "RESETUJ POSTĘP"
-resetBtn.TextSize               = 18
+resetBtn.TextSize               = 26
 resetBtn.Font                   = FONT
 resetBtn.TextColor3             = C_WHITE
 resetBtn.AutoButtonColor        = false
@@ -683,11 +686,11 @@ end)
 _G["__settingsPanel"] = panel
 _G["__settingsReady"] = true
 
--- Toggle kieruje do MenuController na zakładkę 4 (USTAWIENIA)
+-- Toggle kieruje do MenuController na zakładkę 4 (USTAWIENIA — po usunięciu SKLEP z menu)
 _G["__settingsToggle"] = function()
 	if _G["__menuSetActiveTab"] then
 		_G["__menuOpen"]()
-		_G["__menuSetActiveTab"](5)
+		_G["__menuSetActiveTab"](4)
 	else
 		setOpen(not isOpen)  -- fallback
 	end

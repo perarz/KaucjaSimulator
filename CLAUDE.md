@@ -26,12 +26,12 @@ src/
     MobileControlsController  -- TYLKO touch: thumbstick lewy dolny + SPRINT/DESKA po prawej
     LegendaryEventController  -- HUD eventu Deszcz Legendarek
     GrandpaController         -- visual-novel dialog dziadka
-    MenuController            -- przycisk MENU (lewa) + 5 zakładek z bubble indicator
+    MenuController            -- przycisk MENU (środek dół) + 4 zakładki z bubble indicator
     BankController            -- split-view SKARBIEC ⇌ EKWIPUNEK (15 slotów × 2), POTWIERDŹ + ULEPSZ
     SprintController          -- Shift sprint gated na BaseLevel ≥ 1; biały pasek staminy
     HatShopController         -- standalone UI sklep czapek
     AdminController           -- panel admina (F2)
-    BoostShopController       -- Robux boost x2 KASA
+    ShopCatalogController     -- osobny przycisk SKLEP w HUD (lewo od MENU) + katalog Robux (VIP/Boost/TripleEgg)
     DeskaController           -- R = wsiada/wysiada deski, gracz bokiem do kamery
     DeckShopController        -- GUI zakupu deski przy gablocie + menu TWOJE DESKI (hoverboard button)
     PvPEntryGuiController     -- GUI płatności 300 zł za wstęp do PvP
@@ -66,16 +66,32 @@ default.project.json
 
 ---
 
+## Workflow z właścicielem repo
+
+**Zawsze przed zmianą/dodaniem czegoś — zadaj kilka pytań żeby rozwiać wątpliwości**, zanim ruszysz pliki. Dotyczy:
+- nowych mechanik (np. "dodaj system X") — dopytaj o zakres, edge case'y, czy ma persystować, czy działa w PvP itd.
+- refaktorów struktur danych (np. zmiana DataStore schema) — dopytaj o migrację i wpływ na obecnych graczy
+- decyzji architektonicznych z >1 sensownym wyborem (np. "osobna lista vs unified inventory") — przedstaw 2-3 opcje z trade-off'ami zanim wybierzesz
+
+Pomijaj pytania tylko gdy zmiana jest oczywista i mała (literówka, jedna linia fixu z konkretnego błędu, dokumentacja).
+
+Workflow większych zmian: **plan → pytania → potwierdzenie → robota → raport**, nie "robota → niespodzianka".
+
+---
+
 ## Konwencje
 
 - **Wszystkie wartości balansowe w `Config.luau`** — zero hardkodów gdzie indziej.
 - **RemoteEvent/RemoteFunction** w `ReplicatedStorage.Events`.
 - **Nigdy nie ufaj klientowi** — server weryfikuje każdą akcję.
 - **Saldo** klient czyta tylko z `player.leaderstats.Zlotowki.Value` (wspiera grosze, format `X PLN` / `X.XX PLN`).
-- **Rzadkości** zawsze polskie klucze: `"Zwykla"`, `"Rzadka"`, `"Epicka"`, `"Legendarna"`, `"Mityczny"`.
+- **Rzadkości BUTELEK** zawsze polskie klucze: `"Zwykla"`, `"Rzadka"`, `"Epicka"`, `"Legendarna"`, `"Mityczny"`.
+- **Rzadkości PETÓW** — angielskie klucze: `"Common"`, `"Rare"`, `"Epic"`, `"Legendary"`, `"Huge"` (osobny system, `Config.Pets.Rarities`). NIE polonizować — zmiana kluczy rozwala zapisane `data.Pets` w DataStore (każdy pet ma `rarity` przechowywaną dosłownie).
 - **Font** UI: `Enum.Font.GothamBlack` (tytuły `LuckiestGuy`).
 - **Plik nagłówek:** `-- [Nazwa].luau` na początku.
 - **task.spawn/wait/delay**, nigdy stare `spawn`/`wait`.
+- **Wspólne helpery** w `ReplicatedStorage.Util` (src/shared/Util.luau): `findAnchor(model)`, `getCarriedCount(data)`, `deepCopy(t)`. Nie dubluj w serwisach.
+- **Anti-exploit** — każdy server handler kupna/transferu/akcji NPC waliduje: (1) per-player throttle (0.3-1s), (2) dystans HRP→anchor NPC (15-18 studs). Patrz pattern w `BankService.guardBankRequest`, `ShopService.tryBuyBackpack`.
 
 ---
 
@@ -84,6 +100,9 @@ default.project.json
 - `Config.DataStoreKey = "PlayerData_v7"` — nie bumpujemy, nowe pola dodawane przez `mergeWithDefaults`.
 - BankService osobny store: `"BankData_v1"`.
 - Leaderboard osobny: OrderedDataStore `"Leaderboard_Zlotowki_v1"` (grosze jako int).
+- **Retry** — `GetAsync`/`SetAsync` mają 3 próby z exponential backoff (0.5/1.5/3s) w PlayerDataService i BankService.
+- **Load fail guard** — gdy GetAsync zwróci błąd po 3 próbach, gracz dostaje `__loadFailed = true` w cache; SaveData jest gate'owany żeby nie nadpisać postępu pustymi danymi; gracz jest kickowany.
+- **BindToClose** — równoległy `SaveData` per gracz (task.spawn + counter + Event:Wait), timeout 25s. Sekwencyjny zapis nie zdąży przy 10+ graczach (Roblox daje ~30s).
 
 ---
 
@@ -111,6 +130,10 @@ default.project.json
     HatOwned = false,
     BankCapLevel = 0,        -- +1 cap per ulepszenie
     InventoryStacks = {},    -- persystencja split EQ
+    MagnetCount = 0,         -- magnesy w plecaku (1 slot każdy)
+    Pets = {},               -- lista { id (uuid), rarity, class } — 1 slot każdy
+    EquippedPet = "",        -- UUID wyposażonego peta (bonusy money/speed/HP)
+    BankPets = {},           -- pety w skarbcu (osobne od EQ)
 }
 ```
 
@@ -304,12 +327,24 @@ Hooki te same co story (BottleService, KoszService itp.) — dzielą wspólne `A
 - Starych 4 przycisków HUD NIE MA — `Visible=false`. Toggle'e (`_G["__inventoryToggle"]` itd.) **przekierowane** na `_G["__menuOpen"]() + __menuSetActiveTab(N)`.
 
 ### MenuController
-- **Jeden przycisk MENU po lewej** (135×90, ikona `rbxassetid://99401921944526`, AnchorPoint(0,0.5), Y=0.35, hover scale 1.12 + rotation 6°).
-- Panel 1380×760, tab bar pill-shaped z animowanym bubble indicator.
-- **5 zakładek**: EKWIPUNEK / UMIEJĘTNOŚCI / QUESTY / SKLEP / USTAWIENIA.
+- **Przycisk MENU w idealnym środku dolnej krawędzi ekranu** (203×135, ikona `rbxassetid://99401921944526`, AnchorPoint(0.5,1), Position(0.5,0,1,-20), hover scale 1.12 + rotation 6°).
+- Panel 1480×880, tab bar pill-shaped z animowanym bubble indicator.
+- **4 zakładki**: EKWIPUNEK / UMIEJĘTNOŚCI / QUESTY / USTAWIENIA. (SKLEP jest osobnym GUI — patrz ShopCatalogController.)
 - Sterowanie: **TAB** toggle, **ESC** close, X w prawym górnym. Klik w tło NIE zamyka.
-- Klawisze I/U/Q przekierowane na menu (`__menuSetActiveTab`).
+- Klawisze I/U/Q przekierowane na menu (`__menuSetActiveTab`). USTAWIENIA = tab idx **4** (było 5 przed usunięciem SKLEP).
 - Eksporty: `_G["__menuOpen/Close/Toggle/SetActiveTab"]`.
+
+### ShopCatalogController (sklep Robux)
+- **Osobny przycisk SKLEP w HUD** (135×135, ikona `rbxassetid://93988211403086`, AnchorPoint(0.5,1), Position(0.5,-184,1,-20) — środek dół, po LEWO od MENU z gap 14px).
+- Panel 1100×720 z headerem "SKLEP" + X-close + ScrollingFrame z UIGridLayout (3 kolumny, cell 310×310, AutomaticCanvasSize.Y).
+- **3 karty placeholder (kolor+litera, bez obrazków — user dorzuci ID)**:
+  - **VIP Deska** (Gamepass `Config.Decks[VIP].GamepassId = 1883460051`, 30 R$) — POSIADASZ gdy `DeckStatus.owned.VIP`.
+  - **x2 KASA** (Developer Product `Config.BoostShop.DoubleEarn.ProductId = 3605052667`, 19 R$) — AKTYWNE z timerem `BoostStatusUpdate.doubleEarnRemainingSec`. Można doliczyć (cumulative).
+  - **Triple Egg** (Gamepass `Config.Pets.TripleEggGamepassId = 1884317989`) — POSIADASZ gdy `PetStatusUpdate.hasGamepass`.
+- Zakup: VIP / Triple = `MarketplaceService:PromptGamePassPurchase`; x2 KASA = `PromptBoostPurchase:FireServer("DoubleEarn")` → server `MarketplaceService:PromptProductPurchase`.
+- Sterowanie: ESC zamyka, X w headerze. Klik w tło NIE zamyka.
+- **Floating HUD timer** (prawy górny, 170×44) widoczny przy aktywnym boost — pokazuje `x2 KASA X:YY`.
+- BoostShopController **został usunięty** w 2026 — cała logika tutaj.
 
 ### Hoverboard button (DeckShopController)
 - 135×135 (lewa strona, pod MENU), ikona z `Config.DeckMenuIconId`, hover scale 1.12 + rotation 6°. Otwiera menu TWOJE DESKI.
@@ -462,7 +497,7 @@ DeskaService to **standalone Script** (.server.luau) — NIE wymagaj w GameServe
 - Developer Product Robux. Aktualny: **x2 KASA z butelkomatu na 10 min** (ProductId `3605052667`, 19 R$).
 - `MarketplaceService.ProcessReceipt` → `activateDoubleEarn(player)` → `doubleEarnUntil[p] = clock + 600`.
 - BottleService.EmptyBackpack: `multiplier *= BoostShopService.GetEarnMultiplier(player)` (mnoży się ze skill tree mult).
-- Klient: badge w prawym górnym HUD gdy aktywny ("x2 KASA 9:42"). Karta w zakładce SKLEP menu.
+- Klient: badge w prawym górnym HUD gdy aktywny ("x2 KASA 9:42"). Karta w **ShopCatalogController** (osobne GUI sklepu, nie zakładka menu — przeniesione w 2026).
 - Brak persystencji boostu (restart serwera = ginie). Konsumowalny produkt.
 - VIP deska (`Config.Decks.VIP.RobuxProductId = 3605653942`) też przez ProcessReceipt → BindableEvent `GrantDeckEvent` → DeskaService.grantDeck.
 

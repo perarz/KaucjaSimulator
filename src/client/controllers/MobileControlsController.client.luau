@@ -20,8 +20,8 @@ print("[MobileControlsController] Touch wykryty — uruchamiam mobile UI")
 
 -- ── Przesunięcie pozycji joysticka ──────────────────────────────────────────
 -- Typ joysticka (Thumbstick — statyczny) ustawiony w StarterPlayer.DevTouchMovementMode
--- w default.project.json. Tutaj tylko przesuwamy go w prawo żeby nie zachodził na MENU.
-local THUMBSTICK_POS = UDim2.new(0, 140, 1, -60)  -- X=140px od lewej, Y=60px nad dołem (nisko)
+-- w default.project.json. Tutaj tylko przesuwamy go w lewy dolny róg żeby nie zachodził na MENU.
+local THUMBSTICK_POS = UDim2.new(0, 110, 1, -90)  -- bliżej lewego dolnego rogu
 
 local playerGui = localPlayer:WaitForChild("PlayerGui")
 
@@ -67,11 +67,52 @@ local function lockThumbstick()
 		"na", tostring(THUMBSTICK_POS))
 end
 
+-- ── Lock pozycji domyślnego JumpButton (Roblox) w prawym dolnym rogu ────────
+-- Bez locka JumpButton siedzi w okolicach centrum-prawej i zachodzi na SPRINT/DESKA.
+-- Wymuszamy go w prawym dolnym rogu, a SPRINT/DESKA siedzą NA LEWO od niego.
+local JUMP_SIZE = 90  -- typowa wielkość domyślnego JumpButton
+local JUMP_POS  = UDim2.new(1, -30, 1, -30)
+local JUMP_ANCHOR = Vector2.new(1, 1)
+local lockedJump: GuiObject? = nil
+local applyingJump = false
+
+local function forceJumpPos(btn: GuiObject)
+	applyingJump = true
+	btn.AnchorPoint = JUMP_ANCHOR
+	btn.Position    = JUMP_POS
+	applyingJump = false
+end
+
+local function lockJumpButton()
+	if lockedJump and lockedJump.Parent then return end
+	local touchGui = playerGui:FindFirstChild("TouchGui")
+	if not touchGui then return end
+	local touchFrame = touchGui:FindFirstChild("TouchControlFrame")
+	if not touchFrame then return end
+	local jump = touchFrame:FindFirstChild("JumpButton")
+	if not (jump and jump:IsA("GuiObject")) then return end
+
+	lockedJump = jump :: GuiObject
+	forceJumpPos(lockedJump)
+
+	lockedJump:GetPropertyChangedSignal("Position"):Connect(function()
+		if applyingJump then return end
+		if lockedJump and lockedJump.Position ~= JUMP_POS then forceJumpPos(lockedJump) end
+	end)
+	lockedJump:GetPropertyChangedSignal("AnchorPoint"):Connect(function()
+		if applyingJump then return end
+		if lockedJump and lockedJump.AnchorPoint ~= JUMP_ANCHOR then forceJumpPos(lockedJump) end
+	end)
+
+	print("[MobileControlsController] JumpButton zlockowany →", lockedJump:GetFullName())
+end
+
 -- Polling do skutku — TouchGui pojawia się asynchronicznie po pierwszym dotknięciu w niektórych edge cases.
 task.spawn(function()
 	for _ = 1, 60 do  -- 60 × 0.2s = 12s
 		lockThumbstick()
-		if lockedFrame then break end
+		lockJumpButton()
+		if lockedFrame and lockedJump then break end
 		task.wait(0.2)
 	end
 end)
@@ -79,11 +120,13 @@ end)
 -- Reset gdy gracz respawnuje (CharacterAdded może zresetować TouchGui)
 localPlayer.CharacterAdded:Connect(function()
 	lockedFrame = nil
+	lockedJump  = nil
 	task.wait(0.3)
 	task.spawn(function()
 		for _ = 1, 30 do
 			lockThumbstick()
-			if lockedFrame then break end
+			lockJumpButton()
+			if lockedFrame and lockedJump then break end
 			task.wait(0.2)
 		end
 	end)
@@ -93,8 +136,10 @@ end)
 playerGui.ChildAdded:Connect(function(c)
 	if c.Name == "TouchGui" then
 		lockedFrame = nil
+		lockedJump  = nil
 		task.wait(0.2)
 		lockThumbstick()
+		lockJumpButton()
 	end
 end)
 
@@ -113,11 +158,14 @@ gui.Parent         = playerGui
 
 local BTN_SIZE = 110
 local PAD      = 18
+-- SPRINT/DESKA siedzą NA LEWO od JumpButton (który jest w prawym dolnym rogu, ~90px szer).
+-- Margines = JUMP_SIZE + odstęp jumpa od krawędzi + gap. Bez tego palec na sprint trafiał w jump.
+local RIGHT_OFFSET = 30 + JUMP_SIZE + 16  -- = 136
 
 local function makeMobileBtn(label: string, anchorY: number, posYOffset: number): TextButton
 	local btn = Instance.new("TextButton")
 	btn.AnchorPoint            = Vector2.new(1, anchorY)
-	btn.Position               = UDim2.new(1, -PAD, anchorY, posYOffset)
+	btn.Position               = UDim2.new(1, -RIGHT_OFFSET, anchorY, posYOffset)
 	btn.Size                   = UDim2.fromOffset(BTN_SIZE, BTN_SIZE)
 	btn.BackgroundColor3       = C_BG
 	btn.BackgroundTransparency = 0.15

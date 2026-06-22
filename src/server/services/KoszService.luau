@@ -6,6 +6,7 @@ local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config            = require(ReplicatedStorage.Config)
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(ServerScriptService.PlayerDataService)
 local QuestService      = require(ServerScriptService.QuestService)
 
@@ -107,11 +108,9 @@ local function setupKoszPrompt(kosz: Instance)
 
 		local data = PlayerDataService.GetData(player)
 		local capacity = Config.BackpackUpgrades[data.BackpackLevel].Capacity
-
-		-- Carried teraz (syrop dziadka też zajmuje slot)
-		local carried = 0
-		for _, v in pairs(data.BackpackContents) do carried += v end
-		if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end
+		-- Carried = butelki + syrop + magnesy + pety (single source of truth: Util.getCarriedCount).
+		-- BEZ tego kosz pozwalał przekroczyć capacity (pety/magnesy nie były wliczane).
+		local carried = Util.getCarriedCount(data)
 
 		-- Plecak całkowicie pełny — w ogóle nie da się przeszukać
 		if carried >= capacity then

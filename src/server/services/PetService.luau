@@ -17,6 +17,7 @@ local HttpService         = game:GetService("HttpService")
 local RunService          = game:GetService("RunService")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(script.Parent:WaitForChild("PlayerDataService"))
 
 local Events                = ReplicatedStorage:WaitForChild("Events")
@@ -38,6 +39,19 @@ local PetService = {}
 local gamepassCache: { [Player]: boolean } = {}
 -- Anty-spam OpenEgg
 local lastOpenAt: { [Player]: number } = {}
+-- Anty-spam EquipPet/UnequipPet/DiscardPet
+local lastPetActionAt: { [Player]: number } = {}
+local PET_ACTION_THROTTLE = 0.3
+-- Anchor gabloty (cache do walidacji dystansu w BuyEggOpen)
+local petGablotaAnchor: BasePart? = nil
+local GABLOTA_MAX_DIST = 18
+local function isNearGablota(player: Player): boolean
+	if not petGablotaAnchor then return false end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	return ((hrp :: BasePart).Position - petGablotaAnchor.Position).Magnitude <= GABLOTA_MAX_DIST
+end
 -- Aktywne wizualne pety (server spawnuje, wszyscy widzą)
 local activeVisual: { [Player]: { model: Model, primary: BasePart, equippedId: string } } = {}
 
@@ -361,6 +375,14 @@ local function checkGamepass(player: Player): boolean
 	return res
 end
 
+-- Public: reset gamepass cache w obrębie sesji (admin override do testów).
+-- UWAGA: Roblox-side gamepass NIE jest revokowany — przy następnym join `checkGamepass`
+-- znowu wykryje. To tylko dla testów flow zakupu w bieżącej sesji.
+function PetService.SetGamepassCache(player: Player, value: boolean)
+	gamepassCache[player] = value
+	PetService.PushStatus(player)
+end
+
 -- Listen for live purchase (gdy gracz kupi gamepass w trakcie sesji)
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, gpId: number, purchased: boolean)
 	if gpId ~= cfg.TripleEggGamepassId then return end
@@ -384,6 +406,12 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 	-- Anty-spam
 	local now = os.clock()
 	if (lastOpenAt[player] or 0) + (cfg.OpenCooldownSec or 1) > now then
+		return nil
+	end
+
+	-- Dystans od Gabloty (anti-exploit: gracz musi stać przy gablocie)
+	if not isNearGablota(player) then
+		PetRouletteResult:FireClient(player, { success = false, reason = "tooFar" })
 		return nil
 	end
 
@@ -450,6 +478,9 @@ end
 
 EquipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	if type(petId) ~= "string" then return end
+	local now = os.clock()
+	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
+	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
 	if not petIndex(data.Pets or {}, petId) then return end
 	data.EquippedPet = petId
@@ -463,6 +494,9 @@ EquipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 end)
 
 UnequipPet.OnServerEvent:Connect(function(player: Player)
+	local now = os.clock()
+	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
+	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
 	data.EquippedPet = ""
 	PetService.PushStatus(player)
@@ -474,6 +508,9 @@ DiscardPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	if type(petId) ~= "string" then return end
 	-- Zakaz wyrzucania itemów (petów) w strefie PvP
 	if player:GetAttribute("InPvPZone") == true then return end
+	local now = os.clock()
+	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
+	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
 	local idx = petIndex(data.Pets or {}, petId)
 	if not idx then return end
@@ -488,19 +525,7 @@ DiscardPet.OnServerEvent:Connect(function(player: Player, petId: any)
 end)
 
 -- ── Gablota: ProximityPrompt na workspace.Pets.GablotyPetow.Gablota ────────
-local function findAnchor(model: Instance): BasePart?
-	if model:IsA("BasePart") then return model :: BasePart end
-	if not model:IsA("Model") then return nil end
-	for _, name in ipairs({ "Head", "HumanoidRootPart", "UpperTorso", "Torso" }) do
-		local p = model:FindFirstChild(name)
-		if p and p:IsA("BasePart") then return p :: BasePart end
-	end
-	if (model :: Model).PrimaryPart then return (model :: Model).PrimaryPart end
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then return d :: BasePart end
-	end
-	return nil
-end
+local findAnchor = Util.findAnchor
 
 task.spawn(function()
 	print("[PetService] === diagnostyka gabloty ===")
@@ -526,6 +551,7 @@ task.spawn(function()
 	end
 	if not anchor then anchor = findAnchor(gablota) end
 	if not anchor then warn("[PetService] Gablota nie ma żadnego BasePart (ani Part 'Proximity')") return end
+	petGablotaAnchor = anchor  -- cache do walidacji dystansu w BuyEggOpen
 
 	for _, c in ipairs(gablota:GetDescendants()) do
 		if c:IsA("ProximityPrompt") then c:Destroy() end
@@ -601,8 +627,9 @@ end)
 
 Players.PlayerRemoving:Connect(function(p)
 	despawnVisual(p)
-	gamepassCache[p] = nil
-	lastOpenAt[p]    = nil
+	gamepassCache[p]   = nil
+	lastOpenAt[p]      = nil
+	lastPetActionAt[p] = nil
 end)
 
 -- ── BindableEvent ForceDespawnPet (PvPService fire'uje gdy gracz wejdzie w PVPZone/SAFEZONE) ──

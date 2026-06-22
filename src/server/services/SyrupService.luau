@@ -6,6 +6,7 @@ local Players             = game:GetService("Players")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local Config              = require(ReplicatedStorage.Config)
+local Util                = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService   = require(ServerScriptService.PlayerDataService)
 
 local SyrupService = {}
@@ -40,14 +41,7 @@ local function getSpawnPart(index: number): BasePart?
 	return nil
 end
 
-local function getCarriedCount(data): number
-	local carried = 0
-	for _, count in pairs(data.BackpackContents) do carried += count end
-	if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end
-	carried += data.MagnetCount or 0    -- magnes = 1 slot
-	carried += #(data.Pets or {})       -- pet = 1 slot
-	return carried
-end
+local getCarriedCount = Util.getCarriedCount
 
 -- Tworzy fizyczny model syropu w workspace.SyrupActive z attribute OwnerUserId
 local function buildSyrupModel(position: Vector3, ownerUserId: number): Model

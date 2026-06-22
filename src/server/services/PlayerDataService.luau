@@ -3,6 +3,7 @@ local Players         = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config          = require(ReplicatedStorage.Config)
+local Util            = require(ReplicatedStorage:WaitForChild("Util"))
 
 local PlayerDataService = {}
 
@@ -60,13 +61,7 @@ local DEFAULT_DATA = {
 	BankPets           = {},
 }
 
-local function deepCopy(t: { [string]: any }): { [string]: any }
-	local copy = {}
-	for k, v in pairs(t) do
-		copy[k] = if type(v) == "table" then deepCopy(v) else v
-	end
-	return copy
-end
+local deepCopy = Util.deepCopy
 
 local cache: { [Player]: { [string]: any } } = {}
 
@@ -84,6 +79,35 @@ local function mergeWithDefaults(data: { [string]: any }): { [string]: any }
 	return merged
 end
 
+-- Retry z exponential backoff dla GetAsync/SetAsync.
+-- DataStore może zwrócić błąd przy throttlu (>60 req/min) lub transientach Roblox —
+-- bez retry pierwszy fail oznacza utratę zapisu (przy SaveData) lub załadowanie
+-- DEFAULT_DATA na świeżego gracza ze starym progresem (przy GetAsync) i nadpis.
+local RETRY_DELAYS = { 0.5, 1.5, 3 }  -- 3 próby łącznie
+
+local function getWithRetry(key: string): (boolean, any)
+	local lastErr: any = nil
+	for attempt = 0, #RETRY_DELAYS do
+		local ok, result = pcall(function() return store:GetAsync(key) end)
+		if ok then return true, result end
+		lastErr = result
+		if attempt < #RETRY_DELAYS then task.wait(RETRY_DELAYS[attempt + 1]) end
+	end
+	return false, lastErr
+end
+
+local function setWithRetry(key: string, data: any): boolean
+	local lastErr: any = nil
+	for attempt = 0, #RETRY_DELAYS do
+		local ok, err = pcall(function() store:SetAsync(key, data) end)
+		if ok then return true end
+		lastErr = err
+		if attempt < #RETRY_DELAYS then task.wait(RETRY_DELAYS[attempt + 1]) end
+	end
+	warn("[PlayerDataService] SetAsync failed po 3 próbach:", lastErr)
+	return false
+end
+
 function PlayerDataService.GetData(player: Player): { [string]: any }
 	if cache[player] then
 		return cache[player]
@@ -92,17 +116,25 @@ function PlayerDataService.GetData(player: Player): { [string]: any }
 	local key = Config.DataStoreKey .. "_" .. player.UserId
 	local data = {}
 
-	local ok, result = pcall(function()
-		return store:GetAsync(key)
-	end)
+	local ok, result = getWithRetry(key)
 
 	if ok and result then
 		data = mergeWithDefaults(result)
 	else
 		if not ok then
-			warn("[PlayerDataService] GetAsync failed for", player.Name, ":", result)
+			-- KRYTYCZNE: po 3 fail'ach nie ładujemy DEFAULT_DATA, żeby nie zniszczyć stanu gracza.
+			-- Oznaczamy cache jako "nieprawidłowy" — SaveData go odrzuci, gracz dostanie kick.
+			warn("[PlayerDataService] GetAsync failed po 3 próbach dla", player.Name, ":", result,
+				"— gracz zostanie kickowany, żeby nie nadpisać postępu")
+			task.spawn(function()
+				player:Kick("Błąd ładowania postępu (DataStore). Spróbuj ponownie za chwilę.")
+			end)
+			data = mergeWithDefaults({})
+			data.__loadFailed = true  -- gate w SaveData
+		else
+			-- ok=true, result=nil → nowy gracz, brak rekordu — OK
+			data = mergeWithDefaults({})
 		end
-		data = mergeWithDefaults({})
 	end
 
 	cache[player] = data
@@ -112,23 +144,19 @@ end
 function PlayerDataService.SaveData(player: Player)
 	local data = cache[player]
 	if not data then return end
+	if data.__loadFailed then return end  -- nie nadpisuj stanu gdy load się nie udał
 
 	local key = Config.DataStoreKey .. "_" .. player.UserId
-	local ok, err = pcall(function()
-		store:SetAsync(key, data)
-	end)
-
-	if not ok then
-		warn("[PlayerDataService] SetAsync failed for", player.Name, ":", err)
-	end
+	setWithRetry(key, data)
 end
 
--- Auto-save co 60 sekund
+-- Auto-save co 60 sekund (równolegle per gracz — sekwencyjny zapycha kolejkę DataStore
+-- przy >10 graczach, każdy SetAsync yielduje 1-2s).
 task.spawn(function()
 	while true do
 		task.wait(60)
 		for player, _ in pairs(cache) do
-			PlayerDataService.SaveData(player)
+			task.spawn(PlayerDataService.SaveData, player)
 		end
 	end
 end)
@@ -247,9 +275,22 @@ do
 	local RunService      = game:GetService("RunService")
 	local evts = ReplicatedStorage:WaitForChild("Events")
 	local ResetProgress = evts:WaitForChild("ResetProgress")
+	local lastResetAt: { [Player]: number } = {}
+	Players.PlayerRemoving:Connect(function(p) lastResetAt[p] = nil end)
 	ResetProgress.OnServerEvent:Connect(function(player)
+		local now = os.clock()
+		if lastResetAt[player] and now - lastResetAt[player] < 5 then return end
+		lastResetAt[player] = now
 		cache[player] = deepCopy(DEFAULT_DATA)
 		PlayerDataService.SaveData(player)
+		-- Bank ma osobny DataStore (BankData_v1) — wyczyść też tam, inaczej skarbiec
+		-- przeżywa reset postępu.
+		local okB, BankService = pcall(function()
+			return require(script.Parent.BankService)
+		end)
+		if okB and BankService and BankService.ResetFor then
+			pcall(function() BankService.ResetFor(player) end)
+		end
 		-- Despawn syropu jeśli był w świecie
 		local ok, SyrupService = pcall(function()
 			return require(script.Parent.SyrupService)
@@ -275,9 +316,23 @@ do
 	end)
 end
 
+-- BindToClose: zapisz wszystkich równolegle (limit ~30s w Roblox, sekwencyjnie nie zdąży
+-- gdy serwer ma 10+ graczy a SetAsync yielduje 1-2s każdy).
 game:BindToClose(function()
+	local pending = 0
+	local done = Instance.new("BindableEvent")
 	for player, _ in pairs(cache) do
-		PlayerDataService.SaveData(player)
+		pending += 1
+		task.spawn(function()
+			PlayerDataService.SaveData(player)
+			pending -= 1
+			if pending == 0 then done:Fire() end
+		end)
+	end
+	if pending > 0 then
+		-- Czekaj na koniec wszystkich SaveData (lub timeout 25s żeby zostawić bufor BindToClose)
+		task.delay(25, function() if pending > 0 then done:Fire() end end)
+		done.Event:Wait()
 	end
 end)
 

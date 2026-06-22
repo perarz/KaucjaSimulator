@@ -6,6 +6,7 @@ local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local Events           = ReplicatedStorage:WaitForChild("Events")
@@ -17,22 +18,22 @@ local UpdateHUD        = Events:WaitForChild("UpdateHUD")
 
 local HAT_TAG = "__ShopHat"
 
--- ── Setup ProximityPrompt na workspace.SKLEP2.Cashier ────────────────────────
--- Priorytet anchor'a: Head > HumanoidRootPart > UpperTorso/Torso > PrimaryPart > dowolny BasePart
-local function findAnchor(model: Instance): BasePart?
-	if model:IsA("BasePart") then return model :: BasePart end
-	if not model:IsA("Model") then return nil end
-	for _, name in ipairs({ "Head", "HumanoidRootPart", "UpperTorso", "Torso" }) do
-		local p = model:FindFirstChild(name)
-		if p and p:IsA("BasePart") then return p :: BasePart end
-	end
-	local pp = (model :: Model).PrimaryPart
-	if pp then return pp end
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then return d :: BasePart end
-	end
-	return nil
+-- Anchor + throttle do walidacji BuyHat (anti-exploit)
+local hatAnchor: BasePart? = nil
+local HAT_MAX_DIST = 15
+local lastBuyAt: { [Player]: number } = {}
+local BUY_THROTTLE = 0.5
+local function isNearHatShop(player: Player): boolean
+	if not hatAnchor then return false end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	return ((hrp :: BasePart).Position - hatAnchor.Position).Magnitude <= HAT_MAX_DIST
 end
+Players.PlayerRemoving:Connect(function(p) lastBuyAt[p] = nil end)
+
+-- ── Setup ProximityPrompt na workspace.SKLEP2.Cashier ────────────────────────
+local findAnchor = Util.findAnchor
 
 task.spawn(function()
 	print("[HatShopService] === diagnostyka startowa ===")
@@ -53,6 +54,7 @@ task.spawn(function()
 		return
 	end
 	print("[HatShopService] Anchor wybrany:", anchor:GetFullName(), "rozmiar=" .. tostring(anchor.Size))
+	hatAnchor = anchor  -- cache do walidacji dystansu w BuyHat
 
 	-- Usuń stary prompt jeśli istnieje (mógł wcześniej siedzieć na złym partsie)
 	for _, c in ipairs(cashier:GetDescendants()) do
@@ -127,6 +129,15 @@ end
 
 -- ── Zakup ───────────────────────────────────────────────────────────────────
 BuyHat.OnServerEvent:Connect(function(player: Player)
+	-- Throttle + dystans od Cashiera
+	local now = os.clock()
+	if lastBuyAt[player] and now - lastBuyAt[player] < BUY_THROTTLE then return end
+	lastBuyAt[player] = now
+	if not isNearHatShop(player) then
+		BuyHatResult:FireClient(player, { success = false, reason = "tooFar" })
+		return
+	end
+
 	local data = PlayerDataService.GetData(player)
 	if data.HatOwned then
 		BuyHatResult:FireClient(player, { success = false, reason = "already" })

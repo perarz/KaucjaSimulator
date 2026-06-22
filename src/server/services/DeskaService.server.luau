@@ -101,6 +101,7 @@ local function dismountPlayer(player: Player)
 
 	if data.weld and data.weld.Parent then data.weld:Destroy() end
 	if data.board and data.board.Parent then data.board:Destroy() end
+	if data.seatedConn then data.seatedConn:Disconnect() end
 
 	local char = player.Character
 	if char then
@@ -227,7 +228,15 @@ local function mountPlayer(player: Player, deckKey: string)
 	humanoid.WalkSpeed  = deck.Speed + petSpeedBonus
 	humanoid.JumpHeight = 0
 
-	mountedData[player] = { weld = weld, board = board, deckKey = deckKey }
+	-- Blokuj siadanie na Seat/VehicleSeat podczas jazdy — SeatWeld konfliktuje z weldem deski (gracz pod mapą / desync).
+	local seatedConn = humanoid.Seated:Connect(function(isSeated, seatPart)
+		if isSeated and seatPart and mountedData[player] then
+			humanoid.Sit = false
+			humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end)
+
+	mountedData[player] = { weld = weld, board = board, deckKey = deckKey, seatedConn = seatedConn }
 	DeskMountResult:FireClient(player, true, board)
 	print(string.format("[DeskaService] %s jeździ na %s (speed %d)", player.Name, deck.name, deck.Speed))
 end
@@ -316,6 +325,23 @@ local function tryBuyDeck(player: Player, key: string)
 	print(string.format("[DeskaService] %s kupił %s za %d zł", player.Name, deck.name, deck.Cost))
 end
 
+-- ── Gabloty: cache anchorów + throttle do walidacji BuyDeck/EquipDeck (anti-exploit) ──
+local gablotyAnchors: { BasePart } = {}
+local DECK_MAX_DIST = 18  -- gabloty są większe, dajemy luźniejszą tolerancję
+local lastDeckActionAt: { [Player]: number } = {}
+local DECK_ACTION_THROTTLE = 0.5
+local function isNearAnyGablota(player: Player): boolean
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	local pos = (hrp :: BasePart).Position
+	for _, a in ipairs(gablotyAnchors) do
+		if a.Parent and (a.Position - pos).Magnitude <= DECK_MAX_DIST then return true end
+	end
+	return false
+end
+Players.PlayerRemoving:Connect(function(p) lastDeckActionAt[p] = nil end)
+
 -- ── Gabloty (ProximityPrompt → OpenDeckShop) ───────────────────────────────────
 local function setupGablota(model: Instance)
 	local num = tonumber(string.match(model.Name, "(%d+)"))
@@ -340,6 +366,7 @@ local function setupGablota(model: Instance)
 		warn("[DeskaService] Gablota", model.Name, "— brak BasePart/Proximity na prompt")
 		return
 	end
+	table.insert(gablotyAnchors, anchor)  -- cache do walidacji dystansu
 
 	local prompt = anchor:FindFirstChildWhichIsA("ProximityPrompt")
 	if not prompt then
@@ -473,6 +500,10 @@ end)
 
 EquipDeck.OnServerEvent:Connect(function(player: Player, key: string)
 	if type(key) ~= "string" then return end
+	local now = os.clock()
+	if lastDeckActionAt[player] and now - lastDeckActionAt[player] < DECK_ACTION_THROTTLE then return end
+	lastDeckActionAt[player] = now
+	if not isNearAnyGablota(player) then return end  -- musi stać przy gablocie
 	local data = PlayerDataService.GetData(player)
 	if not (data.OwnedDecks and data.OwnedDecks[key]) then return end
 	data.EquippedDeck = key
@@ -485,6 +516,13 @@ end)
 
 BuyDeck.OnServerEvent:Connect(function(player: Player, key: string)
 	if type(key) ~= "string" then return end
+	local now = os.clock()
+	if lastDeckActionAt[player] and now - lastDeckActionAt[player] < DECK_ACTION_THROTTLE then return end
+	lastDeckActionAt[player] = now
+	if not isNearAnyGablota(player) then
+		BuyDeckResult:FireClient(player, { success = false, reason = "tooFar" })
+		return
+	end
 	tryBuyDeck(player, key)
 end)
 

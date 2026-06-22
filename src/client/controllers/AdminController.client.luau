@@ -75,7 +75,7 @@ end)
 
 -- ── Panel admina (tylko dla adminów, F2 toggle) ─────────────────────────────
 local PANEL_W = 460
-local PANEL_H = 510  -- powiększony żeby pomieścić sekcję DODAJ KOD + MAGNES
+local PANEL_H = 660  -- powiększony żeby pomieścić sekcje RESET GAMEPASS + RESET SKARBIEC
 
 local gui = Instance.new("ScreenGui")
 gui.Name           = "AdminPanel"
@@ -176,6 +176,39 @@ magnetBtn.MouseButton1Click:Connect(function()
 	local n = tonumber(magnetInput.Text) or 0
 	if n <= 0 then return end
 	AdminAction:FireServer({ action = "giveMagnet", count = n })
+end)
+
+-- Reset gamepass'ów section (testowy override — tylko sesja, NIE revoke u Robloxa)
+mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 446), "RESET GAMEPASS (SESJA)", 14, Color3.fromRGB(175, 175, 175))
+local resetGpInfo = mkLabel(panel, UDim2.new(1, -130, 0, 36), UDim2.fromOffset(16, 470),
+	"Czyści VIP deska + Triple Egg do testów", 12, Color3.fromRGB(220, 220, 220), Enum.TextXAlignment.Left)
+resetGpInfo.TextYAlignment = Enum.TextYAlignment.Center
+resetGpInfo.TextWrapped = true
+local resetGpBtn = mkBtn(panel, UDim2.fromOffset(96, 36), UDim2.new(1, -112, 0, 470), "RESET", Color3.fromRGB(255, 150, 80))
+local resetGpStatus = mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 510),
+	"", 12, Color3.fromRGB(170, 221, 102))
+
+resetGpBtn.MouseButton1Click:Connect(function()
+	AdminAction:FireServer({ action = "resetGamepass" })
+	resetGpStatus.Text = "Zresetowano (sesja). Reconnect = wróci."
+	resetGpStatus.TextColor3 = Color3.fromRGB(170, 221, 102)
+end)
+
+-- Reset SKARBIEC section — czyści BankData_v1 wskazanego gracza (online lub offline po nazwie)
+mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 540),
+	"RESET SKARBIEC (GRACZ)", 14, Color3.fromRGB(175, 175, 175))
+local rbInput  = mkInput(panel, UDim2.fromOffset(232, 36), UDim2.fromOffset(16, 564), "Nick gracza")
+local rbBtn    = mkBtn(panel, UDim2.fromOffset(96, 36), UDim2.new(1, -112, 0, 564), "RESET", Color3.fromRGB(220, 90, 90))
+local rbStatus = mkLabel(panel, UDim2.new(1, -32, 0, 18), UDim2.fromOffset(16, 604),
+	"", 12, Color3.fromRGB(170, 221, 102))
+
+rbBtn.MouseButton1Click:Connect(function()
+	local name = rbInput.Text
+	if #name == 0 or #name > 32 then return end
+	AdminAction:FireServer({ action = "resetBank", target = name })
+	rbStatus.Text = "Wysłano reset dla: " .. name
+	rbStatus.TextColor3 = Color3.fromRGB(170, 221, 102)
+	rbInput.Text = ""
 end)
 
 -- Hint

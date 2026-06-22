@@ -6,6 +6,7 @@ local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config            = require(ReplicatedStorage.Config)
+local Util              = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(ServerScriptService.PlayerDataService)
 
 local Events         = ReplicatedStorage:WaitForChild("Events")
@@ -16,23 +17,23 @@ local UpdateHUD      = Events:WaitForChild("UpdateHUD")
 
 local ShopService = {}
 
+-- Anchor + throttle do walidacji BuyBackpack (anti-exploit)
+local shopAnchor: BasePart? = nil
+local SHOP_MAX_DIST = 15
+local lastBuyAt: { [Player]: number } = {}
+local BUY_THROTTLE = 0.5
+local function isNearShop(player: Player): boolean
+	if not shopAnchor then return false end
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return false end
+	return ((hrp :: BasePart).Position - shopAnchor.Position).Magnitude <= SHOP_MAX_DIST
+end
+Players.PlayerRemoving:Connect(function(p) lastBuyAt[p] = nil end)
+
 -- ── Setup ProximityPrompt na blacie ───────────────────────────────────────
 
--- Priorytet: Head > HumanoidRootPart > UpperTorso/Torso > PrimaryPart > dowolny BasePart
-local function findAnchor(model: Instance): BasePart?
-	if model:IsA("BasePart") then return model :: BasePart end
-	if not model:IsA("Model") then return nil end
-	for _, name in ipairs({ "Head", "HumanoidRootPart", "UpperTorso", "Torso" }) do
-		local p = model:FindFirstChild(name)
-		if p and p:IsA("BasePart") then return p :: BasePart end
-	end
-	local pp = (model :: Model).PrimaryPart
-	if pp then return pp end
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then return d :: BasePart end
-	end
-	return nil
-end
+local findAnchor = Util.findAnchor
 
 local function setupShop()
 	local sklep = workspace:WaitForChild("BUTELKOMANIACY", 30)
@@ -52,6 +53,7 @@ local function setupShop()
 		warn("[ShopService] Kasjer nie ma żadnego BasePart — sklep nie będzie aktywny")
 		return
 	end
+	shopAnchor = counter  -- cache do walidacji dystansu w BuyBackpack
 
 	-- Prompt
 	local existing = counter:FindFirstChildOfClass("ProximityPrompt")
@@ -75,6 +77,15 @@ end
 -- ── Logika zakupu plecaków ────────────────────────────────────────────────
 
 local function tryBuyBackpack(player: Player, targetLevel: number)
+	-- Throttle + dystans od Kasjera
+	local now = os.clock()
+	if lastBuyAt[player] and now - lastBuyAt[player] < BUY_THROTTLE then return end
+	lastBuyAt[player] = now
+	if not isNearShop(player) then
+		BackpackResult:FireClient(player, { success = false, reason = "tooFar" })
+		return
+	end
+
 	local data = PlayerDataService.GetData(player)
 	local current = data.BackpackLevel or 1
 

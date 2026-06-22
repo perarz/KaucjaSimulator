@@ -59,8 +59,8 @@
         "AdminController": {
           "$path": "src/client/controllers/AdminController.client.luau"
         },
-        "BoostShopController": {
-          "$path": "src/client/controllers/BoostShopController.client.luau"
+        "ShopCatalogController": {
+          "$path": "src/client/controllers/ShopCatalogController.client.luau"
         },
         "DeskaController": {
           "$path": "src/client/controllers/DeskaController.client.luau"
@@ -176,6 +176,9 @@
       "$className": "ReplicatedStorage",
       "Config": {
         "$path": "src/shared/Config.luau"
+      },
+      "Util": {
+        "$path": "src/shared/Util.luau"
       },
       "Events": {
         "$className": "Folder",

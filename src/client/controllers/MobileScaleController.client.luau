@@ -9,9 +9,11 @@ local RunService    = game:GetService("RunService")
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local DESIGN_X  = 1280
-local DESIGN_Y  = 720
-local MIN_SCALE = 0.50
+-- DESIGN dopasowany do największego paneluw (MENU = 1480×880). Bez tego na małych
+-- telefonach (np. 360×640) menu wystawało poza ekran i X-close nie dało się kliknąć.
+local DESIGN_X  = 1480
+local DESIGN_Y  = 880
+local MIN_SCALE = 0.30
 local MAX_SCALE = 1.00
 local TAG_NAME  = "__MobileUIScale"
 
@@ -61,8 +63,18 @@ local function trackScale(s: UIScale)
     end)
 end
 
+-- Top-level dzieci ScreenGui o rozmiarze CZYSTO scale'owym (np. overlay fromScale(1,1))
+-- są już viewport-relative i NIE wolno ich skalować — UIScale mnoży AbsoluteSize parenta,
+-- więc overlay 1×1 staje się np. 0.87×0.87 na małym ekranie → ciemne tło pokrywa tylko
+-- lewy-górny róg ("ucięte pociemnienie"). Skipujemy je.
+local function isViewportSized(child: GuiObject): boolean
+    local sz = child.Size
+    return sz.X.Offset == 0 and sz.Y.Offset == 0 and sz.X.Scale > 0 and sz.Y.Scale > 0
+end
+
 local function processGuiObject(child: Instance)
     if not child:IsA("GuiObject") then return end
+    if isViewportSized(child :: GuiObject) then return end
     local s = ensureScaleFor(child)
     trackScale(s)
 end

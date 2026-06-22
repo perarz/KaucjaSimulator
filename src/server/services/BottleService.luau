@@ -3,6 +3,7 @@ local Players             = game:GetService("Players")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local CollectionService   = game:GetService("CollectionService")
 local Config              = require(ReplicatedStorage.Config)
+local Util                = require(ReplicatedStorage:WaitForChild("Util"))
 local ServerScriptService = game:GetService("ServerScriptService")
 local PlayerDataService   = require(ServerScriptService.PlayerDataService)
 local QuestService        = require(ServerScriptService.QuestService)
@@ -23,6 +24,29 @@ local LegendaryEventEnd   = Events:WaitForChild("LegendaryEventEnd")
 
 -- Flaga eventu — pętla respawn i jednorazowe spawny ją respektują
 local legendaryEventActive = false
+
+-- ── Rate limit (per-player) + dystans do butelkomatu ──────────────────────────
+local lastCollectAt: { [Player]: number } = {}
+local lastEmptyAt:   { [Player]: number } = {}
+local lastDropAt:    { [Player]: number } = {}
+local COLLECT_THROTTLE = 0.05  -- 20 Hz max — chroni przed spamem, nie blokuje magnesu/normalnego pickup
+local EMPTY_THROTTLE   = 0.5
+local DROP_THROTTLE    = 0.2
+local BUTELKOMAT_MAX_DIST = 15  -- studs, ile od najbliższego tagged Butelkomat
+local function isNearButelkomat(hrp: BasePart): boolean
+	for _, part in ipairs(CollectionService:GetTagged(BUTELKOMAT_TAG)) do
+		if part:IsA("BasePart") and (part.Position - hrp.Position).Magnitude <= BUTELKOMAT_MAX_DIST then
+			return true
+		end
+	end
+	return false
+end
+
+Players.PlayerRemoving:Connect(function(p: Player)
+	lastCollectAt[p] = nil
+	lastEmptyAt[p]   = nil
+	lastDropAt[p]    = nil
+end)
 
 -- Workspace foldery
 local bottlesFolder:      Folder
@@ -616,6 +640,10 @@ DropBottle.OnServerEvent:Connect(function(player: Player, rarity: any)
 	if not Config.BottleValues[rarity] then return end
 	-- Zakaz wyrzucania itemów w strefie PvP (anti-exploit + porządek na arenie)
 	if player:GetAttribute("InPvPZone") == true then return end
+	-- Throttle anty-spam
+	local now = os.clock()
+	if lastDropAt[player] and now - lastDropAt[player] < DROP_THROTTLE then return end
+	lastDropAt[player] = now
 
 	local data = PlayerDataService.GetData(player)
 	if not data.BackpackContents then return end
@@ -683,12 +711,7 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 
 	local data = PlayerDataService.GetData(player)
 	local capacity = Config.BackpackUpgrades[data.BackpackLevel].Capacity
-
-	local carried = 0
-	for _, count in pairs(data.BackpackContents) do carried += count end
-	if data.Grandpa and data.Grandpa.hasSyrup then carried += 1 end
-	carried += data.MagnetCount or 0   -- magnes = 1 slot
-	carried += #(data.Pets or {})       -- każdy pet = 1 slot
+	local carried  = Util.getCarriedCount(data)
 
 	if carried >= capacity then
 		if not opts.silent then
@@ -722,11 +745,29 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 end
 
 CollectBottle.OnServerEvent:Connect(function(player: Player, bottlePart: Instance)
+	-- Throttle 20Hz — exploit-spam guard. Normalny pickup nigdy nie przekracza tego.
+	local now = os.clock()
+	if lastCollectAt[player] and now - lastCollectAt[player] < COLLECT_THROTTLE then return end
+	lastCollectAt[player] = now
 	BottleService.TryCollectBottle(player, bottlePart)
 end)
 
 -- Handler opróżnienia plecaka (butelkomat)
 EmptyBackpack.OnServerEvent:Connect(function(player: Player)
+	-- Throttle
+	local now = os.clock()
+	if lastEmptyAt[player] and now - lastEmptyAt[player] < EMPTY_THROTTLE then return end
+	lastEmptyAt[player] = now
+
+	-- Dystans: gracz MUSI być blisko któregoś tagged Butelkomat
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then return end
+	if not isNearButelkomat(hrp :: BasePart) then
+		EmptyBackpackResult:FireClient(player, { success = false, reason = "tooFar" })
+		return
+	end
+
 	local data = PlayerDataService.GetData(player)
 
 	local totalBottles = 0

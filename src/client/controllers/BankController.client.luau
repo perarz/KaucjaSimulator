@@ -72,11 +72,11 @@ local RARITY_ORDER  = { "Zwykla", "Rzadka", "Epicka", "Legendarna", "Mityczny" }
 local RARITY_COLORS = Config.BottleColors
 
 -- ── Wymiary ───────────────────────────────────────────────────────────────────
-local SLOT_B       = 78
+local SLOT_B       = 110
 local GAP_B        = 14
 local COLS_B       = 5     -- 5 kolumn (jak główny ekwipunek)
-local SLOT_COUNT_B = 15    -- 15 slotów na sztywno (jak ekwipunek) — split layout nie ginie
-local MAX_VIS_ROWS = 3     -- 3 rzędy widoczne (jak ekwipunek)
+local SLOT_COUNT_B = 60    -- jak menu inwentarza (cap L4=50 + pety/magnesy/syrop + headroom)
+local MAX_VIS_ROWS = 4     -- 4 rzędy widoczne, reszta scrolluje (panel mieści się w 1380×760)
 local SLOTS_W_B    = COLS_B * SLOT_B + (COLS_B - 1) * GAP_B
 local VIS_H_B      = MAX_VIS_ROWS * SLOT_B + (MAX_VIS_ROWS - 1) * GAP_B
 local INNER_PAD    = 16
@@ -331,6 +331,14 @@ end)
 local currentCapacity = 10
 local currentBankCap  = 10
 local currentHasSyrup = false
+-- Token aktualnego oczekującego POTWIERDŹ (timeout fallback w MouseButton1Click).
+-- Jeśli przyjdzie BankResult, token jest zerowany — opóźniony reset go widzi i nie odpali.
+local pendingConfirmToken: { [string]: any }? = nil
+-- Overflow butelek niewidocznych w UI banku (defensywne — gdyby cap przekroczył SLOT_COUNT_B=60).
+-- Zwykle wartości = 0 bo 60 slotów pokrywa cap L4=50 + pety/magnesy/syrop + headroom.
+-- Zostawione jako fallback; bez tego conservation fail przy graczu z cap > 60.
+local invBpOverflow:  { [string]: number } = { Zwykla=0, Rzadka=0, Epicka=0, Legendarna=0, Mityczny=0 }
+local bankBpOverflow: { [string]: number } = { Zwykla=0, Rzadka=0, Epicka=0, Legendarna=0, Mityczny=0 }
 -- Magnes w EQ — każdy zajmuje 1 slot pojemności (zmniejsza efektywny cap dla butelek)
 local function currentMagnetCount(): number
 	local m = _G["__magnetState"]
@@ -478,7 +486,8 @@ local function renderAll()
 		renderSlot("bank", i)
 		renderSlot("inv",  i)
 	end
-	-- Bank counter X/10 — czerwony gdy przekroczy max
+	-- Bank counter X/cap — czerwony gdy przekroczy max (server cap = 10 + BankCapLevel).
+	-- UI ma 60 slotów żeby gracz mógł rozmieścić cokolwiek, ale walidacja server cap'a stoi.
 	local nb = bankTotalCount()
 	bankCounter.Text = string.format("%d/%d", nb, currentBankCap)
 	bankCounter.TextColor3 = (nb > currentBankCap) and Color3.fromRGB(255, 90, 90) or C_ACCENT_GREEN
@@ -772,6 +781,9 @@ local function performTransfer(fromP: string, toP: string, fromIdx: number, toId
 	for _, s in pairs(invSlotArr) do curInvTotal += slotSize(s) end
 	local invCap = currentCapacity - (currentHasSyrup and 1 or 0) - currentMagnetCount()
 
+	local curBankTotal = 0
+	for _, s in pairs(bankSlotArr) do curBankTotal += slotSize(s) end
+
 	local function invTotalAfter(): number
 		if fromP == "inv" and toP == "bank" then
 			if isBottleMerge then return curInvTotal - slotSize(src)
@@ -785,7 +797,23 @@ local function performTransfer(fromP: string, toP: string, fromIdx: number, toId
 		return curInvTotal
 	end
 
-	if invTotalAfter() > invCap then showCapacityError(); return end
+	-- Mirror dla skarbca — bez tego klient pozwalał wrzucić peta do banku przy pełnym,
+	-- serwer odrzucał "bankFull" już po POTWIERDŹ (mylące UX).
+	local function bankTotalAfter(): number
+		if fromP == "inv" and toP == "bank" then
+			if isBottleMerge then return curBankTotal + slotSize(src)
+			elseif tgt then return curBankTotal - slotSize(tgt) + slotSize(src)
+			else return curBankTotal + slotSize(src) end
+		elseif fromP == "bank" and toP == "inv" then
+			if isBottleMerge then return curBankTotal - slotSize(src)
+			elseif tgt then return curBankTotal - slotSize(src) + slotSize(tgt)
+			else return curBankTotal - slotSize(src) end
+		end
+		return curBankTotal
+	end
+
+	if invTotalAfter()  > invCap        then showCapacityError(); return end
+	if bankTotalAfter() > currentBankCap then showCapacityError("SKARBIEC PEŁNY! (MAX " .. currentBankCap .. ")"); return end
 
 	if tgt then
 		if isBottleMerge then
@@ -980,17 +1008,25 @@ local function syncInvLayoutToShared()
 	_G["__inventorySetLayout"](layout)
 end
 
--- Cache split layout banku w session (przeżywa close → open)
--- Filtrujemy pety — ich pozycje pochodzą z serwera (BankInit.bankPets).
+-- Cache split layout banku w session (przeżywa close → open).
+-- Butelki w __bankLayoutCache (slotIdx → {rarity, count}).
+-- Pety w __bankPetSlotCache/__invPetSlotCache (petId → slotIdx) — żeby pety też trzymały
+-- pozycję między otwarciami banku, tak samo jak butelki (split layout).
 local function saveBankLayoutToCache()
-	local cache = {}
+	local bottleCache = {}
+	local bankPetSlots, invPetSlots = {}, {}
 	for i = 1, SLOT_COUNT_B do
-		local s = bankSlotArr[i]
-		if s and not isPetSlot(s) then
-			cache[i] = { rarity = s.rarity, count = s.count }
+		local sBnk = bankSlotArr[i]
+		if sBnk then
+			if isPetSlot(sBnk) then bankPetSlots[sBnk.pet.id] = i
+			else bottleCache[i] = { rarity = sBnk.rarity, count = sBnk.count } end
 		end
+		local sInv = invSlotArr[i]
+		if sInv and isPetSlot(sInv) then invPetSlots[sInv.pet.id] = i end
 	end
-	_G["__bankLayoutCache"] = cache
+	_G["__bankLayoutCache"]   = bottleCache
+	_G["__bankPetSlotCache"]  = bankPetSlots
+	_G["__invPetSlotCache"]   = invPetSlots
 end
 
 local bankMoveLocked = false
@@ -1069,13 +1105,18 @@ end)
 confirmBtn.MouseButton1Click:Connect(function()
 	local newBp = arrayToContents(invSlotArr,  SLOT_COUNT_B)
 	local newBk = arrayToContents(bankSlotArr, SLOT_COUNT_B)
+	-- Doliczamy overflow butelek (te poza widokiem UI — patrz BankInit).
+	-- Inaczej server widzi mniejszą sumę butelek per rzadkość → conservation fail.
+	for _, r in ipairs(RARITY_ORDER) do
+		newBp[r] = (newBp[r] or 0) + (invBpOverflow[r]  or 0)
+		newBk[r] = (newBk[r] or 0) + (bankBpOverflow[r] or 0)
+	end
 	local newEqPets   = arrayToPetIds(invSlotArr,  SLOT_COUNT_B)
 	local newBankPets = arrayToPetIds(bankSlotArr, SLOT_COUNT_B)
 
-	-- Reconcile petów: jeśli jakiś pet z serwera NIE zmieścił się w 15 slotach UI
-	-- (overflow — butelki + pety > 15) to wypadał z obu list → serwer odrzucał całość
-	-- ("conservation" → "BŁĄD ZAPISU"). Brakujące UUIDy przywracamy na ich oryginalną
-	-- stronę (serverEqPetIds/serverBankPetIds z BankInit), żeby conservation zawsze przeszło.
+	-- Reconcile petów: jeśli jakiś pet z serwera NIE zmieścił się w SLOT_COUNT_B slotach UI
+	-- (mało prawdopodobne przy 60 slotach, ale defensywne) to wypadał z list → conservation fail.
+	-- Brakujące UUIDy przywracamy na oryginalną stronę (serverEqPetIds/serverBankPetIds).
 	local present: { [string]: boolean } = {}
 	for _, id in ipairs(newEqPets)   do present[id] = true end
 	for _, id in ipairs(newBankPets) do present[id] = true end
@@ -1095,6 +1136,17 @@ confirmBtn.MouseButton1Click:Connect(function()
 	})
 	confirmBtn.Text             = "ZAPISYWANIE..."
 	confirmBtn.BackgroundColor3 = Color3.fromRGB(20, 80, 40)
+	-- Timeout fallback — jeśli serwer nie odpowie w 5s (np. zerwane połączenie / błąd
+	-- niezłapany przez guardBankRequest), reset przycisku żeby gracz nie utykał.
+	local thisClick = {}
+	pendingConfirmToken = thisClick
+	task.delay(5, function()
+		if pendingConfirmToken ~= thisClick then return end
+		pendingConfirmToken = nil
+		confirmBtn.Text             = "POTWIERDŹ"
+		confirmBtn.BackgroundColor3 = C_CONFIRM
+		showCapacityError("BRAK ODPOWIEDZI SERWERA — SPRÓBUJ ZNOWU")
+	end)
 end)
 
 -- ── Zdarzenia serwera ─────────────────────────────────────────────────────────
@@ -1190,13 +1242,23 @@ BankInit.OnClientEvent:Connect(function(data)
 			end
 		end
 	end
-	-- Dodaj pety z banku (po butelkach) — wypełniaj pierwsze wolne sloty
+	-- Dodaj pety z banku — preferuj zachowany slot z cache (per UUID).
+	-- Jeśli nie ma cache lub slot zajęty/poza zakresem → pierwszy wolny.
 	if type(data.bankPets) == "table" then
+		local petCache = _G["__bankPetSlotCache"]
 		for _, pet in ipairs(data.bankPets) do
-			for i = 1, SLOT_COUNT_B do
-				if not bankSlotArr[i] then
-					bankSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }
-					break
+			local preferredIdx = type(petCache) == "table" and tonumber(petCache[pet.id]) or nil
+			local placed = false
+			if preferredIdx and preferredIdx >= 1 and preferredIdx <= SLOT_COUNT_B and not bankSlotArr[preferredIdx] then
+				bankSlotArr[preferredIdx] = { rarity = "_pet", count = 1, pet = pet }
+				placed = true
+			end
+			if not placed then
+				for i = 1, SLOT_COUNT_B do
+					if not bankSlotArr[i] then
+						bankSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }
+						break
+					end
 				end
 			end
 		end
@@ -1239,17 +1301,37 @@ BankInit.OnClientEvent:Connect(function(data)
 			end
 		end
 	end
-	-- Dodaj pety z EQ (po butelkach) — wypełniaj pierwsze wolne sloty
+	-- Dodaj pety z EQ — preferuj zachowany slot z cache (per UUID).
 	if type(data.eqPets) == "table" then
+		local petCache = _G["__invPetSlotCache"]
 		for _, pet in ipairs(data.eqPets) do
-			for i = 1, SLOT_COUNT_B do
-				if not invSlotArr[i] then
-					invSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }
-					break
+			local preferredIdx = type(petCache) == "table" and tonumber(petCache[pet.id]) or nil
+			local placed = false
+			if preferredIdx and preferredIdx >= 1 and preferredIdx <= SLOT_COUNT_B and not invSlotArr[preferredIdx] then
+				invSlotArr[preferredIdx] = { rarity = "_pet", count = 1, pet = pet }
+				placed = true
+			end
+			if not placed then
+				for i = 1, SLOT_COUNT_B do
+					if not invSlotArr[i] then
+						invSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }
+						break
+					end
 				end
 			end
 		end
 	end
+
+	-- Oblicz overflow butelek (server snapshot - co weszło w panel UI).
+	-- Gdy gracz ma cap > 15 (np. 50), niektóre butelki nie mieszczą się w 15 slotach UI banku.
+	-- Bez tego klient gubił je przy POTWIERDŹ → server widział mniejszą sumę → conservation fail.
+	local placedInInv  = arrayToContents(invSlotArr,  SLOT_COUNT_B)
+	local placedInBank = arrayToContents(bankSlotArr, SLOT_COUNT_B)
+	for _, r in ipairs(RARITY_ORDER) do
+		invBpOverflow[r]  = math.max(0, (data.backpackContents[r] or 0) - (placedInInv[r]  or 0))
+		bankBpOverflow[r] = math.max(0, (data.bankContents[r]     or 0) - (placedInBank[r] or 0))
+	end
+
 	renderAll()
 
 	-- Animacja wejścia
@@ -1286,6 +1368,18 @@ do
 			if type(data) ~= "table" then return end
 			serverEqPetIds   = petIdSet(data.pets)
 			serverBankPetIds = petIdSet(data.bankPets)
+			-- Usuń z arr pety których już nie ma na serwerze (np. discard z innego UI).
+			-- Bez tego POTWIERDŹ wysyłałby UUID nieistniejącego peta → conservation fail.
+			local validIds: { [string]: boolean } = {}
+			for id in pairs(serverEqPetIds)   do validIds[id] = true end
+			for id in pairs(serverBankPetIds) do validIds[id] = true end
+			for i = 1, SLOT_COUNT_B do
+				local s = invSlotArr[i]
+				if s and isPetSlot(s) and not validIds[s.pet.id] then invSlotArr[i] = nil end
+				local sB = bankSlotArr[i]
+				if sB and isPetSlot(sB) and not validIds[sB.pet.id] then bankSlotArr[i] = nil end
+			end
+			renderAll()
 		end)
 	end
 end
@@ -1293,6 +1387,7 @@ end
 BankResult.OnClientEvent:Connect(function(result)
 	confirmBtn.Text             = "POTWIERDŹ"
 	confirmBtn.BackgroundColor3 = C_CONFIRM
+	pendingConfirmToken = nil  -- anuluj timeout fallback
 	if result.success then
 		-- Smart resync — zachowuje split layout który gracz ustawił (np. 10 → 5+5)
 		currentCapacity = tonumber(result.backpackCapacity) or currentCapacity
@@ -1308,32 +1403,59 @@ BankResult.OnClientEvent:Connect(function(result)
 			renderAll()
 			return
 		end
-		-- Najpierw czyścimy pety z obu arrays (server zwraca świeże listy), potem resync butelek
+		-- Zachowaj BIEŻĄCE pozycje petów (UUID → slotIdx) PRZED czyszczeniem.
+		-- Bez tego pety re-sortowały się po POTWIERDŹ od slotu 1, a butelki zostawały.
+		-- Pety mają trzymać slot tak samo jak butelki (split layout).
+		local prevInvPetSlot:  { [string]: number } = {}
+		local prevBankPetSlot: { [string]: number } = {}
+		for i = 1, SLOT_COUNT_B do
+			local sInv = invSlotArr[i]
+			if sInv and isPetSlot(sInv) then prevInvPetSlot[sInv.pet.id] = i end
+			local sBnk = bankSlotArr[i]
+			if sBnk and isPetSlot(sBnk) then prevBankPetSlot[sBnk.pet.id] = i end
+		end
+
+		-- Czyścimy pety i resync'ujemy butelki (smartResync zachowuje split layout butelek)
 		for i = 1, SLOT_COUNT_B do
 			if bankSlotArr[i] and isPetSlot(bankSlotArr[i]) then bankSlotArr[i] = nil end
 			if invSlotArr[i]  and isPetSlot(invSlotArr[i])  then invSlotArr[i]  = nil end
 		end
 		smartResyncArr(bankSlotArr, result.bankContents, SLOT_COUNT_B)
 		smartResyncArr(invSlotArr,  result.backpackContents, SLOT_COUNT_B)
-		-- Re-add pets z server response
+
+		-- Re-add pety zachowując pozycje sprzed transferu (per UUID).
+		-- Helper: spróbuj zachowany slot; jeśli zajęty/nieprawidłowy — pierwszy wolny.
+		local function placePetPreservingSlot(arr, pet, preferredIdx: number?)
+			if preferredIdx and preferredIdx >= 1 and preferredIdx <= SLOT_COUNT_B and not arr[preferredIdx] then
+				arr[preferredIdx] = { rarity = "_pet", count = 1, pet = pet }
+				return
+			end
+			for i = 1, SLOT_COUNT_B do
+				if not arr[i] then arr[i] = { rarity = "_pet", count = 1, pet = pet }; return end
+			end
+		end
 		if type(result.eqPets) == "table" then
 			for _, pet in ipairs(result.eqPets) do
-				for i = 1, SLOT_COUNT_B do
-					if not invSlotArr[i] then invSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }; break end
-				end
+				-- Pet mógł być po stronie banku przed transferem (drag bank→EQ) — sprawdzamy oba mapy
+				placePetPreservingSlot(invSlotArr, pet, prevInvPetSlot[pet.id] or prevBankPetSlot[pet.id])
 			end
 		end
 		if type(result.bankPets) == "table" then
 			for _, pet in ipairs(result.bankPets) do
-				for i = 1, SLOT_COUNT_B do
-					if not bankSlotArr[i] then bankSlotArr[i] = { rarity = "_pet", count = 1, pet = pet }; break end
-				end
+				placePetPreservingSlot(bankSlotArr, pet, prevBankPetSlot[pet.id] or prevInvPetSlot[pet.id])
 			end
 		end
 		-- Transfer zatwierdzony — odśwież snapshot serwera (kolejne zamknięcie bez zmian
 		-- nie zgłosi fałszywie "niezatwierdzonych" transferów)
 		serverBpContents   = result.backpackContents or serverBpContents
 		serverBankContents = result.bankContents or serverBankContents
+		-- Przelicz overflow z nowymi sumami (po transferze sumy się zmieniły).
+		local placedInInv2  = arrayToContents(invSlotArr,  SLOT_COUNT_B)
+		local placedInBank2 = arrayToContents(bankSlotArr, SLOT_COUNT_B)
+		for _, r in ipairs(RARITY_ORDER) do
+			invBpOverflow[r]  = math.max(0, (serverBpContents[r]   or 0) - (placedInInv2[r]  or 0))
+			bankBpOverflow[r] = math.max(0, (serverBankContents[r] or 0) - (placedInBank2[r] or 0))
+		end
 		serverEqPetIds     = petIdSet(result.eqPets)
 		serverBankPetIds   = petIdSet(result.bankPets)
 		syncInvLayoutToShared()  -- po confirm zapisz nowy layout do głównego ekwipunku
@@ -1345,6 +1467,10 @@ BankResult.OnClientEvent:Connect(function(result)
 		elseif result.reason == "bankFull" then msg = "SKARBIEC PEŁNY! (MAX " .. currentBankCap .. ")"
 		elseif result.reason == "locked" then msg = "BANK ZABLOKOWANY — KUP FUNDAMENT"
 		elseif result.reason == "broke" then msg = "ZA MAŁO ZŁ NA ULEPSZENIE"
+		elseif result.reason == "tooFar" then msg = "PODEJDŹ DO BANKIERA"
+		elseif result.reason == "throttled" then msg = "ZA SZYBKO — POCZEKAJ CHWILĘ"
+		elseif result.reason == "conservation" then msg = "BŁĄD SYNCHRONIZACJI — OTWÓRZ BANK PONOWNIE"
+		elseif result.reason == "invalid" then msg = "NIEPRAWIDŁOWE DANE"
 		end
 		showCapacityError(msg)
 	end

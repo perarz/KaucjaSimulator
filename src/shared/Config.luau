@@ -61,7 +61,7 @@ return {
 			Speed = 100,
 			CostType = "Gamepass",          -- Gamepass (one-time unlock), nie Developer Product
 			GamepassId = 1883460051,
-			RobuxPrice = 30,                -- info-only do UI
+			RobuxPrice = 39,                -- info-only do UI
 			gablota = 4,
 			color = Color3.fromRGB(230, 190, 60),
 		},
@@ -122,6 +122,7 @@ return {
 		SingleEggCost   = 500,            -- 1 jajko = 500 zł zawsze
 		TripleEggCost   = 1500,           -- 3 jajka = 1500 zł (tylko przy gamepass'ie)
 		TripleEggGamepassId = 1884317989, -- gamepass odblokowujący opcję 3-jajek
+		TripleEggPriceRobux = 39,         -- cena R$ na Roblox (do wyświetlenia w sklepie)
 
 		-- Hard cap równoczesnych petów wyposażonych (na razie 1)
 		MaxEquipped = 1,
