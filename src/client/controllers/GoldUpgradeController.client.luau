@@ -316,19 +316,31 @@ do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0.5, 0); c.Parent = disc
 end
 
--- Segmenty (radialne paski; pierwsze `filled` na żółto = łuk)
-local segs: { Frame } = {}
+-- Łuk koła: ring na obwodzie. Każdy "szprych" = transparentny rail od środka do rąbka,
+-- na końcu którego siedzi kolorowa końcówka (tip). Zapalone końcówki tworzą żółty łuk
+-- WZDŁUŻ obwodu (nie wypełniają całego pola koła).
+local RING_THICK = 22
+local segs: { Frame } = {}  -- końcówki (tips)
 for i = 0, SEG_N - 1 do
-	local bar = Instance.new("Frame")
-	bar.Size             = UDim2.fromOffset(SEG_W, WHEEL_R)
-	bar.AnchorPoint      = Vector2.new(0.5, 1)
-	bar.Position         = UDim2.fromScale(0.5, 0.5)
-	bar.Rotation         = i * SEG_STEP
-	bar.BackgroundColor3 = C_DISC
-	bar.BorderSizePixel  = 0
-	bar.ZIndex           = 5
-	bar.Parent           = wheel
-	segs[i + 1] = bar
+	local spoke = Instance.new("Frame")
+	spoke.Size                   = UDim2.fromOffset(SEG_W, WHEEL_R)
+	spoke.AnchorPoint            = Vector2.new(0.5, 1)
+	spoke.Position               = UDim2.fromScale(0.5, 0.5)
+	spoke.Rotation               = i * SEG_STEP
+	spoke.BackgroundTransparency = 1
+	spoke.BorderSizePixel        = 0
+	spoke.ZIndex                 = 5
+	spoke.Parent                 = wheel
+
+	local tip = Instance.new("Frame")
+	tip.Size                   = UDim2.new(1, 0, 0, RING_THICK)
+	tip.Position               = UDim2.fromOffset(0, 0)  -- górny (zewnętrzny) koniec railu = rąbek
+	tip.BackgroundColor3       = C_ARC
+	tip.BackgroundTransparency = 1                       -- domyślnie zgaszone
+	tip.BorderSizePixel        = 0
+	tip.ZIndex                 = 6
+	tip.Parent                 = spoke
+	segs[i + 1] = tip
 end
 
 -- Obramowanie koła (na wierzchu, maskuje postrzępiony rąbek) — NIE rotuje
@@ -398,11 +410,11 @@ luckTag.Visible                = false
 luckTag.ZIndex                 = 12
 luckTag.Parent                 = wheelHolder
 
--- setArc: żółty łuk od góry, zgodny z ruchem wskazówek
+-- setArc: zapala żółty łuk na obwodzie (od góry, zgodnie z ruchem wskazówek).
 local function setArc(percent: number)
 	local filled = math.floor((math.clamp(percent, 0, 100) / 100) * SEG_N + 0.5)
 	for i = 1, SEG_N do
-		segs[i].BackgroundColor3 = (i <= filled) and C_ARC or C_DISC
+		segs[i].BackgroundTransparency = (i <= filled) and 0 or 1
 	end
 end
 
@@ -448,48 +460,34 @@ spinBtn.AnchorPoint = Vector2.new(0.5, 0)
 spinBtn.Position    = UDim2.new(0.5, 0, 0, WHEEL_D + 116)
 spinLbl.TextSize    = 26
 
--- REROLL (Robux) — po przegranej
-local rerollBtn = Instance.new("ImageButton")
-rerollBtn.Size                   = UDim2.fromOffset(150, 64)
-rerollBtn.AnchorPoint            = Vector2.new(0.5, 0)
-rerollBtn.Position               = UDim2.new(0.5, -90, 0, WHEEL_D + 184)
-rerollBtn.BackgroundColor3       = C_BG
-rerollBtn.BorderSizePixel        = 0
-rerollBtn.AutoButtonColor        = true
-rerollBtn.Image                  = (gcfg.Reroll and gcfg.Reroll.Image) or ""
-rerollBtn.ScaleType              = Enum.ScaleType.Fit
-rerollBtn.Visible                = false
-rerollBtn.ZIndex                 = 6
-rerollBtn.Parent                 = col2
-do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = rerollBtn
-	local s = Instance.new("UIStroke"); s.Color = C_GOLD; s.Thickness = 2; s.Parent = rerollBtn
-	local cap = Instance.new("TextLabel")
-	cap.Size = UDim2.new(1, 0, 0, 18); cap.Position = UDim2.new(0, 0, 1, -18)
-	cap.BackgroundTransparency = 1; cap.Text = "REROLL"; cap.Font = FONT; cap.TextSize = 14
-	cap.TextColor3 = C_GOLD; cap.ZIndex = 7; cap.Parent = rerollBtn
+-- Sam obrazek (bez ramki/napisu), tylko hover-scale.
+local PROD_W, PROD_H = 200, 84
+local function makeProductBtn(xOff: number): ImageButton
+	local b = Instance.new("ImageButton")
+	b.Size                   = UDim2.fromOffset(PROD_W, PROD_H)
+	b.AnchorPoint            = Vector2.new(0.5, 0)
+	b.Position               = UDim2.new(0.5, xOff, 0, WHEEL_D + 178)
+	b.BackgroundTransparency = 1
+	b.BorderSizePixel        = 0
+	b.AutoButtonColor        = false
+	b.ScaleType              = Enum.ScaleType.Fit
+	b.ZIndex                 = 6
+	b.Parent                 = col2
+	local sc = Instance.new("UIScale"); sc.Parent = b
+	local ti = TweenInfo.new(0.1)
+	b.MouseEnter:Connect(function() if b.Active then TweenService:Create(sc, ti, { Scale = 1.06 }):Play() end end)
+	b.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.0 }):Play() end)
+	return b
 end
 
--- 2x LUCK (Robux) — przed spinem
-local luckBtn = Instance.new("ImageButton")
-luckBtn.Size                   = UDim2.fromOffset(150, 64)
-luckBtn.AnchorPoint            = Vector2.new(0.5, 0)
-luckBtn.Position               = UDim2.new(0.5, 90, 0, WHEEL_D + 184)
-luckBtn.BackgroundColor3       = C_BG
-luckBtn.BorderSizePixel        = 0
-luckBtn.AutoButtonColor        = true
-luckBtn.Image                  = (gcfg.DoubleLuck and gcfg.DoubleLuck.Image) or ""
-luckBtn.ScaleType              = Enum.ScaleType.Fit
-luckBtn.ZIndex                 = 6
-luckBtn.Parent                 = col2
-do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = luckBtn
-	local s = Instance.new("UIStroke"); s.Color = C_GOLD; s.Thickness = 2; s.Parent = luckBtn
-	local cap = Instance.new("TextLabel")
-	cap.Size = UDim2.new(1, 0, 0, 18); cap.Position = UDim2.new(0, 0, 1, -18)
-	cap.BackgroundTransparency = 1; cap.Text = "2x LUCK"; cap.Font = FONT; cap.TextSize = 14
-	cap.TextColor3 = C_GOLD; cap.ZIndex = 7; cap.Parent = luckBtn
-end
+-- REROLL (Robux) — po przegranej
+local rerollBtn = makeProductBtn(-110)
+rerollBtn.Image   = (gcfg.Reroll and gcfg.Reroll.Image) or ""
+rerollBtn.Visible = false
+
+-- 2x LUCK (Robux) — przed spinem oraz po przegranej (per spin)
+local luckBtn = makeProductBtn(110)
+luckBtn.Image = (gcfg.DoubleLuck and gcfg.DoubleLuck.Image) or ""
 
 -- ── COL3: gold pet + ODBIERZ ────────────────────────────────────────────────
 local goldFrame = Instance.new("Frame")
@@ -658,6 +656,10 @@ local function rebuildPets()
 				check.Visible = false
 				if #selected == 0 then selectedRarity = nil end
 			else
+				if pet.gold then
+					showToast("Nie można zaznaczać złotych petów")
+					return
+				end
 				if not eligibleRarity(pet.rarity) then
 					showToast("Tej rzadkości nie można ulepszać")
 					return
@@ -710,12 +712,14 @@ local function animateSpin(percent: number, won: boolean, onDone: () -> ())
 	local add  = (targetMod - (base % 360)) % 360
 	local final = base + add
 
-	-- Tick SFX na przejście segmentu pod wskaźnikiem
-	local lastSeg = -1
+	-- Tick SFX per "ząbek" koła (12 na obrót) — zwalnia razem z kołem (Quint Out),
+	-- jak roulette kosza/gabloty. NIE per-segment (120/obr to była kakofonia/za głośno).
+	local NOTCH_DEG = 30
+	local lastNotch = nil
 	spinTick = RunService.RenderStepped:Connect(function()
-		local seg = math.floor(((360 - (wheel.Rotation % 360)) % 360) / SEG_STEP)
-		if seg ~= lastSeg then
-			lastSeg = seg
+		local n = math.floor((wheel.Rotation % 360) / NOTCH_DEG)
+		if n ~= lastNotch then
+			lastNotch = n
 			playSfx("RouletteTick")
 		end
 	end)
@@ -829,7 +833,8 @@ rerollBtn.MouseButton1Click:Connect(function()
 end)
 
 luckBtn.MouseButton1Click:Connect(function()
-	if phase ~= "select" then return end
+	-- 2x luck można kupić przed spinem ORAZ po przegranej (per spin, na reroll).
+	if phase ~= "select" and phase ~= "lost" then return end
 	if luckActive then showToast("2x LUCK już aktywne", C_GOLD); return end
 	playSfx("Click")
 	GoldUpgradeBuy:FireServer("luck")
@@ -895,6 +900,8 @@ GoldUpgradeResult.OnClientEvent:Connect(function(res)
 			goldImg.Image = res.goldImage or ""
 			goldImg.Visible = res.goldImage ~= nil
 			goldPlaceholder.Visible = res.goldImage == nil
+			rerollBtn.Visible = false
+			luckBtn.Visible = false
 			setClaimWon(true)
 			percentLbl.Visible = true
 			percentLbl.Text = "WYGRANA!"
@@ -918,7 +925,7 @@ GoldUpgradeResult.OnClientEvent:Connect(function(res)
 			percentLbl.Text = "PUDŁO"
 			percentLbl.TextColor3 = X_RED
 			rerollBtn.Visible = true
-			luckBtn.Visible = false
+			luckBtn.Visible = true   -- 2x luck zostaje (per-spin, na reroll)
 			setSpinEnabled(false)
 			task.delay(0.05, function() percentLbl.TextColor3 = C_WHITE end)
 		end
