@@ -134,13 +134,21 @@ local function findEquippedPet(data)
 	return nil
 end
 
+-- Mnożnik gold peta (+15% do statystyk). Zwykły pet → 1.
+local function goldMul(pet): number
+	if pet and pet.gold then
+		return (cfg.GoldUpgrade and cfg.GoldUpgrade.StatMultiplier) or 1
+	end
+	return 1
+end
+
 function PetService.GetMoneyMul(player: Player): number
 	if not player or not player.Parent then return 1 end
 	local data = PlayerDataService.GetData(player)
 	local p = findEquippedPet(data)
 	if not p then return 1 end
 	local rcfg = rarityCfg(p.rarity)
-	return (rcfg and rcfg.moneyMul) or 1
+	return ((rcfg and rcfg.moneyMul) or 1) * goldMul(p)
 end
 
 function PetService.GetSpeedBonus(player: Player): number
@@ -150,7 +158,7 @@ function PetService.GetSpeedBonus(player: Player): number
 	if not p then return 0 end
 	local ccfg = classCfg(p.class)
 	if not ccfg or ccfg.effect ~= "speed" then return 0 end
-	return (ccfg.bonuses[p.rarity]) or 0
+	return math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
 end
 
 function PetService.GetHpBonus(player: Player): number
@@ -160,7 +168,7 @@ function PetService.GetHpBonus(player: Player): number
 	if not p then return 0 end
 	local ccfg = classCfg(p.class)
 	if not ccfg or ccfg.effect ~= "hp" then return 0 end
-	return (ccfg.bonuses[p.rarity]) or 0
+	return math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
 end
 
 -- ── Visual pet (server-side spawn, wszyscy widzą) ──────────────────────────
@@ -363,6 +371,7 @@ local function pushHud(player: Player)
 		magnetCount      = data.MagnetCount or 0,
 	})
 end
+PetService.PushHud = pushHud
 
 -- ── Gamepass check ─────────────────────────────────────────────────────────
 local function checkGamepass(player: Player): boolean

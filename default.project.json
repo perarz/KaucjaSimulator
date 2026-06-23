@@ -88,6 +88,9 @@
         },
         "PetGablotaController": {
           "$path": "src/client/controllers/PetGablotaController.client.luau"
+        },
+        "GoldUpgradeController": {
+          "$path": "src/client/controllers/GoldUpgradeController.client.luau"
         }
       }
     },
@@ -162,6 +165,9 @@
       },
       "PetService": {
         "$path": "src/server/services/PetService.luau"
+      },
+      "GoldPetService": {
+        "$path": "src/server/services/GoldPetService.luau"
       },
       "PlayerCollisionService": {
         "$path": "src/server/services/PlayerCollisionService.luau"
@@ -259,7 +265,13 @@
         "UnequipPet":          { "$className": "RemoteEvent" },
         "DiscardPet":          { "$className": "RemoteEvent" },
         "PetStatusUpdate":     { "$className": "RemoteEvent" },
-        "PromptPetGamepassBuy":{ "$className": "RemoteEvent" }
+        "PromptPetGamepassBuy":{ "$className": "RemoteEvent" },
+        "OpenGoldUpgrade":     { "$className": "RemoteEvent" },
+        "GoldUpgradeSpin":     { "$className": "RemoteEvent" },
+        "GoldUpgradeResult":   { "$className": "RemoteEvent" },
+        "GoldUpgradeClaim":    { "$className": "RemoteEvent" },
+        "GoldUpgradeBuy":      { "$className": "RemoteEvent" },
+        "GoldUpgradeProduct":  { "$className": "RemoteEvent" }
       }
     },
 

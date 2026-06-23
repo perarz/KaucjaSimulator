@@ -135,6 +135,43 @@ return {
 
 		-- Cooldown server-side przy OpenEgg (anty-spam)
 		OpenCooldownSec = 4.0,  -- pokrywa animację ruletki (3.5s) + fade-out (0.35s) — defense in depth obok klientowego gate'u spinning.
+
+		-- ── Ulepszanie peta na ZŁOTEGO (rig "steve10die" w workspace.PUSTYNIA) ──
+		-- Gracz zaznacza 1-5 petów TEJ SAMEJ rzadkości → koło fortuny. Liczba petów =
+		-- procent szansy (1=20% … 5=100%). Wygrana → 1 gold pet (rarity = wsadu, klasa =
+		-- klasa większości, statystyki ×StatMultiplier). Przegrana → wsad przepada.
+		-- Pety są "stake'owane" przy ZAKRĘĆ; reroll (Robux) pozwala kręcić ponownie tym
+		-- samym wsadem. 2x luck (Robux) jednorazowo na spin podwaja procent.
+		GoldUpgrade = {
+			StatMultiplier = 1.15,         -- gold pet ma +15% do statystyk zwykłego peta tej rzadkości/klasy
+			MaxSelect      = 5,            -- max petów na jeden spin
+			PercentPerPet  = 20,          -- 1 pet = 20%, 5 petów = 100%
+			SpinSeconds    = 3.5,         -- czas animacji koła (jak roulette kosza)
+			SpinRotations  = 5,           -- ile pełnych obrotów koła zanim się zatrzyma
+			Throttle       = 0.4,         -- anty-spam server-side
+			MaxDist        = 18,          -- dystans HRP → rig (anti-exploit)
+			RigName        = "steve10die",
+			RigContainer   = "PUSTYNIA",  -- katalog/model w workspace zawierający riga
+
+			-- Obrazek gold peta per rzadkość wsadu (część 3 UI + tekstura w EQ).
+			-- Tylko te rzadkości można ulepszać (Huge nie ma obrazka → niedozwolone).
+			Images = {
+				Common    = "rbxassetid://132288921287087",
+				Rare      = "rbxassetid://112329854262606",
+				Epic      = "rbxassetid://105106767734269",
+				Legendary = "rbxassetid://132662083437235",
+			},
+
+			-- Developer Products (Robux) — obsługiwane w BoostShopService.ProcessReceipt
+			Reroll = {
+				ProductId = 3606257973,
+				Image     = "rbxassetid://88009445359522",
+			},
+			DoubleLuck = {
+				ProductId = 3606258769,
+				Image     = "rbxassetid://125626173802893",
+			},
+		},
 	},
 
 	-- Magnes — używany item z ekwipunku. Aktywacja na 2 min: serwer co tick zbiera
