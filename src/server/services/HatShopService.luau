@@ -66,9 +66,10 @@ task.spawn(function()
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText            = "Sklep z czapkami"
 	prompt.ObjectText            = "Kasjer"
-	prompt.MaxActivationDistance = 10
+	prompt.MaxActivationDistance = 14
 	prompt.HoldDuration          = 0
 	prompt.RequiresLineOfSight   = false
+	prompt.UIOffset              = Vector2.new(0, -100)
 	prompt.Parent                = anchor
 
 	prompt.Triggered:Connect(function(player: Player)

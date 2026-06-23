@@ -15,12 +15,14 @@ local PromptBoostPurchase = Events:WaitForChild("PromptBoostPurchase")
 
 local BoostShopService = {}
 
-local doubleEarnUntil: { [Player]: number } = {}   -- [player] = os.clock() do kiedy aktywny
+-- [player] = os.time() epoch do kiedy aktywny. Epoch (NIE os.clock()) — przeżywa restart serwera
+-- gdy zsynchronizujemy z data.DoubleEarnUntil w PlayerData.
+local doubleEarnUntil: { [Player]: number } = {}
 
 -- Public: użyte przez BottleService butelkomat
 function BoostShopService.GetEarnMultiplier(player: Player): number
 	local until_ = doubleEarnUntil[player]
-	if until_ and os.clock() < until_ then
+	if until_ and os.time() < until_ then
 		return Config.BoostShop.DoubleEarn.Multiplier or 2
 	end
 	return 1
@@ -29,7 +31,7 @@ end
 local function syncBoostStatus(player: Player)
 	local until_ = doubleEarnUntil[player]
 	local remaining = 0
-	if until_ then remaining = math.max(0, until_ - os.clock()) end
+	if until_ then remaining = math.max(0, until_ - os.time()) end
 	BoostStatusUpdate:FireClient(player, {
 		doubleEarnRemainingSec = remaining,
 		productId              = Config.BoostShop.DoubleEarn.ProductId,
@@ -39,17 +41,25 @@ end
 
 local function activateDoubleEarn(player: Player)
 	local duration = Config.BoostShop.DoubleEarn.DurationSec or 600
-	local now = os.clock()
+	local now = os.time()
 	-- Jeśli już ma aktywny, doliczamy do końca (cumulative)
 	local current = doubleEarnUntil[player]
+	local newUntil
 	if current and current > now then
-		doubleEarnUntil[player] = current + duration
+		newUntil = current + duration
 	else
-		doubleEarnUntil[player] = now + duration
+		newUntil = now + duration
+	end
+	doubleEarnUntil[player] = newUntil
+	-- Persist w PlayerData — restart serwera nie kasuje boostu.
+	local data = PlayerDataService.GetData(player)
+	if data then
+		data.DoubleEarnUntil = newUntil
+		PlayerDataService.SaveData(player)
 	end
 	syncBoostStatus(player)
 	print(string.format("[BoostShop] %s aktywował x2 KASA — koniec za %ds",
-		player.Name, math.floor(doubleEarnUntil[player] - now)))
+		player.Name, math.floor(newUntil - now)))
 end
 
 -- Paczka złotówek za Robux — dolicza PLN do salda gracza (jak deska VIP: ProcessReceipt).
@@ -136,8 +146,10 @@ task.spawn(function()
 	while true do
 		task.wait(1)
 		for player, until_ in pairs(doubleEarnUntil) do
-			if os.clock() >= until_ then
+			if os.time() >= until_ then
 				doubleEarnUntil[player] = nil
+				local data = PlayerDataService.GetData(player)
+				if data then data.DoubleEarnUntil = 0 end  -- wyczyść persystowane pole
 				syncBoostStatus(player)
 				print("[BoostShop]", player.Name, "boost x2 skończony")
 			else
@@ -147,9 +159,18 @@ task.spawn(function()
 	end
 end)
 
--- Initial sync
+-- Initial sync + RESTORE boostu po restarcie serwera
 Players.PlayerAdded:Connect(function(player)
 	task.wait(1)
+	local data = PlayerDataService.GetData(player)
+	if data then
+		local saved = data.DoubleEarnUntil or 0
+		if saved > os.time() then
+			doubleEarnUntil[player] = saved
+			print(string.format("[BoostShop] %s — restore boostu, koniec za %ds",
+				player.Name, math.floor(saved - os.time())))
+		end
+	end
 	syncBoostStatus(player)
 end)
 

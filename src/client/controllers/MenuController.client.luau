@@ -165,10 +165,53 @@ do
 	end)
 end
 
+-- ── Money label w prawym górnym rogu (lewo od X-close) ────────────────────
+-- Wallet HUD jest schowany gdy modalka otwarta (moveLockCount > 0), więc bez tego gracz
+-- nie widzi swojego salda w menu. Czyta na bieżąco leaderstats.Zlotowki.
+local MONEY_W = 240
+local MONEY_GAP = 12  -- gap od X-close (52 wide + 16 right margin)
+local moneyLbl = Instance.new("TextLabel")
+moneyLbl.AnchorPoint            = Vector2.new(1, 0)
+moneyLbl.Position               = UDim2.new(1, -(16 + 52 + MONEY_GAP), 0, 18)
+moneyLbl.Size                   = UDim2.fromOffset(MONEY_W, 44)
+moneyLbl.BackgroundColor3       = C_HEADER
+moneyLbl.BorderSizePixel        = 0
+moneyLbl.Text                   = "0 PLN"
+moneyLbl.Font                   = FONT_MAIN
+moneyLbl.TextSize               = 22
+moneyLbl.TextColor3             = C_ACCENT_GREEN
+moneyLbl.ZIndex                 = 9
+moneyLbl.Parent                 = panel
+mkCorner(moneyLbl, 8)
+mkStroke(moneyLbl, C_BORDER, 3)
+
+do
+	local function formatMoney(n: number): string
+		n = tonumber(n) or 0
+		if math.abs(n - math.floor(n)) < 0.005 then
+			return string.format("%d PLN", math.floor(n))
+		end
+		return string.format("%.2f PLN", n)
+	end
+	local function updateMoney(zl)
+		if zl then moneyLbl.Text = formatMoney(zl.Value) end
+	end
+	task.spawn(function()
+		local ls = player:WaitForChild("leaderstats", 30)
+		if not ls then return end
+		local zl = ls:WaitForChild("Zlotowki", 30)
+		if not zl then return end
+		updateMoney(zl)
+		zl:GetPropertyChangedSignal("Value"):Connect(function() updateMoney(zl) end)
+	end)
+end
+
 -- ── Pasek zakładek (pill shape, no border, inny kolor) ────────────────────
+-- Szerokość: -60 na X-close - MONEY_W - MONEY_GAP*2 (gap z każdej strony money label).
+local TABBAR_RIGHT_RESERVE = 60 + MONEY_W + MONEY_GAP * 2
 local tabBar = Instance.new("Frame")
 tabBar.Position           = UDim2.fromOffset(CONTENT_PAD, CONTENT_PAD)
-tabBar.Size               = UDim2.new(1, -CONTENT_PAD * 2 - 60, 0, TABBAR_H)  -- -60 zostaw miejsce na X
+tabBar.Size               = UDim2.new(1, -CONTENT_PAD * 2 - TABBAR_RIGHT_RESERVE, 0, TABBAR_H)
 tabBar.BackgroundColor3   = C_TABBAR
 tabBar.BorderSizePixel    = 0
 tabBar.Parent             = panel
@@ -200,7 +243,7 @@ local isMenuOpen = false
 -- Obliczanie pozycji zakładki — równo rozłożone na pasku
 local function tabRect(idx: number): (UDim2, UDim2)
 	local tabAbsW = tabBar.AbsoluteSize.X
-	if tabAbsW <= 0 then tabAbsW = MENU_W - CONTENT_PAD * 2 - 60 end  -- pre-layout fallback
+	if tabAbsW <= 0 then tabAbsW = MENU_W - CONTENT_PAD * 2 - TABBAR_RIGHT_RESERVE end  -- pre-layout fallback
 	local cellW = (tabAbsW - TABBAR_PAD * 2) / #TABS
 	local x     = TABBAR_PAD + (idx - 1) * cellW
 	return UDim2.fromOffset(x, TABBAR_PAD),

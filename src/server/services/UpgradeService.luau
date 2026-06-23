@@ -129,6 +129,39 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 		return
 	end
 
+	-- ── Wytrzymałość (odnoga Stamina — single-level, wymaga SpeedLevel >= 2) ──
+	if upgradeType == "Stamina" then
+		if (data.BaseLevel or 0) < 1 then
+			SkillTreeUpdate:FireClient(player, { success = false, reason = "needBase" })
+			return
+		end
+		if (data.SpeedLevel or 0) < 2 then
+			SkillTreeUpdate:FireClient(player, { success = false, reason = "needSpeed2" })
+			return
+		end
+		if (data.StaminaLevel or 0) >= 1 then
+			SkillTreeUpdate:FireClient(player, { success = false, reason = "already" })
+			return
+		end
+		if not deductCost(data, Config.StaminaUpgrade.Cost, Config.StaminaUpgrade.CostType) then
+			SkillTreeUpdate:FireClient(player, { success = false, reason = "broke" })
+			return
+		end
+		data.StaminaLevel = 1
+		PlayerDataService.UpdateLeaderstats(player)
+		QuestService.AddProgress(player, "buy_skill", { amount = 1 })
+		pcall(function()
+			local sqs = require(script.Parent.StoryQuestService)
+			sqs.AddProgress(player, "buy_skill", 1)
+		end)
+		SkillTreeUpdate:FireClient(player, {
+			success     = true,
+			upgradeType = "Stamina",
+			newLevel    = 1,
+		})
+		return
+	end
+
 	-- ── Gałęzie Speed / Multiplier ─────────────────────────────────────
 	local meta = UPGRADE_META[upgradeType]
 	if not meta then return end

@@ -18,7 +18,7 @@ local KoszService = {}
 
 local KOSZ_HOLD_DURATION = 2.0
 local KOSZ_COOLDOWN_SEC  = 30      -- ile sekund kosz jest "pusty" po przeszukaniu
-local KOSZ_PROMPT_DIST   = 7
+local KOSZ_PROMPT_DIST   = 12  -- było 7 — przy crowdzie 40+ graczy ciężko podejść
 
 local rarityOrder = { "Zwykla", "Rzadka", "Epicka", "Legendarna", "Mityczny" }
 
@@ -97,6 +97,7 @@ local function setupKoszPrompt(kosz: Instance)
 	prompt.HoldDuration          = KOSZ_HOLD_DURATION
 	prompt.MaxActivationDistance = KOSZ_PROMPT_DIST
 	prompt.RequiresLineOfSight   = false
+	prompt.UIOffset              = Vector2.new(0, -100)  -- prompt nad głowami innych graczy
 	prompt.Parent                = anchor
 
 	prompt.Triggered:Connect(function(player: Player)

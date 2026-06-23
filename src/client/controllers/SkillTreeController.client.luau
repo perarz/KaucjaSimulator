@@ -227,6 +227,7 @@ local pData = {
 	SpeedLevel      = 0,
 	MultiplierLevel = 0,
 	LuckLevel       = 0,
+	StaminaLevel    = 0,
 	Zlotowki        = 0,
 }
 
@@ -252,6 +253,15 @@ local function tryBuy(branch: string, level: number): boolean
 		return true
 	end
 
+	-- Stamina: single-level, wymaga SpeedLevel >= 2
+	if branch == "Stamina" then
+		if (pData.StaminaLevel or 0) >= 1 then return false end
+		if pData.SpeedLevel < 2 then return false end
+		if Config.StaminaUpgrade.Cost > pData.Zlotowki then return false end
+		BuySkillUpgrade:FireServer("Stamina", 1)
+		return true
+	end
+
 	local cur, upgrades
 	if branch == "Speed" then
 		cur, upgrades = pData.SpeedLevel, Config.SpeedUpgrades
@@ -270,6 +280,13 @@ local function nodeState(branch: string, level: number): string
 		if pData.LuckLevel >= 1 then return "purchased" end
 		if pData.BaseLevel < 1 then return "locked" end
 		if pData.MultiplierLevel < 2 then return "locked" end
+		return "available"
+	end
+
+	if branch == "Stamina" then
+		if (pData.StaminaLevel or 0) >= 1 then return "purchased" end
+		if pData.BaseLevel < 1 then return "locked" end
+		if pData.SpeedLevel < 2 then return "locked" end
 		return "available"
 	end
 
@@ -657,6 +674,8 @@ local function applyDetailStatus()
 		cost = Config.SpeedUpgrades[detailLevel].Cost
 	elseif detailBranch == "Multiplier" then
 		cost = Config.MultiplierUpgrades[detailLevel].Cost
+	elseif detailBranch == "Stamina" then
+		cost = Config.StaminaUpgrade.Cost
 	else  -- Luck
 		cost = Config.LuckUpgrade.Cost
 	end
@@ -687,6 +706,8 @@ local function applyDetailStatus()
 		detBadge.TextColor3 = Color3.fromRGB(220, 80, 80)
 		detCostLbl.Text = if detailBranch == "Luck" and pData.MultiplierLevel < 2
 			then "Wymaga Mnożnika poziom 2"
+			elseif detailBranch == "Stamina" and pData.SpeedLevel < 2
+			then "Wymaga Prędkości poziom 2"
 			elseif detailBranch ~= "Base" and pData.BaseLevel < 1
 			then "Kup Fundament najpierw"
 			else "Wymaga poprzedniego poziomu"
@@ -748,6 +769,12 @@ local function showDetail(branch: string, level: number)
 		detSubtitle.Text = "Szczęście — odnoga Mnożnika"
 		detEffect.Text   = "Podwaja szanse na lepsze rzadkości w koszach (Rzadka × " .. up.LuckMultiplier
 			.. ", Epicka × " .. up.LuckMultiplier .. ", Legendarna × " .. up.LuckMultiplier .. ")."
+	elseif branch == "Stamina" then
+		local up = Config.StaminaUpgrade
+		detTitle.Text    = string.upper(up.Name)
+		detSubtitle.Text = "Wytrzymałość — odnoga Prędkości"
+		detEffect.Text   = "+" .. (up.StaminaBonus or 50)
+			.. " do maksymalnej staminy (dłuższy sprint). Sumuje się z bonusem czapki."
 	end
 
 	-- Pokaż content, ukryj placeholder (detail panel jest zawsze widoczny w menu)
@@ -857,9 +884,12 @@ local L1_CY      = BASE_CY - V_STEP      -- 388
 local SPEED_CX   = BASE_CX - BRANCH_DX
 local MULT_CX    = BASE_CX + BRANCH_DX
 local LUCK_CX    = MULT_CX + 130            -- odnoga w prawo od Mult column
+local STAMINA_CX = SPEED_CX - 130           -- odnoga w lewo od Speed column
 
 -- Accent kolor dla Luck (fioletowy)
-local C_LUCK_ACC = Color3.fromRGB(150, 90, 200)
+local C_LUCK_ACC    = Color3.fromRGB(150, 90, 200)
+-- Accent dla Stamina (cyjan/turkus — odróżnia od Speed niebieskiego)
+local C_STAMINA_ACC = Color3.fromRGB(80, 200, 200)
 
 type NodeDef = {
 	branch: string,
@@ -875,6 +905,7 @@ local NODES_ORDER: { string } = {
 	"Speed_1", "Speed_2", "Speed_3", "Speed_4",
 	"Mult_1",  "Mult_2",  "Mult_3",  "Mult_4",
 	"Luck_1",
+	"Stamina_1",
 }
 
 local NODES: { [string]: NodeDef } = {
@@ -892,6 +923,9 @@ local NODES: { [string]: NodeDef } = {
 
 	-- Odnoga "Szczęście" od Mult_2 w prawo (fioletowy, ★ icon)
 	Luck_1  = { branch = "Luck",       level = 1, cx = LUCK_CX,  cy = L1_CY - V_STEP,    accent = C_LUCK_ACC,  icon = ICON_BASE  },
+
+	-- Odnoga "Wytrzymałość" od Speed_2 w lewo (cyjan, +50 max stamina)
+	Stamina_1 = { branch = "Stamina",  level = 1, cx = STAMINA_CX, cy = L1_CY - V_STEP,  accent = C_STAMINA_ACC, icon = ICON_SPEED },
 }
 
 type NodeHandle = {
@@ -944,6 +978,7 @@ for lv = 1, 3 do
 end
 -- Odnoga: Luck rozgałęzia się z Mult_2 w prawo
 drawLine("Mult_2", "Luck_1")
+drawLine("Speed_2", "Stamina_1")
 
 -- Tworzymy hexy
 for _, key in ipairs(NODES_ORDER) do
@@ -1175,6 +1210,7 @@ SkillTreeUpdate.OnClientEvent:Connect(function(result)
 	if result.upgradeType == "Speed"      then pData.SpeedLevel      = result.newLevel end
 	if result.upgradeType == "Multiplier" then pData.MultiplierLevel = result.newLevel end
 	if result.upgradeType == "Luck"       then pData.LuckLevel       = result.newLevel end
+	if result.upgradeType == "Stamina"    then pData.StaminaLevel    = result.newLevel end
 
 	playSfx("Buy")
 	playSfx("LevelUp")
@@ -1216,5 +1252,6 @@ SkillTreeInit.OnClientEvent:Connect(function(data)
 	pData.SpeedLevel      = data.speedLevel      or 0
 	pData.MultiplierLevel = data.multiplierLevel or 0
 	pData.LuckLevel       = data.luckLevel       or 0
+	pData.StaminaLevel    = data.staminaLevel    or 0
 	renderNodes()
 end)

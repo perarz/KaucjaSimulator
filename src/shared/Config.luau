@@ -134,7 +134,7 @@ return {
 		MaxEquipped = 1,
 
 		-- Cooldown server-side przy OpenEgg (anty-spam)
-		OpenCooldownSec = 1.0,
+		OpenCooldownSec = 4.0,  -- pokrywa animację ruletki (3.5s) + fade-out (0.35s) — defense in depth obok klientowego gate'u spinning.
 	},
 
 	-- Magnes — używany item z ekwipunku. Aktywacja na 2 min: serwer co tick zbiera
@@ -288,7 +288,16 @@ return {
 		Cost = 2000,
 		CostType = "Zlotowki",
 		Name = "Talizman Szczęścia",
-		LuckMultiplier = 2, -- chances dla R/E/L × 2, Zwykla zmniejsza się proporcjonalnie
+		LuckMultiplier = 2, -- chances dla R/E/L R/E/L × 2, Zwykla zmniejsza się proporcjonalnie
+	},
+
+	-- Skill Tree: Stamina — odnoga od Speed L2 (wymaga SpeedLevel >= 2).
+	-- Single-level upgrade. +50 max stamina (sumuje się z bonusem czapki).
+	StaminaUpgrade = {
+		Cost = 3000,
+		CostType = "Zlotowki",
+		Name = "Wytrzymałość",
+		StaminaBonus = 50, -- doliczane do SprintController.STAMINA_MAX_BASE (sumuje z czapką)
 	},
 
 	-- Sklep: Plecak (pojemność) — osobny sklep, NIE skill tree

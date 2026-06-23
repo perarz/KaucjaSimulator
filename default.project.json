@@ -71,6 +71,9 @@
         "MobileControlsController": {
           "$path": "src/client/controllers/MobileControlsController.client.luau"
         },
+        "CrowdTransparencyController": {
+          "$path": "src/client/controllers/CrowdTransparencyController.client.luau"
+        },
         "PvPEntryGuiController": {
           "$path": "src/client/controllers/PvPEntryGuiController.client.luau"
         },

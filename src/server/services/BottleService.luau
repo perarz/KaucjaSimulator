@@ -67,14 +67,18 @@ local function setupSpawnPoints()
 	spawnPointsFolder = workspace:FindFirstChild("BottleSpawnPoints") :: Folder
 end
 
--- Dodaje ProximityPrompt i tag CollectionService do danej części
+-- Dodaje ProximityPrompt i tag CollectionService do danej części.
+-- MaxActivationDistance 14 (było 8) + UIOffset.Y = -100 — żeby przy crowdzie 40+ graczy
+-- nie trzeba było wciskać się w tłum i prompt UI nie ginął za głowami innych.
 local function tagAsButelkomat(part: BasePart, objectText: string)
 	if not part:FindFirstChildOfClass("ProximityPrompt") then
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText            = "Oddaj butelki"
 		prompt.ObjectText            = objectText
-		prompt.MaxActivationDistance = 8
+		prompt.MaxActivationDistance = 14
 		prompt.HoldDuration          = 0
+		prompt.RequiresLineOfSight   = false
+		prompt.UIOffset              = Vector2.new(0, -100)
 		prompt.Parent                = part
 	end
 	CollectionService:AddTag(part, BUTELKOMAT_TAG)
@@ -90,31 +94,61 @@ local function setupButelkomaty()
 	end
 end
 
--- Taguje odpowiednią część w modelu AutomatKaucyjny
-local function setupAutomatKaucyjny()
-	local model = workspace:FindFirstChild("AutomatKaucyjny")
-	if not model then
-		warn("[BottleService] Nie znaleziono modelu AutomatKaucyjny w workspace")
-		return
-	end
-
-	-- Znajdź PrimaryPart albo pierwszy BasePart
-	local targetPart: BasePart? = (model :: Model).PrimaryPart
-	if not targetPart then
-		for _, desc in ipairs(model:GetDescendants()) do
-			if desc:IsA("BasePart") then
-				targetPart = desc :: BasePart
-				break
+-- Taguje BlackPanel (lub PrimaryPart/dowolny BasePart fallback) w jednym modelu AutomatKaucyjny.
+local function setupOneAutomat(model: Instance)
+	if not model:IsA("Model") then return end
+	-- Preferowany target: model.BlackPanel (oryginalny design — prompt siedzi na czarnym panelu).
+	-- Fallback: PrimaryPart, potem dowolny BasePart — żeby duplikaty zachowane bez BlackPanel
+	-- nadal dostały prompt.
+	local target: BasePart? = nil
+	local bp = model:FindFirstChild("BlackPanel")
+	if bp and bp:IsA("BasePart") then
+		target = bp :: BasePart
+	else
+		target = (model :: Model).PrimaryPart
+		if not target then
+			for _, desc in ipairs(model:GetDescendants()) do
+				if desc:IsA("BasePart") then target = desc :: BasePart; break end
 			end
 		end
 	end
-	if not targetPart then
-		warn("[BottleService] AutomatKaucyjny nie ma żadnego BasePart")
+	if not target then
+		warn("[BottleService] AutomatKaucyjny", model:GetFullName(), "nie ma żadnego BasePart — pominięty")
 		return
 	end
+	tagAsButelkomat(target, "Automat Kaucyjny")
+	print("[BottleService] AutomatKaucyjny gotowy →", target:GetFullName())
+end
 
-	tagAsButelkomat(targetPart.Parent.BlackPanel, "Automat Kaucyjny")
-	print("[BottleService] AutomatKaucyjny gotowy →", targetPart:GetFullName())
+-- Obsługuje DOWOLNĄ liczbę modeli AutomatKaucyjny w workspace (zarówno duplikaty o tej
+-- samej nazwie jak i z suffix'em "AutomatKaucyjny2", "AutomatKaucyjny_3"). ChildAdded
+-- pokrywa dynamiczne klonowanie podczas runtime.
+local automatHooked = false
+local function setupAutomatKaucyjny()
+	if automatHooked then return end
+	automatHooked = true
+	local function matches(name: string): boolean
+		return string.match(name, "^AutomatKaucyjny") ~= nil
+	end
+	local found = 0
+	for _, child in ipairs(workspace:GetChildren()) do
+		if matches(child.Name) then
+			setupOneAutomat(child)
+			found += 1
+		end
+	end
+	if found == 0 then
+		warn("[BottleService] Nie znaleziono żadnego AutomatKaucyjny w workspace")
+	else
+		print(string.format("[BottleService] Zarejestrowano %d automat(ów) kaucyjnych", found))
+	end
+	-- Późne dodawanie (np. clone w Studio podczas play, procedural spawn) — przechwytuj.
+	workspace.ChildAdded:Connect(function(child)
+		if matches(child.Name) then
+			task.wait(0.1)  -- daj klatkę żeby BlackPanel/PrimaryPart się dociągnęły
+			setupOneAutomat(child)
+		end
+	end)
 end
 
 -- Weighted random rzadkość

@@ -62,9 +62,10 @@ local function setupShop()
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText            = "Sklep z plecakami"
 	prompt.ObjectText            = "Kasjer"
-	prompt.MaxActivationDistance = 10
+	prompt.MaxActivationDistance = 14
 	prompt.HoldDuration          = 0
 	prompt.RequiresLineOfSight   = false
+	prompt.UIOffset              = Vector2.new(0, -100)
 	prompt.Parent                = counter
 
 	prompt.Triggered:Connect(function(player: Player)

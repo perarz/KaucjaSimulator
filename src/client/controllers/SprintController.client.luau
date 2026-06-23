@@ -22,7 +22,7 @@ print("[SprintController] start — czeka na SkillTreeInit")
 -- Shift Lock wyłączony przez StarterPlayer.EnableMouseLockOption=false w default.project.json
 
 -- ── Tuning ─────────────────────────────────────────────────────────────────
-local SPRINT_BONUS   = 5
+local SPRINT_BONUS   = 12   -- było 5 — różnica chodzenie/sprint za mało zauważalna
 local STAMINA_MAX_BASE = 100
 local DRAIN_PER_SEC  = 25   -- 4 sekundy pełnego sprintu
 local REGEN_PER_SEC  = 18
@@ -33,14 +33,23 @@ local BAR_HEIGHT     = 5
 -- ── Stan ───────────────────────────────────────────────────────────────────
 local baseLevel       = 0
 local speedLevel      = 0
+local staminaLevel    = 0  -- odnoga skill tree: +Config.StaminaUpgrade.StaminaBonus do max
 local hatOwned        = false
 local hatSpeedBonus   = 0
 local hatStaminaBonus = 0
 local petSpeedBonus   = 0  -- z PetService (klasa Sprinter, addytywne do baseSpeed)
-local function getStaminaMax(): number return STAMINA_MAX_BASE + (hatOwned and hatStaminaBonus or 0) end
+local function getStaminaMax(): number
+	local n = STAMINA_MAX_BASE
+	if hatOwned then n += hatStaminaBonus end
+	if staminaLevel >= 1 and Config.StaminaUpgrade then
+		n += (Config.StaminaUpgrade.StaminaBonus or 0)
+	end
+	return n
+end
 local stamina      = STAMINA_MAX_BASE
 local sprinting    = false
 local shiftHeld    = false
+local exhausted    = false  -- po zejściu staminy do 0 blokuje sprint dopóki Shift nie zostanie puszczony
 local wasMounted   = false  -- do wykrycia zejścia z deski → przywrócenie prędkości pieszej
 
 local function getBaseSpeed(): number
@@ -142,7 +151,10 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 
-	if shiftHeld and stamina > 0 then
+	-- exhausted: gdy stamina spadła do 0, blokujemy sprint dopóki Shift nie zostanie puszczony.
+	-- Inaczej `shiftHeld and stamina>0` oscylowało drain ↔ regen przy stamina=0 i Shift dawał
+	-- praktycznie nieskończony sprint (regen 18/s wpadał między drain ticki).
+	if shiftHeld and stamina > 0 and not exhausted then
 		if not sprinting then
 			sprinting = true
 			applySpeed()
@@ -150,6 +162,7 @@ RunService.Heartbeat:Connect(function(dt)
 		stamina = math.max(0, stamina - DRAIN_PER_SEC * dt)
 		if stamina <= 0 then
 			sprinting = false
+			exhausted = true
 			applySpeed()
 		end
 	else
@@ -157,6 +170,8 @@ RunService.Heartbeat:Connect(function(dt)
 			sprinting = false
 			applySpeed()
 		end
+		-- Reset exhausted gdy Shift puszczony — można znowu sprintować dopiero po puszczeniu.
+		if not shiftHeld then exhausted = false end
 		if stamina < getStaminaMax() then
 			stamina = math.min(getStaminaMax(), stamina + REGEN_PER_SEC * dt)
 		end
@@ -169,16 +184,21 @@ end)
 -- ── Sync z drzewkiem umiejętności ──────────────────────────────────────────
 SkillTreeInit.OnClientEvent:Connect(function(data)
 	if type(data) ~= "table" then return end
-	baseLevel  = data.baseLevel  or 0
-	speedLevel = data.speedLevel or 0
-	print(string.format("[SprintController] SkillTreeInit → baseLevel=%d speedLevel=%d", baseLevel, speedLevel))
+	baseLevel    = data.baseLevel    or 0
+	speedLevel   = data.speedLevel   or 0
+	staminaLevel = data.staminaLevel or 0
+	print(string.format("[SprintController] SkillTreeInit → baseLevel=%d speedLevel=%d staminaLevel=%d",
+		baseLevel, speedLevel, staminaLevel))
+	-- Cap stamina do nowego max (gdyby był niższy niż obecny — bezpieczeństwo)
+	if stamina > getStaminaMax() then stamina = getStaminaMax() end
 	applySpeed()
 end)
 
 SkillTreeUpdate.OnClientEvent:Connect(function(data)
 	if type(data) ~= "table" or not data.success then return end
-	if data.upgradeType == "Base"  then baseLevel  = data.newLevel or baseLevel end
-	if data.upgradeType == "Speed" then speedLevel = data.newLevel or speedLevel end
+	if data.upgradeType == "Base"    then baseLevel    = data.newLevel or baseLevel end
+	if data.upgradeType == "Speed"   then speedLevel   = data.newLevel or speedLevel end
+	if data.upgradeType == "Stamina" then staminaLevel = data.newLevel or staminaLevel end
 	applySpeed()
 end)
 

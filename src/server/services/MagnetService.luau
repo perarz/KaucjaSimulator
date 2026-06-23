@@ -108,13 +108,22 @@ local function sweepOnce(player: Player)
 	end
 end
 
-local function activate(player: Player)
+-- Inner activate — duration = ile sekund jeszcze ma trwać. Używany przez UseMagnet (cfg.DurationSec)
+-- oraz przez restoreFromData (remaining po restarcie serwera).
+local function activateFor(player: Player, duration: number, persistUntil: boolean)
 	local existing = active[player]
-	if existing then return end  -- już aktywny — nie restartuj
+	if existing then return end
+	if duration <= 0 then return end
 
-	local endsAt = os.clock() + cfg.DurationSec
+	local endsAt = os.clock() + duration
 	local state: ActiveMagnet = { endsAt = endsAt, thread = nil :: any }
 	active[player] = state
+
+	if persistUntil then
+		local data = PlayerDataService.GetData(player)
+		data.MagnetActiveUntil = os.time() + duration  -- epoch — przeżywa restart serwera
+		PlayerDataService.SaveData(player)
+	end
 
 	state.thread = task.spawn(function()
 		while active[player] == state and os.clock() < state.endsAt do
@@ -124,11 +133,17 @@ local function activate(player: Player)
 		end
 		-- Wygaśnięcie efektu
 		if active[player] == state then
+			local data = PlayerDataService.GetData(player)
+			data.MagnetActiveUntil = 0  -- wyczyść persystowane pole
 			deactivate(player)
 		end
 	end)
 
 	MagnetService.PushStatus(player)
+end
+
+local function activate(player: Player)
+	activateFor(player, cfg.DurationSec, true)
 end
 
 UseMagnet.OnServerEvent:Connect(function(player: Player)
@@ -145,9 +160,18 @@ end)
 
 Players.PlayerAdded:Connect(function(player: Player)
 	task.spawn(function()
-		PlayerDataService.GetData(player)
+		local data = PlayerDataService.GetData(player)
 		task.wait(2)
-		if player.Parent then MagnetService.PushStatus(player) end
+		if not player.Parent then return end
+		-- Restore boostu: jeśli MagnetActiveUntil > os.time(), wznów timer z remaining.
+		-- Bez tego gracz tracił aktywny magnes przy restarcie serwera (mimo że został odjęty z plecaka).
+		local until_ = data.MagnetActiveUntil or 0
+		local remaining = until_ - os.time()
+		if remaining > 0 then
+			activateFor(player, remaining, false)  -- false: nie nadpisuj zapisanego until
+		else
+			MagnetService.PushStatus(player)
+		end
 	end)
 end)
 

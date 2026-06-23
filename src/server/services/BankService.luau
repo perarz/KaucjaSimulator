@@ -119,9 +119,10 @@ task.spawn(function()
 		prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText          = "Otwórz bank"
 		prompt.ObjectText          = "Bankier"
-		prompt.MaxActivationDistance = 8
+		prompt.MaxActivationDistance = 14
 		prompt.HoldDuration        = 0
 		prompt.RequiresLineOfSight = false
+		prompt.UIOffset            = Vector2.new(0, -100)  -- prompt nad głowami innych graczy
 		prompt.Parent              = anchor
 	end
 

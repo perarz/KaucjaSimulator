@@ -524,14 +524,20 @@ end
 local function hideAll()
 	if fadingOut then return end  -- nie spamuj
 	skipOverlay.Visible = false
-	spinning = false
-	setPromptsEnabled(true)   -- z powrotem włącz E/T po zakończeniu
 	if roulPanel.Visible then
+		-- WAŻNE: spinning i prompty zostają zablokowane DOPÓKI fade-out się nie skończy.
+		-- Wcześniej `spinning = false` + `setPromptsEnabled(true)` leciały od razu,
+		-- gracz w 0.35s okienku fade'u mógł kliknąć E → nowa ruletka rusza, stare tween'y
+		-- fade-out psują panel (znika), a SFX nowego spinu gra. Ten guard zamyka to okno.
 		fadeOutAndHide(roulPanel, function()
+			spinning = false
+			setPromptsEnabled(true)
 			if not choicePanel.Visible then gui.Enabled = false end
 			unlockMove()
 		end)
 	else
+		spinning = false
+		setPromptsEnabled(true)
 		if choicePanel.Visible then choicePanel.Visible = false end
 		gui.Enabled = false
 		unlockMove()

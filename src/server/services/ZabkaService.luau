@@ -97,9 +97,10 @@ task.spawn(function()
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText            = cfg.PromptText
 	prompt.ObjectText            = cfg.PromptObject
-	prompt.MaxActivationDistance = 10
+	prompt.MaxActivationDistance = 14
 	prompt.HoldDuration          = 0
 	prompt.RequiresLineOfSight   = false
+	prompt.UIOffset              = Vector2.new(0, -100)
 	prompt.Enabled               = true
 	prompt.Parent                = anchor
 

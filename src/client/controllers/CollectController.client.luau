@@ -511,10 +511,9 @@ local function hookupWallet(moneyGui: ScreenGui)
 		warn("[CollectController] Brak Money.Ramka — wallet HUD nie pokaże złotówek")
 		return
 	end
-	-- Wyśrodkuj ramkę na górze ekranu. Wcześniej Y=-60 wjeżdżał poza ekran na telefonie
-	-- (IgnoreGuiInset=true → brak buforu na notch/status bar), Y=12 daje mały margines pod krawędzią.
+	-- Wyśrodkuj ramkę przy samej górze ekranu (2px od krawędzi).
 	ramka.AnchorPoint = Vector2.new(0.5, 0)
-	ramka.Position    = UDim2.new(0.5, 0, 0, 12)
+	ramka.Position    = UDim2.new(0.5, 0, 0, 2)
 
 	local plnLbl = ramka:WaitForChild("PLN", 10)
 	if not plnLbl or not plnLbl:IsA("TextLabel") then
@@ -687,12 +686,15 @@ local INV_HEADER_H = 52
 local INV_DET_W    = 480      -- szerokość detail panelu po prawej (wider w nowym menu)
 local INV_DET_GAP  = 24       -- gap między slotami a detail panelem
 local panelRows    = math.ceil(SLOT_COUNT / SLOTS_PER_ROW)
--- slotsW = pełna szerokość siatki + thickness scrollbara po prawej
-local slotsW       = SLOTS_PER_ROW * SLOT_SIZE + (SLOTS_PER_ROW - 1) * SLOT_GAP + SCROLLBAR_THICK + 4
+-- Marginesy WEWNĄTRZ slotsContainer (strokes slotów + odstęp od krawędzi paneli sąsiadów).
+-- Wcześniej sloty stykały się ze ścianami scrolla → strokes ucinane przez ClipsDescendants.
+local SLOT_OUTER_PAD = 10
+-- slotsW = pełna szerokość siatki + thickness scrollbara po prawej + marginesy wewnętrzne
+local slotsW       = SLOTS_PER_ROW * SLOT_SIZE + (SLOTS_PER_ROW - 1) * SLOT_GAP + SCROLLBAR_THICK + 4 + SLOT_OUTER_PAD * 2
 -- slotsH = WIDOCZNA wysokość (VISIBLE_ROWS rzędów) — reszta scrolluje
-local slotsH       = VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_GAP
+local slotsH       = VISIBLE_ROWS * SLOT_SIZE + (VISIBLE_ROWS - 1) * SLOT_GAP + SLOT_OUTER_PAD * 2
 -- canvasH = pełna wysokość zawartości (wszystkie rzędy) — ScrollingFrame ją używa
-local canvasH      = panelRows * SLOT_SIZE + (panelRows - 1) * SLOT_GAP
+local canvasH      = panelRows * SLOT_SIZE + (panelRows - 1) * SLOT_GAP + SLOT_OUTER_PAD * 2
 local INV_W_COMPACT = slotsW + PAD * 2
 local INV_W_WIDE    = INV_W_COMPACT + INV_DET_W + PAD       -- detail + prawy padding
 local INV_W        = INV_W_WIDE  -- zachowane dla pozycji detail panelu poniżej
@@ -1334,13 +1336,14 @@ for i = 1, SLOT_COUNT do
 	local col = (i - 1) % SLOTS_PER_ROW
 	local row = math.floor((i - 1) / SLOTS_PER_ROW)
 
-	-- AnchorPoint w środku, by UIScale rosło ze środka
+	-- AnchorPoint w środku, by UIScale rosło ze środka. +SLOT_OUTER_PAD = wewnętrzny margines
+	-- żeby strokes slotów nie były ucinane przez ScrollingFrame ClipsDescendants.
 	local sf = mkFrame(slotsContainer,
 		UDim2.new(0, SLOT_SIZE, 0, SLOT_SIZE),
 		UDim2.new(0,
-			col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE/2,
+			col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE/2 + SLOT_OUTER_PAD,
 			0,
-			row * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE/2),
+			row * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE/2 + SLOT_OUTER_PAD),
 		C.SLOT, 0)
 	sf.AnchorPoint = Vector2.new(0.5, 0.5)
 	sf.ClipsDescendants = true
@@ -1549,9 +1552,9 @@ local function packedSlotPosition(packIdx: number): UDim2  -- packIdx 0-based
 	local col = packIdx % SLOTS_PER_ROW
 	local row = math.floor(packIdx / SLOTS_PER_ROW)
 	return UDim2.new(0,
-		col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2,
+		col * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2 + SLOT_OUTER_PAD,
 		0,
-		row * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2)
+		row * (SLOT_SIZE + SLOT_GAP) + SLOT_SIZE / 2 + SLOT_OUTER_PAD)
 end
 
 -- Layout aktualnej zakładki: itemy danej kategorii pakowane od lewego-górnego rogu,

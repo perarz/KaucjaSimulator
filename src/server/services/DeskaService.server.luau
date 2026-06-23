@@ -503,14 +503,26 @@ EquipDeck.OnServerEvent:Connect(function(player: Player, key: string)
 	local now = os.clock()
 	if lastDeckActionAt[player] and now - lastDeckActionAt[player] < DECK_ACTION_THROTTLE then return end
 	lastDeckActionAt[player] = now
-	if not isNearAnyGablota(player) then return end  -- musi stać przy gablocie
+	-- BUGFIX: usunięty wymóg isNearAnyGablota — EquipDeck jest wywoływany z hoverboard
+	-- menu (otwieralne wszędzie), nie z gabloty. Posiadanie deski wystarcza za autoryzację.
 	local data = PlayerDataService.GetData(player)
-	if not (data.OwnedDecks and data.OwnedDecks[key]) then return end
+	if not (data.OwnedDecks and data.OwnedDecks[key]) then
+		-- nie posiada — pchnij aktualny stan żeby UI się nie zacięło z "selecting…"
+		pushStatus(player)
+		return
+	end
+	if data.EquippedDeck == key then
+		pushStatus(player)
+		return
+	end
 	data.EquippedDeck = key
 	PlayerDataService.SaveData(player)
-	-- Natychmiast wsiada na wybraną deskę
-	if mountedData[player] then dismountPlayer(player) end
-	mountPlayer(player, key)
+	-- Auto-swap tylko gdy aktualnie jeździ — inaczej WYPOSAŻ z menu nieoczekiwanie sadzało
+	-- gracza na deskę. Jeśli nie jedzie, samo ustawiamy equipped i pushujemy status.
+	if mountedData[player] then
+		dismountPlayer(player)
+		mountPlayer(player, key)
+	end
 	pushStatus(player)
 end)
 

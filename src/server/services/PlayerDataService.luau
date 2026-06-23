@@ -17,6 +17,7 @@ local DEFAULT_DATA = {
 	BackpackLevel   = 1,
 	SpeedLevel      = 0,   -- 0 = nic nie kupiono, 1+ = kupiony poziom
 	LuckLevel       = 0,   -- 0 = brak, 1 = kupiony (odnoga od Mult L2, podwaja szczęście w koszach)
+	StaminaLevel    = 0,   -- 0 = brak, 1 = kupiony (odnoga od Speed L2, +50 max stamina)
 	TotalBottles    = 0,
 	BackpackContents = {
 		Zwykla    = 0,
@@ -52,6 +53,10 @@ local DEFAULT_DATA = {
 	-- Każdy magnes zajmuje 1 slot (NIE stackuje się — 1 slot = 1 sztuka).
 	-- Po użyciu count -= 1, serwer aktywuje 2-min sweep.
 	MagnetCount        = 0,
+	-- Boost'y trzymane jako epoch os.time() — przeżywają restart serwera.
+	-- 0 = nieaktywny. Po restarcie jeśli value > os.time(), serwis restartuje timer z remaining.
+	MagnetActiveUntil  = 0,    -- magnet sweep timer
+	DoubleEarnUntil    = 0,    -- x2 KASA boost (Robux)
 	-- Pety: lista posiadanych petów + UUID wyposażonego.
 	-- Każdy pet = { id (UUID string), rarity (string), class (string) }.
 	-- Zajmuje 1 slot pojemności (tak jak butelka). Equipped daje bonusy (money/speed/HP).
@@ -214,6 +219,7 @@ local function fireInitialHUD(player: Player)
 		multiplierLevel = data.MultiplierLevel or 0,
 		baseLevel       = data.BaseLevel       or 0,
 		luckLevel       = data.LuckLevel       or 0,
+		staminaLevel    = data.StaminaLevel    or 0,
 	})
 end
 
