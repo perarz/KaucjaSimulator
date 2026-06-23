@@ -807,13 +807,14 @@ end
 -- ── Button wiring ───────────────────────────────────────────────────────────
 local ROT_STEP = 36
 -- LEWO/PRAWO obracają ŁUK (arcRing), nie wskazówkę.
+-- LEWO/PRAWO działają w wyborze ORAZ po przegranej (przed rerollem) — tylko nie w trakcie kręcenia/wygranej.
 leftBtn.MouseButton1Click:Connect(function()
-	if phase ~= "select" or not leftBtn.Active then return end
+	if phase ~= "select" and phase ~= "lost" then return end
 	playSfx("Click")
 	TweenService:Create(arcRing, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Rotation = arcRing.Rotation - ROT_STEP }):Play()
 end)
 rightBtn.MouseButton1Click:Connect(function()
-	if phase ~= "select" or not rightBtn.Active then return end
+	if phase ~= "select" and phase ~= "lost" then return end
 	playSfx("Click")
 	TweenService:Create(arcRing, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Rotation = arcRing.Rotation + ROT_STEP }):Play()
 end)
@@ -898,6 +899,10 @@ GoldUpgradeResult.OnClientEvent:Connect(function(res)
 			if res.reason == "needReroll" then
 				phase = "lost"
 				rerollBtn.Visible = true
+				luckBtn.Visible = (not luckActive)
+				luckTag.Visible = luckActive
+				leftBtn.Active = true; rightBtn.Active = true
+				setSpinEnabled(false)
 			else
 				gotoSelect()
 			end
@@ -905,10 +910,11 @@ GoldUpgradeResult.OnClientEvent:Connect(function(res)
 		return
 	end
 
-	-- Udany spin → aktualizuj pety (staked usunięte), animuj koło
+	-- Udany spin → aktualizuj pety (staked usunięte), animuj koło.
+	-- UWAGA: NIE resetujemy luckActive — x2 luck zostaje aktywne przez całą próbę
+	-- (też na reroll po przegranej), aż do wygranej/zamknięcia.
 	if res.pets then petsState = res.pets; rebuildPets() end
 	selected = {}; selectedSet = {}; selectedRarity = nil
-	luckActive = false
 
 	animateSpin(res.percent or 0, res.won == true, function()
 		if res.won then
@@ -942,7 +948,9 @@ GoldUpgradeResult.OnClientEvent:Connect(function(res)
 			percentLbl.Text = "PUDŁO"
 			percentLbl.TextColor3 = X_RED
 			rerollBtn.Visible = true
-			luckBtn.Visible = true   -- 2x luck zostaje (per-spin, na reroll)
+			luckBtn.Visible = (not luckActive)   -- jeśli 2x luck już aktywne, nie ma co kupować ponownie
+			luckTag.Visible = luckActive          -- pokaż że x2 luck dalej działa
+			leftBtn.Active = true; rightBtn.Active = true  -- LEWO/PRAWO znów klikalne
 			setSpinEnabled(false)
 			task.delay(0.05, function() percentLbl.TextColor3 = C_WHITE end)
 		end
@@ -953,6 +961,8 @@ GoldUpgradeProduct.OnClientEvent:Connect(function(payload)
 	if type(payload) ~= "table" then return end
 	if payload.kind == "luck" then
 		luckActive = true
+		luckTag.Visible = true
+		luckBtn.Visible = false   -- już aktywne — nie kupuj drugi raz
 		showToast("2x LUCK aktywne — szansa podwojona!", C_GOLD)
 		if phase == "select" then refreshPreview() end
 	elseif payload.kind == "reroll" then
@@ -964,8 +974,10 @@ GoldUpgradeProduct.OnClientEvent:Connect(function(payload)
 			spinBtn.BackgroundColor3 = C_ACC
 			spinLbl.TextColor3 = Color3.new(0, 0, 0)
 			rerollBtn.Visible = false
-			-- ZAKRĘĆ po rerollu = reroll spin
-			-- (obsłużone niżej w specjalnym kliknięciu)
+			luckTag.Visible = luckActive          -- x2 luck dalej działa na reroll
+			luckBtn.Visible = (not luckActive)
+			leftBtn.Active = true; rightBtn.Active = true  -- LEWO/PRAWO klikalne przed rerollem
+			-- ZAKRĘĆ po rerollu = reroll spin (obsłużone w osobnym kliknięciu)
 		else
 			showToast("REROLL niedostępny tutaj.")
 		end

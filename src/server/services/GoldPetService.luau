@@ -253,13 +253,10 @@ local function doSpin(player: Player, payload)
 		end
 	end
 
-	-- Procent szansy
+	-- Procent szansy. x2 luck NIE jest konsumowane per spin — zostaje aktywne na całą
+	-- próbę (też na reroll po przegranej). Reset dopiero przy zamknięciu/wygranej (resetSession).
 	local base = #staked * (gcfg.PercentPerPet or 20)
-	local luckUsed = false
-	if s.doubleLuckPending then
-		s.doubleLuckPending = false
-		luckUsed = true
-	end
+	local luckUsed = s.doubleLuckPending == true
 	local percent = math.clamp(luckUsed and base * 2 or base, 0, 100)
 
 	-- Roll

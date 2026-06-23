@@ -188,13 +188,27 @@ local function getActivePetsFolder(): Folder
 	return f :: Folder
 end
 
-local function petModelTemplate(rarity: string): Instance?
-	local folder: Instance = ReplicatedStorage
-	for _, segment in ipairs(cfg.ModelsFolderPath) do
-		folder = folder:FindFirstChild(segment)
-		if not folder then return nil end
+local function petModelTemplate(rarity: string, isGold: boolean?): Instance?
+	-- Gold pety mają osobny folder modeli (PetyGold), reszta z PetyEnchanted.
+	-- Dla zwykłych: fallback na starą nazwę folderu (PetyZwykle) gdyby ktoś nie zmienił.
+	local pathLists
+	if isGold then
+		pathLists = { cfg.GoldModelsFolderPath or { "Pets", "PetyGold" } }
+	else
+		pathLists = { cfg.ModelsFolderPath, { "Pets", "PetyEnchanted" }, { "Pets", "PetyZwykle" } }
 	end
-	return folder:FindFirstChild((cfg.ModelNamePrefix or "Pet") .. rarity)
+	local name = (cfg.ModelNamePrefix or "Pet") .. rarity
+	for _, segments in ipairs(pathLists) do
+		if segments then
+			local folder: Instance? = ReplicatedStorage
+			for _, segment in ipairs(segments) do
+				folder = folder and folder:FindFirstChild(segment)
+			end
+			local model = folder and folder:FindFirstChild(name)
+			if model then return model end
+		end
+	end
+	return nil
 end
 
 local function despawnVisual(player: Player)
@@ -206,10 +220,11 @@ end
 
 local function spawnVisual(player: Player, pet)
 	despawnVisual(player)  -- na wszelki wypadek
-	local template = petModelTemplate(pet.rarity)
+	local template = petModelTemplate(pet.rarity, pet.gold == true)
 	if not template then
+		local fp = (pet.gold and cfg.GoldModelsFolderPath) or cfg.ModelsFolderPath
 		warn(string.format("[PetService] Brak modelu peta dla rzadkości '%s' (ReplicatedStorage.%s.%s%s)",
-			pet.rarity, table.concat(cfg.ModelsFolderPath, "."), cfg.ModelNamePrefix or "Pet", pet.rarity))
+			pet.rarity, table.concat(fp, "."), cfg.ModelNamePrefix or "Pet", pet.rarity))
 		return
 	end
 
