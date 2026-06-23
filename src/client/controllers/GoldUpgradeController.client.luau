@@ -297,29 +297,33 @@ wheelHolder.BackgroundTransparency = 1
 wheelHolder.ZIndex                 = 4
 wheelHolder.Parent                 = col2
 
--- Rotujący kontener z segmentami + tłem
-local wheel = Instance.new("Frame")
-wheel.Size                   = UDim2.fromOffset(WHEEL_D, WHEEL_D)
-wheel.AnchorPoint            = Vector2.new(0.5, 0.5)
-wheel.Position               = UDim2.fromScale(0.5, 0.5)
-wheel.BackgroundTransparency = 1
-wheel.ZIndex                 = 4
-wheel.Parent                 = wheelHolder
-
+-- Statyczny ciemny dysk (nie rotuje)
 local disc = Instance.new("Frame")
-disc.Size                   = UDim2.fromScale(1, 1)
+disc.Size                   = UDim2.fromOffset(WHEEL_D, WHEEL_D)
+disc.AnchorPoint            = Vector2.new(0.5, 0.5)
+disc.Position               = UDim2.fromScale(0.5, 0.5)
 disc.BackgroundColor3       = C_DISC
 disc.BorderSizePixel        = 0
 disc.ZIndex                 = 4
-disc.Parent                 = wheel
+disc.Parent                 = wheelHolder
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0.5, 0); c.Parent = disc
 end
 
--- Łuk koła: ring na obwodzie. Każdy "szprych" = transparentny rail od środka do rąbka,
--- na końcu którego siedzi kolorowa końcówka (tip). Zapalone końcówki tworzą żółty łuk
--- WZDŁUŻ obwodu (nie wypełniają całego pola koła).
-local RING_THICK = 22
+-- Łuk koła: cienki pasek DOKŁADNIE na obwodzie dużego koła. Każdy "szprych" =
+-- transparentny rail od środka do rąbka; kolorowa końcówka (tip) siedzi na samym
+-- rąbku. Zapalone końcówki tworzą żółty łuk wzdłuż obwodu.
+-- arcRing rotuje TYLKO przyciskami LEWO/PRAWO (przesuwa łuk). Wskazówka (needle)
+-- kręci się osobno i wyznacza wynik.
+local RING_THICK = 14
+local arcRing = Instance.new("Frame")
+arcRing.Size                   = UDim2.fromOffset(WHEEL_D, WHEEL_D)
+arcRing.AnchorPoint            = Vector2.new(0.5, 0.5)
+arcRing.Position               = UDim2.fromScale(0.5, 0.5)
+arcRing.BackgroundTransparency = 1
+arcRing.ZIndex                 = 5
+arcRing.Parent                 = wheelHolder
+
 local segs: { Frame } = {}  -- końcówki (tips)
 for i = 0, SEG_N - 1 do
 	local spoke = Instance.new("Frame")
@@ -330,7 +334,7 @@ for i = 0, SEG_N - 1 do
 	spoke.BackgroundTransparency = 1
 	spoke.BorderSizePixel        = 0
 	spoke.ZIndex                 = 5
-	spoke.Parent                 = wheel
+	spoke.Parent                 = arcRing
 
 	local tip = Instance.new("Frame")
 	tip.Size                   = UDim2.new(1, 0, 0, RING_THICK)
@@ -356,17 +360,26 @@ do
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 5; s.Parent = rimRing
 end
 
--- Czarna kreska (wskaźnik) — od środka do góry, NIE rotuje
-local pointer = Instance.new("Frame")
-pointer.Size             = UDim2.fromOffset(6, WHEEL_R - 6)
-pointer.AnchorPoint      = Vector2.new(0.5, 1)
-pointer.Position         = UDim2.fromScale(0.5, 0.5)
-pointer.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-pointer.BorderSizePixel  = 0
-pointer.ZIndex           = 10
-pointer.Parent           = wheelHolder
+-- Czarna kreska (WSKAZÓWKA) — od środka do rąbka. KRĘCI SIĘ przy ZAKRĘĆ i wyznacza
+-- wynik (gdzie się zatrzyma: na żółtym łuku = wygrana). AnchorPoint na środku koła
+-- żeby Rotation obracał ją wokół centrum.
+local needle = Instance.new("Frame")
+needle.Size             = UDim2.fromOffset(7, WHEEL_R - 4)
+needle.AnchorPoint      = Vector2.new(0.5, 1)
+needle.Position         = UDim2.fromScale(0.5, 0.5)
+needle.Rotation         = 0
+needle.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+needle.BorderSizePixel  = 0
+needle.ZIndex           = 10
+needle.Parent           = wheelHolder
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 3); c.Parent = pointer
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 3); c.Parent = needle
+	-- grot na końcu wskazówki
+	local head = Instance.new("Frame")
+	head.Size = UDim2.fromOffset(16, 16); head.AnchorPoint = Vector2.new(0.5, 0)
+	head.Position = UDim2.fromScale(0.5, 0); head.Rotation = 45
+	head.BackgroundColor3 = Color3.fromRGB(10, 10, 10); head.BorderSizePixel = 0
+	head.ZIndex = 10; head.Parent = needle
 end
 -- Środkowa kropka
 local hub = Instance.new("Frame")
@@ -683,48 +696,47 @@ local function rebuildPets()
 	end
 end
 
--- ── Wheel spin animation ────────────────────────────────────────────────────
+-- ── Spin animation: KRĘCI SIĘ WSKAZÓWKA (łuk stoi), wskazówka wyznacza wynik ──
 local spinTick: RBXScriptConnection? = nil
 local function animateSpin(percent: number, won: boolean, onDone: () -> ())
 	setArc(percent)
 	local arcAngle = (math.clamp(percent, 0, 100) / 100) * 360
+	local arcRot   = arcRing.Rotation % 360  -- początek łuku (od góry), ustawiony LEWO/PRAWO
 
-	-- targetLocal = kąt łuku (od góry) który ma trafić pod wskaźnik (top).
-	local targetLocal
+	-- offset = pozycja w obrębie łuku (wygrana) lub poza nim (przegrana), licząc od arcRot.
+	local offset
 	if won then
 		if arcAngle <= 0 then arcAngle = 1 end
-		targetLocal = arcAngle * (0.2 + math.random() * 0.6)  -- pewnie wewnątrz łuku
+		offset = arcAngle * (0.15 + math.random() * 0.7)  -- pewnie wewnątrz łuku
 	else
-		local emptyStart = arcAngle
-		local emptyEnd   = 360
-		if emptyEnd - emptyStart < 6 then
-			-- łuk niemal pełny — wymuś trafienie w łuk (i tak praktycznie 100%)
-			targetLocal = arcAngle * 0.5
+		local emptySpan = 360 - arcAngle
+		if emptySpan < 6 then
+			offset = arcAngle * 0.5  -- łuk ~pełny → i tak praktycznie wygrana
 		else
-			local pad = (emptyEnd - emptyStart) * 0.12
-			targetLocal = emptyStart + pad + math.random() * (emptyEnd - emptyStart - 2 * pad)
+			local pad = emptySpan * 0.12
+			offset = arcAngle + pad + math.random() * (emptySpan - 2 * pad)  -- w pustej części
 		end
 	end
-	-- pointer trafia w łuk gdy wheel.Rotation ≡ -targetLocal (mod 360)
-	local targetMod = (360 - (targetLocal % 360)) % 360
-	local cur  = wheel.Rotation
+	-- wskazówka ma się zatrzymać na kącie (arcRot + offset) od góry
+	local targetMod = (arcRot + offset) % 360
+	local cur  = needle.Rotation
 	local base = cur + 360 * cfgInit.spinRotations
 	local add  = (targetMod - (base % 360)) % 360
 	local final = base + add
 
-	-- Tick SFX per "ząbek" koła (12 na obrót) — zwalnia razem z kołem (Quint Out),
+	-- Tick SFX per "ząbek" (12 na obrót) — zwalnia razem z wskazówką (Quint Out),
 	-- jak roulette kosza/gabloty. NIE per-segment (120/obr to była kakofonia/za głośno).
 	local NOTCH_DEG = 30
 	local lastNotch = nil
 	spinTick = RunService.RenderStepped:Connect(function()
-		local n = math.floor((wheel.Rotation % 360) / NOTCH_DEG)
+		local n = math.floor((needle.Rotation % 360) / NOTCH_DEG)
 		if n ~= lastNotch then
 			lastNotch = n
 			playSfx("RouletteTick")
 		end
 	end)
 
-	local tw = TweenService:Create(wheel,
+	local tw = TweenService:Create(needle,
 		TweenInfo.new(cfgInit.spinSeconds, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 		{ Rotation = final })
 	tw:Play()
@@ -759,7 +771,8 @@ local function resetUiState()
 	percentLbl.Visible = true
 	percentLbl.TextColor3 = C_WHITE
 	luckTag.Visible = false
-	wheel.Rotation = 0
+	needle.Rotation = 0
+	arcRing.Rotation = 0
 end
 
 local function openUI(payload)
@@ -790,15 +803,16 @@ end
 
 -- ── Button wiring ───────────────────────────────────────────────────────────
 local ROT_STEP = 36
+-- LEWO/PRAWO obracają ŁUK (arcRing), nie wskazówkę.
 leftBtn.MouseButton1Click:Connect(function()
 	if phase ~= "select" or not leftBtn.Active then return end
 	playSfx("Click")
-	TweenService:Create(wheel, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Rotation = wheel.Rotation - ROT_STEP }):Play()
+	TweenService:Create(arcRing, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Rotation = arcRing.Rotation - ROT_STEP }):Play()
 end)
 rightBtn.MouseButton1Click:Connect(function()
 	if phase ~= "select" or not rightBtn.Active then return end
 	playSfx("Click")
-	TweenService:Create(wheel, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Rotation = wheel.Rotation + ROT_STEP }):Play()
+	TweenService:Create(arcRing, TweenInfo.new(0.25, Enum.EasingStyle.Quad), { Rotation = arcRing.Rotation + ROT_STEP }):Play()
 end)
 
 local function beginSpin(isReroll: boolean)
