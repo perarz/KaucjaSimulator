@@ -310,76 +310,79 @@ do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0.5, 0); c.Parent = disc
 end
 
--- Łuk koła: cienki pasek DOKŁADNIE na obwodzie dużego koła. Każdy "szprych" =
--- transparentny rail od środka do rąbka; kolorowa końcówka (tip) siedzi na samym
--- rąbku. Zapalone końcówki tworzą żółty łuk wzdłuż obwodu.
--- arcRing rotuje TYLKO przyciskami LEWO/PRAWO (przesuwa łuk). Wskazówka (needle)
--- kręci się osobno i wyznacza wynik.
-local RING_THICK = 14
-local arcRing = Instance.new("Frame")
-arcRing.Size                   = UDim2.fromOffset(WHEEL_D, WHEEL_D)
-arcRing.AnchorPoint            = Vector2.new(0.5, 0.5)
-arcRing.Position               = UDim2.fromScale(0.5, 0.5)
-arcRing.BackgroundTransparency = 1
-arcRing.ZIndex                 = 5
-arcRing.Parent                 = wheelHolder
+-- Łuk koła: cienki żółty pasek leżący DOKŁADNIE na obwodzie (czarnym okręgu).
+-- Każda końcówka (tip) pozycjonowana TRYGONOMETRYCZNIE na promieniu = WHEEL_R, więc
+-- arc jest idealnie współśrodkowy z kołem. arcRing (pełnowymiarowy, kotwica na środku)
+-- rotuje TYLKO przyciskami LEWO/PRAWO — przesuwa łuk. Wskazówka kręci się osobno.
+local RING_THICK = 16
+local TIP_W      = 14
+local CXY        = WHEEL_D / 2
+local R_RIM      = WHEEL_R        -- środek paska na obwodzie → pokrywa czarny okrąg
 
-local segs: { Frame } = {}  -- końcówki (tips)
-for i = 0, SEG_N - 1 do
-	local spoke = Instance.new("Frame")
-	spoke.Size                   = UDim2.fromOffset(SEG_W, WHEEL_R)
-	spoke.AnchorPoint            = Vector2.new(0.5, 1)
-	spoke.Position               = UDim2.fromScale(0.5, 0.5)
-	spoke.Rotation               = i * SEG_STEP
-	spoke.BackgroundTransparency = 1
-	spoke.BorderSizePixel        = 0
-	spoke.ZIndex                 = 5
-	spoke.Parent                 = arcRing
-
-	local tip = Instance.new("Frame")
-	tip.Size                   = UDim2.new(1, 0, 0, RING_THICK)
-	tip.Position               = UDim2.fromOffset(0, 0)  -- górny (zewnętrzny) koniec railu = rąbek
-	tip.BackgroundColor3       = C_ARC
-	tip.BackgroundTransparency = 1                       -- domyślnie zgaszone
-	tip.BorderSizePixel        = 0
-	tip.ZIndex                 = 6
-	tip.Parent                 = spoke
-	segs[i + 1] = tip
-end
-
--- Obramowanie koła (na wierzchu, maskuje postrzępiony rąbek) — NIE rotuje
 local rimRing = Instance.new("Frame")
 rimRing.Size                   = UDim2.fromOffset(WHEEL_D, WHEEL_D)
 rimRing.AnchorPoint            = Vector2.new(0.5, 0.5)
 rimRing.Position               = UDim2.fromScale(0.5, 0.5)
 rimRing.BackgroundTransparency = 1
-rimRing.ZIndex                 = 8
+rimRing.ZIndex                 = 5
 rimRing.Parent                 = wheelHolder
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0.5, 0); c.Parent = rimRing
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 5; s.Parent = rimRing
+	local s = Instance.new("UIStroke"); s.Color = Color3.fromRGB(8, 8, 8); s.Thickness = 6; s.Parent = rimRing
 end
 
--- Czarna kreska (WSKAZÓWKA) — od środka do rąbka. KRĘCI SIĘ przy ZAKRĘĆ i wyznacza
--- wynik (gdzie się zatrzyma: na żółtym łuku = wygrana). AnchorPoint na środku koła
--- żeby Rotation obracał ją wokół centrum.
+local arcRing = Instance.new("Frame")
+arcRing.Size                   = UDim2.fromOffset(WHEEL_D, WHEEL_D)
+arcRing.AnchorPoint            = Vector2.new(0.5, 0.5)
+arcRing.Position               = UDim2.fromScale(0.5, 0.5)
+arcRing.BackgroundTransparency = 1
+arcRing.ZIndex                 = 9
+arcRing.Parent                 = wheelHolder
+
+local segs: { Frame } = {}  -- końcówki (tips)
+for i = 0, SEG_N - 1 do
+	local deg = i * SEG_STEP
+	local ang = math.rad(deg)
+	local tip = Instance.new("Frame")
+	tip.AnchorPoint            = Vector2.new(0.5, 0.5)
+	tip.Position               = UDim2.fromOffset(CXY + math.sin(ang) * R_RIM, CXY - math.cos(ang) * R_RIM)
+	tip.Size                   = UDim2.fromOffset(TIP_W, RING_THICK)
+	tip.Rotation               = deg
+	tip.BackgroundColor3       = C_ARC
+	tip.BackgroundTransparency = 1   -- domyślnie zgaszone
+	tip.BorderSizePixel        = 0
+	tip.ZIndex                 = 9
+	tip.Parent                 = arcRing
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = tip
+	segs[i + 1] = tip
+end
+
+-- WSKAZÓWKA — kontener pełnowymiarowy (kotwica na środku koła), więc Rotation obraca
+-- ją czysto wokół centrum. Tył strzałki = środek koła. Grot na zewnętrznym końcu.
 local needle = Instance.new("Frame")
-needle.Size             = UDim2.fromOffset(7, WHEEL_R - 4)
-needle.AnchorPoint      = Vector2.new(0.5, 1)
-needle.Position         = UDim2.fromScale(0.5, 0.5)
-needle.Rotation         = 0
-needle.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-needle.BorderSizePixel  = 0
-needle.ZIndex           = 10
-needle.Parent           = wheelHolder
+needle.Size                   = UDim2.fromScale(1, 1)
+needle.AnchorPoint            = Vector2.new(0.5, 0.5)
+needle.Position               = UDim2.fromScale(0.5, 0.5)
+needle.Rotation               = 0
+needle.BackgroundTransparency = 1
+needle.ZIndex                 = 10
+needle.Parent                 = wheelHolder
+
+local needleBar = Instance.new("Frame")
+needleBar.Size             = UDim2.fromOffset(8, WHEEL_R - 8)
+needleBar.AnchorPoint      = Vector2.new(0.5, 1)
+needleBar.Position         = UDim2.fromScale(0.5, 0.5)  -- tył (dół) dokładnie w środku
+needleBar.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+needleBar.BorderSizePixel  = 0
+needleBar.ZIndex           = 10
+needleBar.Parent           = needle
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 3); c.Parent = needle
-	-- grot na końcu wskazówki
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 4); c.Parent = needleBar
 	local head = Instance.new("Frame")
-	head.Size = UDim2.fromOffset(16, 16); head.AnchorPoint = Vector2.new(0.5, 0)
+	head.Size = UDim2.fromOffset(18, 18); head.AnchorPoint = Vector2.new(0.5, 0)
 	head.Position = UDim2.fromScale(0.5, 0); head.Rotation = 45
-	head.BackgroundColor3 = Color3.fromRGB(10, 10, 10); head.BorderSizePixel = 0
-	head.ZIndex = 10; head.Parent = needle
+	head.BackgroundColor3 = Color3.fromRGB(8, 8, 8); head.BorderSizePixel = 0
+	head.ZIndex = 10; head.Parent = needleBar
 end
 -- Środkowa kropka
 local hub = Instance.new("Frame")
