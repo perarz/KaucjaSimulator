@@ -110,6 +110,15 @@ MarketplaceService.ProcessReceipt = function(receiptInfo)
 		end
 	end
 
+	-- Gold-upgrade (reroll / 2x luck) — single ProcessReceipt w grze, więc routujemy tutaj.
+	local okGP, GoldPetService = pcall(function() return require(script.Parent.GoldPetService) end)
+	if okGP and GoldPetService and GoldPetService.HandleReceipt then
+		local handled = GoldPetService.HandleReceipt(player, receiptInfo.ProductId)
+		if handled then
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+	end
+
 	-- Nieznany ProductId
 	warn("[BoostShop] Nieznany ProductId:", receiptInfo.ProductId)
 	return Enum.ProductPurchaseDecision.NotProcessedYet

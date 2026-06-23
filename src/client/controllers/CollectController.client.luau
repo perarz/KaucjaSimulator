@@ -282,6 +282,7 @@ local function syncPetSlots()
 						name      = p.class,  -- "Sprinter" / "Tank" wyświetlane na slocie
 						count     = 1,
 						petRarity = p.rarity, -- do obrazka tekstury peta (Config.Pets.Rarities[r].image)
+						petGold   = p.gold == true, -- gold pet → osobna tekstura (Config.Pets.GoldUpgrade.Images)
 					}
 					presentSet[p.id] = true
 					break
@@ -1083,13 +1084,17 @@ local function refreshInvDetail()
 		local ccfg = (Config.Pets and Config.Pets.Classes and Config.Pets.Classes[pet.class]) or {}
 		local color = rcfg.color or C.WHITE
 		local rname = rcfg.displayName or pet.rarity
+		local isGold = pet.gold == true
+		local statMul = isGold and ((Config.Pets.GoldUpgrade and Config.Pets.GoldUpgrade.StatMultiplier) or 1.15) or 1
+		local GOLD_COLOR = Color3.fromRGB(239, 199, 95)
 
-		D.title.Text       = string.format("%s %s", rname, pet.class)
-		D.title.TextColor3 = color
+		D.title.Text       = isGold and string.format("ZŁOTY %s %s", rname, pet.class)
+			or string.format("%s %s", rname, pet.class)
+		D.title.TextColor3 = isGold and GOLD_COLOR or color
 		D.count.Text       = (uuid == equippedId) and "WYPOSAŻONY ✓" or "1 sztuka"
 		D.count.TextColor3 = (uuid == equippedId) and C.ACCENT_GREEN or C.DIMTEXT
-		D.baseLbl.Text     = string.format("Mnożnik kasy: ×%.1f", rcfg.moneyMul or 1)
-		local bonus = (ccfg.bonuses and ccfg.bonuses[pet.rarity]) or 0
+		D.baseLbl.Text     = string.format("Mnożnik kasy: ×%.2f", (rcfg.moneyMul or 1) * statMul)
+		local bonus = math.floor(((ccfg.bonuses and ccfg.bonuses[pet.rarity]) or 0) * statMul + 0.5)
 		if ccfg.effect == "speed" then
 			D.totalLbl.Text = string.format("Speed bonus: +%d (chodzenie i deska)", bonus)
 		elseif ccfg.effect == "hp" then
@@ -1097,7 +1102,8 @@ local function refreshInvDetail()
 		else
 			D.totalLbl.Text = ""
 		end
-		D.multLbl.Text = ""
+		D.multLbl.Text = isGold and "✦ ZŁOTY PET — +15% do statystyk" or ""
+		D.multLbl.TextColor3 = GOLD_COLOR
 		D.desc.Text    = "Tylko 1 pet może być wyposażony naraz. Wyrzucenie usuwa pet na stałe."
 		return
 	end
@@ -1504,11 +1510,16 @@ local function renderSlot(i: number)
 			-- Ukryj zwykły count (1) dla peta — pokażemy emoji klasy
 			-- (SL.names jest "Sprinter"/"Tank", count "1" pomijamy bo każdy pet = 1)
 			SL.counts[i].Text = ""
-			-- Tekstura peta per rzadkość
+			-- Tekstura peta per rzadkość (gold pet → osobna tekstura z GoldUpgrade.Images)
 			local rcfg = (Config.Pets and Config.Pets.Rarities and Config.Pets.Rarities[data.petRarity]) or {}
+			local petTex = rcfg.image
+			if data.petGold then
+				local gimg = Config.Pets and Config.Pets.GoldUpgrade and Config.Pets.GoldUpgrade.Images
+				petTex = (gimg and gimg[data.petRarity]) or petTex
+			end
 			if img then
-				img.Image   = rcfg.image or ""
-				img.Visible = (rcfg.image ~= nil)
+				img.Image   = petTex or ""
+				img.Visible = (petTex ~= nil)
 				-- Huge ma natywnie mniejszą grafikę — powiększamy żeby pasował do butelek
 				local sc = (data.petRarity == "Huge") and 0.98 or 0.82
 				img.Size = UDim2.fromScale(sc, sc)

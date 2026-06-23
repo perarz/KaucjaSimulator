@@ -177,6 +177,22 @@ task.spawn(function()
 		end
 	end
 
+	-- Gold-upgrade: obrazki gold petów + reroll + 2x luck — preload (anty pop-in)
+	local gu = Config.Pets and Config.Pets.GoldUpgrade
+	if gu then
+		if gu.Images then
+			for _, img in pairs(gu.Images) do
+				if type(img) == "string" and img ~= "" then table.insert(assets, img) end
+			end
+		end
+		if gu.Reroll and type(gu.Reroll.Image) == "string" and gu.Reroll.Image ~= "" then
+			table.insert(assets, gu.Reroll.Image)
+		end
+		if gu.DoubleLuck and type(gu.DoubleLuck.Image) == "string" and gu.DoubleLuck.Image ~= "" then
+			table.insert(assets, gu.DoubleLuck.Image)
+		end
+	end
+
 	-- Tekstury butelek w slotach EQ/banku — preload (jw. anty pop-in)
 	if Config.BottleImages then
 		for _, img in pairs(Config.BottleImages) do
