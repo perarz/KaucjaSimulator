@@ -47,7 +47,7 @@ local C_VIP         = Color3.fromRGB(230, 190, 60)
 local C_BOOST       = Color3.fromRGB(255, 130, 70)
 local C_EGG         = Color3.fromRGB(170, 110, 230)
 
-local SHOP_ICON_ID  = "rbxassetid://93988211403086"
+local SHOP_ICON_ID  = "rbxassetid://116179222814716"
 
 -- ── Helpers ─────────────────────────────────────────────────────────────────
 local function mkCorner(parent: Instance, r: number)
