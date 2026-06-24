@@ -549,6 +549,46 @@ DeskaService to **standalone Script** (.server.luau) — NIE wymagaj w GameServe
 
 ---
 
+## Wymiana / Trading (TradeService + TradeController)
+
+### Założenia
+- Wymiana gracz↔gracz w obrębie serwera (bez dystansu). Przedmioty: **pety z EQ (`data.Pets`),
+  włącznie z założonym** (auto-unequip przy transferze; skarbiec `BankPets` POZA wymianą) + **pieniądze**.
+- **Serwer autorytatywny.** Pet logic (remove/add/unequip/refresh) zostaje w `PetService`
+  (single source of truth) — TradeService woła `PetService.RemovePets/AddPets/FindPet/CountPets/GetPetCap/RefreshAfterTrade`.
+
+### Przycisk + lista
+- Przycisk **WYMIANA** w HUD: lewa strona, **stos deska(-190) / teleport(0) / wymiana(+190)** (anchor (0,0.5)).
+  Ikona `Config.Trade.ButtonIconId`. (Przesunięcie desek/teleportu zrobione w DeckShop/TeleportController.)
+- Klik → lista aktywnych graczy (`Players:GetPlayers()` client-side, awatar `rbxthumb` + nick + INVITE).
+
+### Flow
+1. `TradeInvite(targetUserId)` → odbiorca dostaje `TradeInvited` → popup „<nick> zaprosił cię do wymiany”
+   (trochę nad środkiem) z akceptuj (`AcceptIconId`) / anuluj (`CancelIconId`). **Bez blokady ruchu** (anti-grief).
+2. `TradeRespond{fromUserId,accept}`. Odmowa → `TradeInviteResult{accepted=false}` → zapraszający widzi
+   „<nick> odmówił wymiany”. Zajęty/inne zaproszenie → `TradeInviteResult{message}`.
+3. Akceptacja → sesja + `TradeStart` do obu → okno wymiany (2 kolumny: TWOJA OFERTA ⇆ OFERTA gracza).
+4. `TradeOffer{pets,money}` per zmiana. Pet klik = **checkmark** (overlay jak gold upgrade). Kwota = TextBox (FocusLost).
+   **Każda zmiana resetuje OBIE akceptacje** + przerywa odliczanie (anti-scam, `resetAcceptance`).
+5. `TradeAccept` od obu → `counting=true` + **3s odliczanie** (`Config.Trade.CountdownSec`). Po Akceptuj
+   pojawia się **Anuluj** (`TradeCancel`) — działa też w trakcie odliczania, bez odliczania przerywa od razu.
+6. Po 3s `executeTrade`: walidacja (własność petów / kasa / wolne sloty 20% plecaka) **bez yieldów →
+   atomowy swap**, potem `SaveData` obu (poza atomowym blokiem). Brak miejsca/kasy → **cała wymiana
+   anulowana** z komunikatem (`TradeEnd{reason="failed"}`). OK → `TradeEnd{reason="completed", received}`.
+
+### Anti-scam / pułapki
+- `countdownToken` — `task.delay(3s)` wykonuje transfer tylko gdy token niezmieniony (zmiana/anuluj inkrementują).
+- Walidacja i mutacja w `executeTrade` **bez yieldów pomiędzy** (atomowość) — SaveData dopiero po swapie.
+- `PlayerRemoving` przerywa sesję drugiego gracza (`TradeEnd reason="cancelled"`) + czyści zaproszenia.
+
+### RemoteEvents
+`TradeInvite`/`TradeInvited`/`TradeRespond`/`TradeInviteResult`/`TradeStart`/`TradeOffer`/`TradeSync`/`TradeAccept`/`TradeCancel`/`TradeEnd`.
+
+### Config (`Config.Trade`)
+`ButtonIconId`, `AcceptIconId`, `CancelIconId`, `CountdownSec=3`, `InviteTimeout=30`, `Throttle=0.5`, `MaxMoney`.
+
+---
+
 ## Panel admina (AdminService + AdminController)
 
 - `Config.Admins` — lista UserId i/lub nazw.

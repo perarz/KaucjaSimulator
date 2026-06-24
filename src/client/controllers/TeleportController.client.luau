@@ -62,7 +62,7 @@ hudGui.Parent         = playerGui
 local tpBtn = Instance.new("ImageButton")
 tpBtn.Name                   = "TeleportButton"
 tpBtn.AnchorPoint            = Vector2.new(0, 0.5)
-tpBtn.Position               = UDim2.new(0, 16, 0.5, 95)  -- lewa strona, środek (pod deską)
+tpBtn.Position               = UDim2.new(0, 16, 0.5, 0)  -- lewa strona; stos: deska / teleport / wymiana
 tpBtn.Size                   = UDim2.fromOffset(156, 156)
 tpBtn.BackgroundTransparency = 1
 tpBtn.BorderSizePixel        = 0
@@ -181,26 +181,22 @@ do
 	layout.Parent = list
 end
 
--- Toast (komunikat o zablokowanej lokalizacji, np. brak kupionej Pustyni)
+-- Toast (komunikat o zablokowanej lokalizacji, np. brak kupionej Pustyni).
+-- Plain text, bez neonowego obrysu; wyświetlany wysoko (tuż pod headerem panelu).
 local toast = Instance.new("TextLabel")
-toast.AnchorPoint            = Vector2.new(0.5, 1)
-toast.Position               = UDim2.new(0.5, 0, 1, -10)
+toast.AnchorPoint            = Vector2.new(0.5, 0)
+toast.Position               = UDim2.new(0.5, 0, 0, HEADER_H + 8)
 toast.Size                   = UDim2.new(1, -24, 0, 44)
-toast.BackgroundColor3       = C_HEADER
-toast.BackgroundTransparency = 0.05
+toast.BackgroundTransparency = 1
 toast.BorderSizePixel        = 0
 toast.Text                   = ""
 toast.TextWrapped            = true
-toast.TextSize               = 16
+toast.TextSize               = 17
 toast.Font                   = FONT
 toast.TextColor3             = X_RED
 toast.Visible                = false
 toast.ZIndex                 = 8
 toast.Parent                 = panel
-do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = toast
-	local s = Instance.new("UIStroke"); s.Color = X_RED; s.Thickness = 2; s.Transparency = 0.3; s.Parent = toast
-end
 local toastToken = 0
 local function showToast(msg: string)
 	toast.Text = msg
