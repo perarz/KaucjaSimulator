@@ -414,6 +414,8 @@ return {
 		Throttle     = 0.5,
 		IconId       = "rbxassetid://70773777562362",
 		-- Kolejność na liście = kolejność wyświetlania. key = nazwa partu, label = napis na przycisku.
+		-- requiresZone = klucz w Config.Zones / OwnedZones — gracz musi mieć kupioną strefę,
+		--   inaczej teleport zablokowany (server + klient pokazuje lockedMsg).
 		Locations = {
 			{ key = "butelkomaniacy", label = "Butelkomaniacy" },
 			{ key = "bank",           label = "Bank" },
@@ -422,7 +424,10 @@ return {
 			{ key = "park",           label = "Park" },
 			{ key = "zabka",          label = "Żabka" },
 			{ key = "sklep",          label = "Sklep" },
-			{ key = "pustynia",       label = "Pustynia" },
+			{ key = "brama",          label = "Brama" },
+			{ key = "pustynia",       label = "Pustynia",
+				requiresZone = "Pustynia",
+				lockedMsg    = "Musisz kupić Pustynię żeby się przeteleportować" },
 		},
 	},
 
