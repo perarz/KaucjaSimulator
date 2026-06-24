@@ -65,18 +65,20 @@ local function playSfx(name: string)
 	local s = tmpl:Clone(); s.SoundGroup = grp; s.Parent = SoundService; s:Play()
 	s.Ended:Connect(function() s:Destroy() end)
 end
+-- X-close — wspólny styl ze STATS (asset 124962493500922, ImageButton, hover UIScale 1.15)
 local function makeXButton(parent: GuiObject, onClick: () -> ())
-	local x = Instance.new("TextButton")
-	x.AnchorPoint = Vector2.new(1, 0)
-	x.Position = UDim2.new(1, -12, 0, 10)
-	x.Size = UDim2.fromOffset(40, 40)
+	local x = Instance.new("ImageButton")
+	x.AnchorPoint            = Vector2.new(1, 0)
+	x.Position               = UDim2.new(1, -12, 0, 10)
+	x.Size                   = UDim2.fromOffset(46, 46)
 	x.BackgroundTransparency = 1
-	x.Text = "X"; x.Font = FONT_MAIN; x.TextSize = 24
-	x.TextColor3 = X_RED; x.AutoButtonColor = false
-	x.Parent = parent
+	x.Image                  = "rbxassetid://124962493500922"
+	x.ScaleType              = Enum.ScaleType.Fit
+	x.AutoButtonColor        = false
+	x.Parent                 = parent
 	local sc = Instance.new("UIScale"); sc.Parent = x
-	x.MouseEnter:Connect(function() x.TextColor3 = X_RED_HOVER; TweenService:Create(sc, TI, { Scale = 1.18 }):Play() end)
-	x.MouseLeave:Connect(function() x.TextColor3 = X_RED; TweenService:Create(sc, TI, { Scale = 1 }):Play() end)
+	x.MouseEnter:Connect(function() TweenService:Create(sc, TI, { Scale = 1.15 }):Play() end)
+	x.MouseLeave:Connect(function() TweenService:Create(sc, TI, { Scale = 1.0 }):Play() end)
 	x.MouseButton1Click:Connect(function() playSfx("Click"); onClick() end)
 	return x
 end
@@ -153,9 +155,11 @@ local function setBuyOpen(open: boolean)
 	if open and not buyLocked then
 		buyLocked = true
 		if _G["__lockMovement"] then _G["__lockMovement"]() end
+		if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("DESKA_BUY") end
 	elseif not open and buyLocked then
 		buyLocked = false
 		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+		if _G["__hudPanelClose"] then _G["__hudPanelClose"]("DESKA_BUY") end
 	end
 end
 makeXButton(buyHeader, function() setBuyOpen(false) end)
@@ -281,6 +285,15 @@ menuGui.IgnoreGuiInset = true
 menuGui.DisplayOrder = 20  -- pod głównym MENU (MenuController = 30), nad HUD
 menuGui.Parent = playerGui
 
+-- Btn hoverboard na DEDYKOWANYM ScreenGui DO=10 (pod wszystkimi panelami).
+-- Wcześniej był na menuGui (DO=20) — co stawiało go nad innymi panelami i blokowało overlay.
+local hudBtnGui = Instance.new("ScreenGui")
+hudBtnGui.Name           = "DeckHudBtn"
+hudBtnGui.ResetOnSpawn   = false
+hudBtnGui.IgnoreGuiInset = true
+hudBtnGui.DisplayOrder   = 10
+hudBtnGui.Parent         = playerGui
+
 -- Przycisk hoverboard (HUD, lewa strona pod przyciskiem MENU) — sam obrazek, bez tła/ramki
 local hoverBtn = Instance.new("ImageButton")
 hoverBtn.Name = "HoverboardButton"
@@ -292,7 +305,7 @@ hoverBtn.BorderSizePixel = 0
 hoverBtn.Image = Config.DeckMenuIconId
 hoverBtn.ScaleType = Enum.ScaleType.Fit
 hoverBtn.AutoButtonColor = false
-hoverBtn.Parent = menuGui
+hoverBtn.Parent = hudBtnGui
 -- Hover: powiększenie + leciutki obrót (jak przycisk MENU)
 do
 	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku deski
@@ -328,23 +341,8 @@ menuPanel.Visible = false
 menuPanel.Parent = menuGui
 mkCorner(menuPanel, 8); mkStroke(menuPanel, C_BORDER, 4)
 
--- Hoverboard ikona znika gdy inne UI otwarte (Menu/Sklep/Bank/itp).
--- Odejmujemy własne lock'i (menuPanel + buyGui) z count'a żeby ikona pozostała widoczna gdy
--- otwarte jest TYLKO moje UI desek.
-do
-	local RunService = game:GetService("RunService")
-	local lastVis = true
-	RunService.RenderStepped:Connect(function()
-		local count = tonumber(_G["__moveLockCount"]) or 0
-		local myLock = (menuPanel.Visible and 1 or 0) + (buyGui.Enabled and 1 or 0)
-		local externalLock = count - myLock
-		local shouldShow = externalLock <= 0
-		if shouldShow ~= lastVis then
-			hoverBtn.Visible = shouldShow
-			lastVis = shouldShow
-		end
-	end)
-end
+-- (auto-hide hoverBtn przy `__moveLockCount > 0` usunięte — shared HUD lock teraz
+-- robi dim+disable zamiast hide.)
 
 local menuHeader = Instance.new("Frame")
 menuHeader.Size = UDim2.new(1, 0, 0, 64)
@@ -595,6 +593,11 @@ equipBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
+-- Rejestracja w shared HUD-lock (MENU/SKLEP/STATS/DESKA/TELEPORT)
+_G["__hudBtnRegistry"] = _G["__hudBtnRegistry"] or {}
+_G["__hudBtnRegistry"]["DESKA"] = hoverBtn
+if _G["__hudRegisterBtn"] then _G["__hudRegisterBtn"]("DESKA", hoverBtn) end
+
 local function openMenu()
 	-- domyślny wybór: wyposażona lub pierwsza posiadana lub pierwsza w configu
 	if selectedKey == "" then
@@ -609,6 +612,7 @@ local function openMenu()
 	if not deckMenuLocked then
 		deckMenuLocked = true
 		if _G["__lockMovement"] then _G["__lockMovement"]() end
+		if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("DESKA_MENU") end
 	end
 end
 local function closeMenu()
@@ -617,6 +621,7 @@ local function closeMenu()
 	if deckMenuLocked then
 		deckMenuLocked = false
 		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+		if _G["__hudPanelClose"] then _G["__hudPanelClose"]("DESKA_MENU") end
 	end
 end
 

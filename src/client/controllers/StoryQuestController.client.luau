@@ -40,10 +40,20 @@ gui.Parent         = playerGui
 local function mkCorner(parent, r) local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r or 8); c.Parent = parent end
 local function mkStroke(parent, color, th) local s = Instance.new("UIStroke"); s.Color = color or C_BORDER; s.Thickness = th or 4; s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; s.Parent = parent end
 
--- ── CORNER HUD (persistent — prawy dolny róg) ──────────────────────────────
+-- ── CORNER HUD (persistent) ────────────────────────────────────────────────
+-- Desktop: prawy DOLNY róg (klasycznie, nad ikonkami HUD).
+-- Mobile (TouchEnabled): prawy GÓRNY róg — joystick + przyciski SPRINT/DESKA
+-- po prawej dolnej zakrywałyby panel; góra jest wolna na telefonie.
+local _IsMobile = game:GetService("UserInputService").TouchEnabled
+
 local cornerPanel = Instance.new("Frame")
-cornerPanel.AnchorPoint = Vector2.new(1, 1)
-cornerPanel.Position    = UDim2.new(1, -16, 1, -16)
+if _IsMobile then
+	cornerPanel.AnchorPoint = Vector2.new(1, 0)
+	cornerPanel.Position    = UDim2.new(1, -16, 0, 16)
+else
+	cornerPanel.AnchorPoint = Vector2.new(1, 1)
+	cornerPanel.Position    = UDim2.new(1, -16, 1, -16)
+end
 cornerPanel.Size        = UDim2.fromOffset(548, 156)
 cornerPanel.BackgroundColor3       = C_BG
 cornerPanel.BackgroundTransparency = 0.05

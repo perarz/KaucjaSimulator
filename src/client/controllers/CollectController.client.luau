@@ -833,49 +833,68 @@ do
 	end)
 end
 
+-- ViewportFrame z obracającym się modelem itemu (góra panelu)
+D.viewport = Instance.new("ViewportFrame")
+D.viewport.Size                   = UDim2.new(1, -32, 0, 188)
+D.viewport.Position               = UDim2.fromOffset(16, 12)
+D.viewport.BackgroundTransparency = 1
+D.viewport.Ambient                = Color3.fromRGB(190, 200, 195)
+D.viewport.LightColor             = Color3.fromRGB(255, 255, 255)
+D.viewport.LightDirection         = Vector3.new(-0.4, -1, -0.3)
+D.viewport.ZIndex                 = 5
+D.viewport.Parent                 = D.panel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 8); c.Parent = D.viewport
+	local s = Instance.new("UIStroke")
+	s.Color = Color3.fromRGB(0, 0, 0)
+	s.Thickness = 3
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = D.viewport
+end
+
 -- Tytuł (nazwa rzadkości)
 D.title = mkLabel(D.panel,
-	UDim2.new(1, -56, 0, 32), UDim2.fromOffset(16, 18),
+	UDim2.new(1, -56, 0, 32), UDim2.fromOffset(16, 218),
 	"", 22, C.WHITE, Enum.TextXAlignment.Left)
 D.title.ZIndex = 5
 
 -- Podtytuł — count
 D.count = mkLabel(D.panel,
-	UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 52),
+	UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 252),
 	"", 13, C.DIMTEXT, Enum.TextXAlignment.Left)
 D.count.ZIndex = 5
 
 -- Separator
 D.sep1 = mkFrame(D.panel,
-	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 86), C.BORDER, 0)
+	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 286), C.BORDER, 0)
 D.sep1.ZIndex = 5
 
 -- "Wartość bazowa: X ZŁ za butelkę"
 D.baseLbl = mkLabel(D.panel,
-	UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 98),
+	UDim2.new(1, -32, 0, 20), UDim2.fromOffset(16, 298),
 	"", 13, C.DIMTEXT, Enum.TextXAlignment.Left)
 D.baseLbl.ZIndex = 5
 
 -- Łączna wartość bez multipliera (count × base)
 D.totalLbl = mkLabel(D.panel,
-	UDim2.new(1, -32, 0, 24), UDim2.fromOffset(16, 122),
+	UDim2.new(1, -32, 0, 24), UDim2.fromOffset(16, 322),
 	"", 16, C.WHITE, Enum.TextXAlignment.Left)
 D.totalLbl.ZIndex = 5
 
 -- Z multiplierem
 D.multLbl = mkLabel(D.panel,
-	UDim2.new(1, -32, 0, 24), UDim2.fromOffset(16, 150),
+	UDim2.new(1, -32, 0, 24), UDim2.fromOffset(16, 350),
 	"", 16, C.ACCENT_GREEN, Enum.TextXAlignment.Left)
 D.multLbl.ZIndex = 5
 
 -- Separator
 D.sep2 = mkFrame(D.panel,
-	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 188), C.BORDER, 0)
+	UDim2.new(1, -32, 0, 1), UDim2.fromOffset(16, 388), C.BORDER, 0)
 D.sep2.ZIndex = 5
 
 -- Opis
 D.desc = mkLabel(D.panel,
-	UDim2.new(1, -32, 0, 100), UDim2.fromOffset(16, 200),
+	UDim2.new(1, -32, 0, 80), UDim2.fromOffset(16, 400),
 	"", 13, C.DIMTEXT, Enum.TextXAlignment.Left)
 D.desc.TextWrapped     = true
 D.desc.TextYAlignment  = Enum.TextYAlignment.Top
@@ -941,6 +960,124 @@ end
 
 D.visible = false
 D.currentRarity = nil
+
+-- ── ViewportFrame: obracający się model itemu w detail panelu ───────────────
+-- Templaty: butelki (BottleModels.<rarity> + ReplicatedStorage.Mityczny),
+-- syrop (SyrupModel), magnes (MagnetModel/Magnes/Magnet), pety (Pets.PetyZwykle/PetyGold.Pet<Rarity>).
+local function findDetailModelTemplate(slotId: string): Instance?
+	if slotId == "Zwykla" or slotId == "Rzadka" or slotId == "Epicka" or slotId == "Legendarna" then
+		local bm = ReplicatedStorage:FindFirstChild("BottleModels")
+		return bm and bm:FindFirstChild(slotId)
+	end
+	if slotId == "Mityczny" then
+		return ReplicatedStorage:FindFirstChild("Mityczny")
+	end
+	if slotId == SYRUP_ID then
+		return ReplicatedStorage:FindFirstChild("SyrupModel")
+	end
+	if slotId == MAGNET_ID then
+		return ReplicatedStorage:FindFirstChild("Magnes")
+			or ReplicatedStorage:FindFirstChild("MagnetModel")
+			or ReplicatedStorage:FindFirstChild("Magnet")
+	end
+	if isPetSlotId(slotId) then
+		local uuid  = string.sub(slotId, #PET_ID_PREFIX + 1)
+		local state = _G["__petsState"]
+		local pets  = (state and state.pets) or {}
+		for _, p in ipairs(pets) do
+			if p.id == uuid then
+				local isGold = p.gold == true
+				local segs = isGold
+					and ((Config.Pets and Config.Pets.GoldModelsFolderPath) or { "Pets", "PetyGold" })
+					or  ((Config.Pets and Config.Pets.ModelsFolderPath)     or { "Pets", "PetyZwykle" })
+				local folder: Instance? = ReplicatedStorage
+				for _, s in ipairs(segs) do folder = folder and folder:FindFirstChild(s) end
+				local name = ((Config.Pets and Config.Pets.ModelNamePrefix) or "Pet") .. tostring(p.rarity)
+				return folder and folder:FindFirstChild(name)
+			end
+		end
+	end
+	return nil
+end
+
+-- Klucz cache — pet z gold-flag tworzy inny key (regrant wizualnego modelu po ZŁOTYM upgrade).
+local function detailViewportKey(slotId: string): string
+	if isPetSlotId(slotId) then
+		local uuid  = string.sub(slotId, #PET_ID_PREFIX + 1)
+		local state = _G["__petsState"]
+		local pets  = (state and state.pets) or {}
+		for _, p in ipairs(pets) do
+			if p.id == uuid then return slotId .. (p.gold and "|gold" or "") end
+		end
+	end
+	return slotId
+end
+
+D.vpModel = nil
+D.vpConn  = nil
+D.viewportFor = nil
+
+local function clearDetailViewport()
+	if D.vpConn  then D.vpConn:Disconnect(); D.vpConn = nil end
+	if D.vpModel then D.vpModel:Destroy();   D.vpModel = nil end
+	D.viewportFor = nil
+end
+
+local function loadDetailViewport(slotId: string)
+	local key = detailViewportKey(slotId)
+	if D.viewportFor == key and D.vpModel then return end
+	clearDetailViewport()
+	local tmpl = findDetailModelTemplate(slotId)
+	if not tmpl then return end
+
+	local clone
+	if tmpl:IsA("Model") then
+		clone = tmpl:Clone()
+		if not clone.PrimaryPart then
+			local p = clone:FindFirstChildWhichIsA("BasePart", true)
+			if p then clone.PrimaryPart = p end
+		end
+	elseif tmpl:IsA("BasePart") then
+		clone = Instance.new("Model")
+		local p = tmpl:Clone(); p.Parent = clone; clone.PrimaryPart = p
+	else
+		return
+	end
+	if not clone.PrimaryPart then clone:Destroy(); return end
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false end
+	end
+
+	local cam = D.viewport:FindFirstChildOfClass("Camera")
+	if not cam then
+		cam = Instance.new("Camera"); cam.Parent = D.viewport; D.viewport.CurrentCamera = cam
+	end
+
+	clone.Parent = D.viewport
+	local bbCF, size = clone:GetBoundingBox()
+	clone:PivotTo(CFrame.new(-bbCF.Position) * clone:GetPivot())
+	local recentered = clone:GetPivot()
+	D.vpModel = clone
+	D.viewportFor = key
+
+	-- Butelki lekko nachylone w bok (~10°) dla bardziej dynamicznego look'u
+	local isBottle = (slotId == "Zwykla" or slotId == "Rzadka" or slotId == "Epicka"
+		or slotId == "Legendarna" or slotId == "Mityczny")
+	local tilt = isBottle and CFrame.Angles(0, 0, math.rad(10)) or CFrame.new()
+
+	local maxE = math.max(size.X, size.Y, size.Z)
+	if maxE <= 0 then maxE = 4 end
+	local dist = maxE * 1.9 + 2
+	cam.FieldOfView = 45
+	cam.CFrame = CFrame.new(Vector3.new(0, size.Y * 0.12, dist), Vector3.zero)
+
+	local angle = 0
+	D.vpConn = RunService.RenderStepped:Connect(function(dt)
+		if not clone.Parent then return end
+		angle += dt * 0.9
+		clone:PivotTo(CFrame.Angles(0, angle, 0) * tilt * recentered)
+	end)
+end
 
 D.dropBtn.MouseButton1Click:Connect(function()
 	local r = D.currentRarity
@@ -1010,15 +1147,26 @@ do
 	D.petDiscardBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.00 }):Play() end)
 end
 
+-- Helper: czy ten UUID jest w EquippedPets (lista wyposażonych petów).
+-- Po refaktorze 1→2 sloty: equippedIds to lista, equippedId (legacy) to pierwszy z listy.
+local function isUuidEquipped(uuid: string, state): boolean
+	if not state then return false end
+	local list = state.equippedIds
+	if type(list) == "table" then
+		for _, id in ipairs(list) do if id == uuid then return true end end
+		return false
+	end
+	return (state.equippedId or "") == uuid
+end
+
 -- Pet click handlers (PO definicji buttonów żeby uniknąć order bug)
 D.petEquipBtn.MouseButton1Click:Connect(function()
 	if not isPetSlotId(D.currentRarity) then return end
 	local uuid = string.sub(D.currentRarity, #PET_ID_PREFIX + 1)
 	local state = _G["__petsState"]
-	local equippedId = (state and state.equippedId) or ""
 	playSfx("Click")
-	if uuid == equippedId then
-		UnequipPetEvt:FireServer()
+	if isUuidEquipped(uuid, state) then
+		UnequipPetEvt:FireServer(uuid)
 	else
 		EquipPetEvt:FireServer(uuid)
 	end
@@ -1048,6 +1196,7 @@ end
 local function refreshInvDetail()
 	if not D.currentRarity then return end
 	local rarity = D.currentRarity
+	loadDetailViewport(rarity)
 
 	-- Quest item: syrop dziadka — inny widok (bez wartości / mnożnika)
 	if rarity == SYRUP_ID then
@@ -1066,7 +1215,9 @@ local function refreshInvDetail()
 		local uuid = string.sub(rarity, #PET_ID_PREFIX + 1)
 		local state = _G["__petsState"]
 		local pets  = (state and state.pets) or {}
-		local equippedId = (state and state.equippedId) or ""
+		local thisEquipped = isUuidEquipped(uuid, state)
+		local equippedCount = (state and state.equippedIds) and #state.equippedIds or ((state and state.equippedId and state.equippedId ~= "") and 1 or 0)
+		local maxEq = (state and state.maxEquipped) or 1
 		local pet
 		for _, p in ipairs(pets) do
 			if p.id == uuid then pet = p; break end
@@ -1091,8 +1242,13 @@ local function refreshInvDetail()
 		D.title.Text       = isGold and string.format("ZŁOTY %s %s", rname, pet.class)
 			or string.format("%s %s", rname, pet.class)
 		D.title.TextColor3 = isGold and GOLD_COLOR or color
-		D.count.Text       = (uuid == equippedId) and "WYPOSAŻONY ✓" or "1 sztuka"
-		D.count.TextColor3 = (uuid == equippedId) and C.ACCENT_GREEN or C.DIMTEXT
+		if thisEquipped then
+			D.count.Text       = string.format("WYPOSAŻONY ✓  (%d/%d)", equippedCount, maxEq)
+			D.count.TextColor3 = C.ACCENT_GREEN
+		else
+			D.count.Text       = string.format("Wolne sloty: %d/%d", maxEq - equippedCount, maxEq)
+			D.count.TextColor3 = C.DIMTEXT
+		end
 		D.baseLbl.Text     = string.format("Mnożnik kasy: ×%.2f", (rcfg.moneyMul or 1) * statMul)
 		local bonus = math.floor(((ccfg.bonuses and ccfg.bonuses[pet.rarity]) or 0) * statMul + 0.5)
 		if ccfg.effect == "speed" then
@@ -1189,17 +1345,28 @@ local function setInvDetailContentVisible(visible: boolean)
 	if isPet then
 		local uuid = string.sub(D.currentRarity, #PET_ID_PREFIX + 1)
 		local state = _G["__petsState"]
-		local equippedId = (state and state.equippedId) or ""
-		if uuid == equippedId then
+		local thisEquipped = isUuidEquipped(uuid, state)
+		local equippedCount = (state and state.equippedIds) and #state.equippedIds or 0
+		local maxEq = (state and state.maxEquipped) or 1
+		if thisEquipped then
 			D.petEquipBtn.Text            = "ZDEJMIJ"
 			D.petEquipBtn.BackgroundColor3 = Color3.fromRGB(190, 150, 60)
 			D.petEquipBtn.TextColor3       = C.WHITE
+			D.petEquipBtn.AutoButtonColor  = false
+		elseif equippedCount >= maxEq then
+			D.petEquipBtn.Text            = string.format("PEŁNE SLOTY (%d/%d)", equippedCount, maxEq)
+			D.petEquipBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+			D.petEquipBtn.TextColor3       = C.WHITE
+			D.petEquipBtn.AutoButtonColor  = false
 		else
 			D.petEquipBtn.Text            = "ZAŁÓŻ"
 			D.petEquipBtn.BackgroundColor3 = C.ACCENT_GREEN
 			D.petEquipBtn.TextColor3       = Color3.new(0, 0, 0)
+			D.petEquipBtn.AutoButtonColor  = false
 		end
 	end
+	D.viewport.Visible = visible
+	if not visible then clearDetailViewport() end
 	D.placeholder.Visible = not visible
 end
 
@@ -2609,12 +2776,14 @@ updateInventory()
 -- PetService wysyła PetStatusUpdate przy każdej zmianie petów. Aktualizujemy
 -- _G.__petsState (czytane też przez Bank/SprintController) + syncujemy sloty.
 local PetStatusUpdateEvt = ReplicatedStorage:WaitForChild("Events"):WaitForChild("PetStatusUpdate")
-_G["__petsState"] = { pets = {}, equippedId = "", bankPets = {}, bonuses = {} }
+_G["__petsState"] = { pets = {}, equippedId = "", equippedIds = {}, maxEquipped = 1, bankPets = {}, bonuses = {} }
 PetStatusUpdateEvt.OnClientEvent:Connect(function(data)
 	if type(data) ~= "table" then return end
 	_G["__petsState"] = {
 		pets        = data.pets or {},
-		equippedId  = data.equippedId or "",
+		equippedId  = data.equippedId or "",                    -- legacy: pierwszy z listy
+		equippedIds = data.equippedIds or {},                    -- lista UUID
+		maxEquipped = data.maxEquipped or 1,                     -- ile slotów dostępnych
 		bankPets    = data.bankPets or {},
 		hasGamepass = data.hasGamepass == true,
 		bonuses     = data.bonuses or {},

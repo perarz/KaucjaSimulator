@@ -77,6 +77,16 @@ gui.Parent         = playerGui
 
 -- ── Przycisk MENU (środek dolnej krawędzi ekranu) — ImageButton z ikoną ─────
 -- Po reorganizacji HUD: środek dół. SKLEP po lewo od MENU, hoverboard zostaje po lewej.
+-- Btn na DEDYKOWANYM ScreenGui z DisplayOrder=10 (pod wszystkimi panelami, żeby overlay
+-- panelu zawsze przykrył btn wizualnie — fix dla "ikona STATS warstwę wyżej niż menu").
+local hudBtnGui = Instance.new("ScreenGui")
+hudBtnGui.Name           = "MenuHudBtn"
+hudBtnGui.ResetOnSpawn   = false
+hudBtnGui.IgnoreGuiInset = true
+hudBtnGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+hudBtnGui.DisplayOrder   = 10
+hudBtnGui.Parent         = playerGui
+
 local HUD_BTN_BOTTOM_OFFSET = 20  -- piksele nad dolną krawędzią
 local menuBtn = Instance.new("ImageButton")
 menuBtn.Name                   = "MenuButton"
@@ -88,7 +98,7 @@ menuBtn.BorderSizePixel        = 0
 menuBtn.Image                  = "rbxassetid://80450607603898"
 menuBtn.ScaleType              = Enum.ScaleType.Fit
 menuBtn.AutoButtonColor        = false
-menuBtn.Parent                 = gui
+menuBtn.Parent                 = hudBtnGui
 
 -- Hover: powiększenie + leciutki obrót
 do
@@ -135,33 +145,23 @@ mkStroke(panel, C_BORDER, 5)
 -- transparentnym tle — przy UIScale <1 (np. monitor 1280×1024 dostaje scale 0.865)
 -- robił się na tyle drobny i niekontrastowy że gracze go nie widzieli i nie umieli
 -- zamknąć menu (skarga z Discorda — "musze klikac samouczek zeby zamknac").
-local closeBtn = Instance.new("TextButton")
-closeBtn.AnchorPoint        = Vector2.new(1, 0)
-closeBtn.Position           = UDim2.new(1, -16, 0, 14)
-closeBtn.Size               = UDim2.fromOffset(52, 52)
-closeBtn.BackgroundColor3   = Color3.fromRGB(200, 55, 55)
-closeBtn.BorderSizePixel    = 0
-closeBtn.Text               = "X"
-closeBtn.Font               = FONT_MAIN
-closeBtn.TextSize           = 32
-closeBtn.TextColor3         = Color3.new(1, 1, 1)
-closeBtn.AutoButtonColor    = false
-closeBtn.ZIndex             = 10
-closeBtn.Parent             = panel
+-- X-close — wspólny styl ze STATS (asset 124962493500922, ImageButton, hover UIScale 1.15)
+local closeBtn = Instance.new("ImageButton")
+closeBtn.AnchorPoint            = Vector2.new(1, 0)
+closeBtn.Position               = UDim2.new(1, -16, 0, 14)
+closeBtn.Size                   = UDim2.fromOffset(46, 46)
+closeBtn.BackgroundTransparency = 1
+closeBtn.BorderSizePixel        = 0
+closeBtn.Image                  = "rbxassetid://124962493500922"
+closeBtn.ScaleType              = Enum.ScaleType.Fit
+closeBtn.AutoButtonColor        = false
+closeBtn.ZIndex                 = 10
+closeBtn.Parent                 = panel
 do
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(1, 0); c.Parent = closeBtn
-	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = closeBtn
-	local sc = Instance.new("UIScale")
-	sc.Parent = closeBtn
+	local sc = Instance.new("UIScale"); sc.Parent = closeBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	closeBtn.MouseEnter:Connect(function()
-		closeBtn.BackgroundColor3 = Color3.fromRGB(235, 80, 80)
-		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
-	end)
-	closeBtn.MouseLeave:Connect(function()
-		closeBtn.BackgroundColor3 = Color3.fromRGB(200, 55, 55)
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-	end)
+	closeBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.15 }):Play() end)
+	closeBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.0 }):Play() end)
 end
 
 -- ── Money label w prawym górnym rogu (lewo od X-close) ────────────────────
@@ -249,7 +249,10 @@ local function tabRect(idx: number): (UDim2, UDim2)
 		UDim2.fromOffset(cellW, TABBAR_H - TABBAR_PAD * 2)
 end
 
--- Tworzymy przyciski (text-only, bubble pokazuje aktywność)
+-- Tworzymy przyciski (text-only, bubble pokazuje aktywność).
+-- TextScaled + UITextSizeConstraint: na desktopie tekst rozmiar 26 (jak dotąd), na mobile
+-- (UIScale ~0.5) cellW kurczy się, więc TextScaled zmniejsza tekst poniżej 26 żeby
+-- "UMIEJĘTNOŚCI" zmieściło się i nie wlewało na sąsiednią zakładkę (bug zgłoszony przez gracza).
 for i, def in ipairs(TABS) do
 	local btn = Instance.new("TextButton")
 	btn.BackgroundTransparency = 1
@@ -257,10 +260,14 @@ for i, def in ipairs(TABS) do
 	btn.BorderSizePixel        = 0
 	btn.Text                   = def.label
 	btn.Font                   = FONT_TAB
-	btn.TextSize               = 26
+	btn.TextScaled             = true
 	btn.TextColor3             = C_DIMTEXT
 	btn.ZIndex                 = 3
 	btn.Parent                 = tabBar
+	local cons = Instance.new("UITextSizeConstraint")
+	cons.MinTextSize = 10
+	cons.MaxTextSize = 26
+	cons.Parent      = btn
 	-- Pozycja ustawimy po pierwszym layoutcie (poniżej, w refreshLayout)
 	tabButtons[i] = btn
 end
@@ -397,6 +404,62 @@ for i, btn in ipairs(tabButtons) do
 	btn.MouseButton1Click:Connect(function() playSfx("Click"); setActiveTab(idx, true) end)
 end
 
+-- ── Shared HUD button lock ────────────────────────────────────────────────
+-- Każdy z 5 HUD-button controllerów (MENU/SKLEP/STATS/DESKA/TELEPORT) rejestruje
+-- swój btn w `__hudBtnRegistry`. Gdy jakiekolwiek menu jest otwarte → wszystkie 5
+-- przycisków: Active=false (niekliklane) + ImageTransparency=0.55 (przyciemnione).
+-- Multi-panel safe (set licznikowy) — np. gdy DESKA_BUY i DESKA_MENU oba aktywne.
+_G["__hudBtnRegistry"] = _G["__hudBtnRegistry"] or {}
+if not _G["__hudPanelOpen"] then
+	local registry = _G["__hudBtnRegistry"]
+	local activeSet: { [string]: boolean } = {}
+	local origActive: { [Instance]: boolean } = {}
+	local origTrans:  { [Instance]: number } = {}
+
+	local function dimBtn(btn)
+		if not btn or not btn.Parent then return end
+		if origActive[btn] == nil then
+			origActive[btn] = btn.Active
+			origTrans[btn]  = btn.ImageTransparency
+		end
+		btn.Active = false
+		btn.ImageTransparency = 0.55
+	end
+	local function restoreBtn(btn)
+		if not btn then return end
+		if origActive[btn] ~= nil then
+			if btn.Parent then
+				btn.Active = origActive[btn]
+				btn.ImageTransparency = origTrans[btn]
+			end
+			origActive[btn] = nil
+			origTrans[btn]  = nil
+		end
+	end
+
+	_G["__hudRegisterBtn"] = function(name, btn)
+		registry[name] = btn
+		if next(activeSet) ~= nil then dimBtn(btn) end
+	end
+
+	_G["__hudPanelOpen"] = function(name)
+		activeSet[name] = true
+		for _, btn in pairs(registry) do dimBtn(btn) end
+	end
+
+	_G["__hudPanelClose"] = function(name)
+		activeSet[name] = nil
+		if next(activeSet) == nil then
+			for _, btn in pairs(registry) do restoreBtn(btn) end
+		end
+	end
+
+	_G["__hudIsAnyOpen"] = function() return next(activeSet) ~= nil end
+end
+
+-- Rejestracja własnego przycisku MENU
+_G["__hudRegisterBtn"]("MENU", menuBtn)
+
 -- ── Open / Close ──────────────────────────────────────────────────────────
 local TI_OPEN  = TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local TI_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
@@ -408,8 +471,10 @@ local function setMenuOpen(open: boolean)
 	-- Lock movement + sygnał dla wallet HUD żeby się schował (poprzez _G.__moveLockCount)
 	if open then
 		if _G["__lockMovement"] then _G["__lockMovement"]() end
+		if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("MENU") end
 	else
 		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+		if _G["__hudPanelClose"] then _G["__hudPanelClose"]("MENU") end
 	end
 
 	if open then
@@ -440,21 +505,8 @@ end
 menuBtn.MouseButton1Click:Connect(function() playSfx("Click"); setMenuOpen(not isMenuOpen) end)
 closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setMenuOpen(false) end)
 
--- Ikona MENU znika gdy inne UI otwarte (Bank/Sklep/itp). Wyłączam tylko zewnętrzny lock —
--- gdy mój panel jest otwarty, count zawiera mój własny lock — odejmuję go.
-do
-	local RunService = game:GetService("RunService")
-	local lastVis = true
-	RunService.RenderStepped:Connect(function()
-		local count = tonumber(_G["__moveLockCount"]) or 0
-		local externalLock = count - (isMenuOpen and 1 or 0)
-		local shouldShow = externalLock <= 0
-		if shouldShow ~= lastVis then
-			menuBtn.Visible = shouldShow
-			lastVis = shouldShow
-		end
-	end)
-end
+-- (auto-hide menuBtn przy `__moveLockCount > 0` usunięte — shared HUD lock teraz
+-- robi dim+disable zamiast hide, btn zostaje widoczny pod overlay'em panelu.)
 -- Klik w overlay (tło) NIE zamyka menu — zamykanie wyłącznie przyciskiem X lub ESC
 
 UserInputService.InputBegan:Connect(function(input, processed)

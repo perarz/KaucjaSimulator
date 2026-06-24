@@ -145,7 +145,9 @@ task.spawn(function()
 			-- Pety: zarówno w EQ jak i w banku — klient renderuje sloty
 			eqPets           = deepCopy(pData.Pets or {}),
 			bankPets         = deepCopy(pData.BankPets or {}),
-			equippedPetId    = pData.EquippedPet or "",
+			equippedPetId    = pData.EquippedPet or "",                    -- legacy: pierwszy z listy
+			equippedPetIds   = pData.EquippedPets or {},                   -- nowe: lista UUID
+			maxEquippedPets  = pData.MaxEquippedPets or 1,
 		})
 	end)
 end)
@@ -254,10 +256,14 @@ local function handleTransfer(player: Player, rawBp: any, rawBk: any, eqPetIds: 
 	pData.Pets     = newPets
 	pData.BankPets = newBankPets
 
-	-- Jeśli wyposażony pet trafił do banku — unequip
-	if pData.EquippedPet ~= "" and not newEqSet[pData.EquippedPet] then
-		pData.EquippedPet = ""
+	-- Jeśli któryś z wyposażonych petów trafił do banku — unequip go z listy.
+	pData.EquippedPets = pData.EquippedPets or {}
+	for i = #pData.EquippedPets, 1, -1 do
+		if not newEqSet[pData.EquippedPets[i]] then
+			table.remove(pData.EquippedPets, i)
+		end
 	end
+	pData.EquippedPet = pData.EquippedPets[1] or ""
 
 	-- BEZ SaveData/saveBank tutaj — SetAsync yielduje 1-2s i blokuje BankResult
 	-- (gracz widzi "ZAPISYWANIE..." aż serwer odpowie). Persystencja przez auto-save 60s

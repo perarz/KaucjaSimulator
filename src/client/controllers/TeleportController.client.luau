@@ -45,7 +45,7 @@ local hudGui = Instance.new("ScreenGui")
 hudGui.Name           = "TeleportHud"
 hudGui.ResetOnSpawn   = false
 hudGui.IgnoreGuiInset = true
-hudGui.DisplayOrder   = 25
+hudGui.DisplayOrder   = 10  -- pod wszystkimi panelami; shared HUD lock dim'uje btn pod overlay'em
 hudGui.Parent         = playerGui
 
 local tpBtn = Instance.new("ImageButton")
@@ -136,19 +136,24 @@ title.TextXAlignment         = Enum.TextXAlignment.Left
 title.ZIndex                 = 4
 title.Parent                 = header
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size                   = UDim2.fromOffset(40, 40)
+-- X-close — wspólny styl ze STATS
+local closeBtn = Instance.new("ImageButton")
+closeBtn.Size                   = UDim2.fromOffset(46, 46)
 closeBtn.AnchorPoint            = Vector2.new(1, 0.5)
 closeBtn.Position               = UDim2.new(1, -12, 0.5, 0)
 closeBtn.BackgroundTransparency = 1
 closeBtn.BorderSizePixel        = 0
-closeBtn.Text                   = "✕"
-closeBtn.TextSize               = 26
-closeBtn.Font                   = FONT
-closeBtn.TextColor3             = X_RED
+closeBtn.Image                  = "rbxassetid://124962493500922"
+closeBtn.ScaleType              = Enum.ScaleType.Fit
 closeBtn.AutoButtonColor        = false
 closeBtn.ZIndex                 = 4
 closeBtn.Parent                 = header
+do
+	local sc = Instance.new("UIScale"); sc.Parent = closeBtn
+	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	closeBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.15 }):Play() end)
+	closeBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.0 }):Play() end)
+end
 
 -- Lista przycisków
 local list = Instance.new("Frame")
@@ -170,14 +175,21 @@ local locked = false
 local function lockMove() if not locked then locked = true; if _G["__lockMovement"] then _G["__lockMovement"]() end end end
 local function unlockMove() if locked then locked = false; if _G["__unlockMovement"] then _G["__unlockMovement"]() end end end
 
+-- Rejestracja w shared HUD-lock (MENU/SKLEP/STATS/DESKA/TELEPORT)
+_G["__hudBtnRegistry"] = _G["__hudBtnRegistry"] or {}
+_G["__hudBtnRegistry"]["TELEPORT"] = tpBtn
+if _G["__hudRegisterBtn"] then _G["__hudRegisterBtn"]("TELEPORT", tpBtn) end
+
 local function closePanel()
 	gui.Enabled = false
 	unlockMove()
+	if _G["__hudPanelClose"] then _G["__hudPanelClose"]("TELEPORT") end
 end
 
 local function openPanel()
 	gui.Enabled = true
 	lockMove()
+	if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("TELEPORT") end
 	panel.Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85)
 	TweenService:Create(panel, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{ Size = UDim2.fromOffset(PANEL_W, PANEL_H) }):Play()

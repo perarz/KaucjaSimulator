@@ -6,7 +6,7 @@
     "StarterPlayer": {
       "$className": "StarterPlayer",
       "$properties": {
-        "EnableMouseLockOption": false,
+        "EnableMouseLockOption": true,
         "DevTouchMovementMode": "Thumbstick"
       },
       "StarterPlayerScripts": {
@@ -58,6 +58,15 @@
         },
         "AdminController": {
           "$path": "src/client/controllers/AdminController.client.luau"
+        },
+        "CameraEffectsController": {
+          "$path": "src/client/controllers/CameraEffectsController.client.luau"
+        },
+        "ZoneEntryController": {
+          "$path": "src/client/controllers/ZoneEntryController.client.luau"
+        },
+        "PetSlotShopController": {
+          "$path": "src/client/controllers/PetSlotShopController.client.luau"
         },
         "ShopCatalogController": {
           "$path": "src/client/controllers/ShopCatalogController.client.luau"
@@ -187,6 +196,12 @@
       "TeleportService": {
         "$path": "src/server/services/TeleportService.luau"
       },
+      "ZoneEntryService": {
+        "$path": "src/server/services/ZoneEntryService.luau"
+      },
+      "PetSlotShopService": {
+        "$path": "src/server/services/PetSlotShopService.luau"
+      },
       "PlayerCollisionService": {
         "$path": "src/server/services/PlayerCollisionService.luau"
       },
@@ -267,6 +282,10 @@
         "ClosePvPEntry":       { "$className": "RemoteEvent" },
         "BuyPvPEntry":         { "$className": "RemoteEvent" },
         "PvPEntryResult":      { "$className": "RemoteEvent" },
+        "ZoneOwnedUpdate":     { "$className": "RemoteEvent" },
+        "OpenPetSlotShop":     { "$className": "RemoteEvent" },
+        "BuyPetSlot":          { "$className": "RemoteEvent" },
+        "BuyPetSlotResult":    { "$className": "RemoteEvent" },
         "StoryQuestInit":      { "$className": "RemoteEvent" },
         "StoryQuestUpdate":    { "$className": "RemoteEvent" },
         "StoryQuestComplete":  { "$className": "RemoteEvent" },

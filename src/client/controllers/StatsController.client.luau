@@ -66,7 +66,7 @@ local hudGui = Instance.new("ScreenGui")
 hudGui.Name           = "StatsHud"
 hudGui.ResetOnSpawn   = false
 hudGui.IgnoreGuiInset = true
-hudGui.DisplayOrder   = 30
+hudGui.DisplayOrder   = 10  -- pod wszystkimi panelami; shared HUD lock dim'uje btn pod overlay'em
 hudGui.Parent         = playerGui
 
 local MENU_W = 230
@@ -488,10 +488,16 @@ end
 
 StatsData.OnClientEvent:Connect(applyStats)
 
+-- Rejestracja w shared HUD-lock (MENU/SKLEP/STATS/DESKA/TELEPORT)
+_G["__hudBtnRegistry"] = _G["__hudBtnRegistry"] or {}
+_G["__hudBtnRegistry"]["STATS"] = statsBtn
+if _G["__hudRegisterBtn"] then _G["__hudRegisterBtn"]("STATS", statsBtn) end
+
 -- ── Open / close ─────────────────────────────────────────────────────────────
 local function openPanel()
 	gui.Enabled = true
 	lockMove()
+	if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("STATS") end
 	-- animacja otwierania (pop przez Size — responsywny UIScale zostaje jedynym na panelu)
 	panel.Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85)
 	overlay.BackgroundTransparency = 1
@@ -504,6 +510,7 @@ local function closePanel()
 	clearViewport()
 	gui.Enabled = false
 	unlockMove()
+	if _G["__hudPanelClose"] then _G["__hudPanelClose"]("STATS") end
 end
 
 statsBtn.MouseButton1Click:Connect(function() playSfx("Click"); openPanel() end)

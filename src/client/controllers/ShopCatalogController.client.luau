@@ -81,6 +81,14 @@ local HUD_GAP  = -18  -- bliżej MENU (lekki zakład na transparentne marginesy 
 local HUD_OFFSET_BOTTOM = 20
 local SHOP_X_OFFSET = -(MENU_W / 2 + HUD_GAP + SHOP_W / 2)
 
+-- Btn na DEDYKOWANYM ScreenGui DO=10 (pod wszystkimi panelami)
+local hudBtnGui = Instance.new("ScreenGui")
+hudBtnGui.Name           = "ShopHudBtn"
+hudBtnGui.ResetOnSpawn   = false
+hudBtnGui.IgnoreGuiInset = true
+hudBtnGui.DisplayOrder   = 10
+hudBtnGui.Parent         = playerGui
+
 local shopBtn = Instance.new("ImageButton")
 shopBtn.Name                   = "ShopButton"
 shopBtn.AnchorPoint            = Vector2.new(0.5, 1)
@@ -91,7 +99,7 @@ shopBtn.BorderSizePixel        = 0
 shopBtn.Image                  = SHOP_ICON_ID
 shopBtn.ScaleType              = Enum.ScaleType.Fit
 shopBtn.AutoButtonColor        = false
-shopBtn.Parent                 = gui
+shopBtn.Parent                 = hudBtnGui
 do
 	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad)
@@ -170,30 +178,22 @@ headerTitle.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
 headerTitle.TextStrokeTransparency = 0.5
 headerTitle.Parent                 = header
 
--- X-close
-local closeBtn = Instance.new("TextButton")
-closeBtn.AnchorPoint        = Vector2.new(1, 0.5)
-closeBtn.Position           = UDim2.new(1, -16, 0.5, 0)
-closeBtn.Size               = UDim2.fromOffset(50, 50)
+-- X-close — wspólny styl ze STATS
+local closeBtn = Instance.new("ImageButton")
+closeBtn.AnchorPoint            = Vector2.new(1, 0.5)
+closeBtn.Position               = UDim2.new(1, -12, 0.5, 0)
+closeBtn.Size                   = UDim2.fromOffset(46, 46)
 closeBtn.BackgroundTransparency = 1
-closeBtn.BorderSizePixel    = 0
-closeBtn.Text               = "X"
-closeBtn.Font               = FONT
-closeBtn.TextSize           = 32
-closeBtn.TextColor3         = Color3.fromRGB(220, 70, 70)
-closeBtn.AutoButtonColor    = false
-closeBtn.Parent             = header
+closeBtn.BorderSizePixel        = 0
+closeBtn.Image                  = "rbxassetid://124962493500922"
+closeBtn.ScaleType              = Enum.ScaleType.Fit
+closeBtn.AutoButtonColor        = false
+closeBtn.Parent                 = header
 do
 	local sc = Instance.new("UIScale"); sc.Parent = closeBtn
 	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
-	closeBtn.MouseEnter:Connect(function()
-		closeBtn.TextColor3 = Color3.fromRGB(255, 110, 110)
-		TweenService:Create(sc, ti, { Scale = 1.18 }):Play()
-	end)
-	closeBtn.MouseLeave:Connect(function()
-		closeBtn.TextColor3 = Color3.fromRGB(220, 70, 70)
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-	end)
+	closeBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.15 }):Play() end)
+	closeBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.0 }):Play() end)
 end
 
 -- Scroll obszar — większy gap pod headerem żeby pierwszy rząd kart nie wycierał się o headerSep
@@ -594,11 +594,17 @@ local isOpen = false
 local TI_OPEN  = TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local TI_CLOSE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
+-- Rejestracja w shared HUD-lock (przyciemnia inne 4 buttony gdy ten panel jest otwarty)
+_G["__hudBtnRegistry"] = _G["__hudBtnRegistry"] or {}
+_G["__hudBtnRegistry"]["SKLEP"] = shopBtn
+if _G["__hudRegisterBtn"] then _G["__hudRegisterBtn"]("SKLEP", shopBtn) end
+
 local function setOpen(open: boolean)
 	if isOpen == open then return end
 	isOpen = open
 	if open then
 		if _G["__lockMovement"] then _G["__lockMovement"]() end
+		if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("SKLEP") end
 		panel.Visible   = true
 		overlay.Visible = true
 		panel.Size      = UDim2.fromOffset(PANEL_W * 0.88, PANEL_H * 0.88)
@@ -607,6 +613,7 @@ local function setOpen(open: boolean)
 		TweenService:Create(overlay, TI_OPEN, { BackgroundTransparency = 0.35 }):Play()
 	else
 		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+		if _G["__hudPanelClose"] then _G["__hudPanelClose"]("SKLEP") end
 		TweenService:Create(panel, TI_CLOSE, {
 			Size = UDim2.fromOffset(PANEL_W * 0.88, PANEL_H * 0.88),
 		}):Play()
@@ -622,21 +629,8 @@ shopBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(not isOpe
 closeBtn.MouseButton1Click:Connect(function() playSfx("Click"); setOpen(false) end)
 overlay.MouseButton1Click:Connect(function() end)  -- klik w tło nie zamyka (jak menu)
 
--- Ikona SKLEP znika gdy gracz otworzy MENU / Bank / inne UI (każdy lock bumpuje __moveLockCount).
--- Pokazujemy też ją z powrotem po zamknięciu UI. Wykluczamy własny lock (gdy mój katalog otwarty,
--- ikona i tak jest pod overlay'em — nie ukrywamy żeby zamknięcie X działało).
-local shopBtnLastVisible = true
-local RunService = game:GetService("RunService")
-RunService.RenderStepped:Connect(function()
-	local count = tonumber(_G["__moveLockCount"]) or 0
-	-- Gdy mój katalog otwarty, count zawiera +1 z mojego lock'a — odejmuję
-	local externalLock = count - (isOpen and 1 or 0)
-	local shouldShow = externalLock <= 0
-	if shouldShow ~= shopBtnLastVisible then
-		shopBtn.Visible = shouldShow
-		shopBtnLastVisible = shouldShow
-	end
-end)
+-- (auto-hide shopBtn przy `__moveLockCount > 0` usunięte — shared HUD lock teraz
+-- robi dim+disable zamiast hide.)
 
 UserInputService.InputBegan:Connect(function(input, processed)
 	if processed then return end

@@ -52,8 +52,9 @@ local function isNearGablota(player: Player): boolean
 	if not (hrp and hrp:IsA("BasePart")) then return false end
 	return ((hrp :: BasePart).Position - petGablotaAnchor.Position).Magnitude <= GABLOTA_MAX_DIST
 end
--- Aktywne wizualne pety (server spawnuje, wszyscy widzą)
-local activeVisual: { [Player]: { model: Model, primary: BasePart, equippedId: string } } = {}
+-- Aktywne wizualne pety per gracz: mapa petId → entry. Każdy equipped pet ma własny visual.
+type VisEntry = { model: Instance, primary: BasePart, slotIdx: number }
+local activeVisual: { [Player]: { [string]: VisEntry } } = {}
 
 -- ── Helpery ───────────────────────────────────────────────────────────────
 
@@ -125,13 +126,56 @@ end
 -- ── Bonus accessors (używane przez BottleService/SprintController/DeskaService) ─
 -- Zwracają 0/1 jeśli nic nie wyposażone — nigdy nie crashują na pustym data.
 
-local function findEquippedPet(data)
-	local id = data.EquippedPet
-	if not id or id == "" then return nil end
-	for _, p in ipairs(data.Pets or {}) do
-		if p.id == id then return p end
+-- Lista wyposażonych petów (rozwiązuje UUID-y w listę pet-tabel z data.Pets).
+-- Idempotent: ignoruje UUID-y które już nie istnieją (np. po wyrzuceniu).
+local function getEquippedPets(data): { any }
+	local out = {}
+	if not data then return out end
+	local ids = data.EquippedPets or {}
+	if #ids == 0 then return out end
+	local byId: { [string]: any } = {}
+	for _, p in ipairs(data.Pets or {}) do byId[p.id] = p end
+	for _, id in ipairs(ids) do
+		local p = byId[id]
+		if p then table.insert(out, p) end
 	end
-	return nil
+	return out
+end
+
+-- Legacy single — pierwszy z listy (dla kodu który jeszcze nie wie o N petach).
+local function findEquippedPet(data)
+	local list = getEquippedPets(data)
+	return list[1]
+end
+
+-- Helper: jest petId w EquippedPets?
+local function isEquipped(data, petId: string): boolean
+	for _, id in ipairs(data.EquippedPets or {}) do
+		if id == petId then return true end
+	end
+	return false
+end
+
+-- Helper: usuń petId z EquippedPets (modyfikuje listę w miejscu).
+local function unequipById(data, petId: string)
+	local ids = data.EquippedPets or {}
+	for i = #ids, 1, -1 do
+		if ids[i] == petId then table.remove(ids, i) end
+	end
+	-- Sync legacy field żeby stary kod (jeśli gdzieś jeszcze został) widział pierwszy
+	data.EquippedPet = ids[1] or ""
+end
+
+-- Helper: dodaj petId do EquippedPets (jeśli jest miejsce i nie ma duplikatu).
+-- Zwraca true jeśli equipped, false jeśli max reached lub duplicate.
+local function equipById(data, petId: string): boolean
+	if isEquipped(data, petId) then return false end
+	data.EquippedPets = data.EquippedPets or {}
+	local maxN = math.max(1, data.MaxEquippedPets or 1)
+	if #data.EquippedPets >= maxN then return false end
+	table.insert(data.EquippedPets, petId)
+	data.EquippedPet = data.EquippedPets[1] or ""
+	return true
 end
 
 -- Mnożnik gold peta (+15% do statystyk). Zwykły pet → 1.
@@ -142,33 +186,43 @@ local function goldMul(pet): number
 	return 1
 end
 
+-- Bonusy sumują się z wszystkich wyposażonych petów.
+-- Money: multiplikatywnie (np. 1.3 × 1.5 = 1.95). Speed/HP: addytywnie.
 function PetService.GetMoneyMul(player: Player): number
 	if not player or not player.Parent then return 1 end
 	local data = PlayerDataService.GetData(player)
-	local p = findEquippedPet(data)
-	if not p then return 1 end
-	local rcfg = rarityCfg(p.rarity)
-	return ((rcfg and rcfg.moneyMul) or 1) * goldMul(p)
+	local mul = 1
+	for _, p in ipairs(getEquippedPets(data)) do
+		local rcfg = rarityCfg(p.rarity)
+		mul = mul * (((rcfg and rcfg.moneyMul) or 1) * goldMul(p))
+	end
+	return mul
 end
 
 function PetService.GetSpeedBonus(player: Player): number
 	if not player or not player.Parent then return 0 end
 	local data = PlayerDataService.GetData(player)
-	local p = findEquippedPet(data)
-	if not p then return 0 end
-	local ccfg = classCfg(p.class)
-	if not ccfg or ccfg.effect ~= "speed" then return 0 end
-	return math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
+	local total = 0
+	for _, p in ipairs(getEquippedPets(data)) do
+		local ccfg = classCfg(p.class)
+		if ccfg and ccfg.effect == "speed" then
+			total = total + math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
+		end
+	end
+	return total
 end
 
 function PetService.GetHpBonus(player: Player): number
 	if not player or not player.Parent then return 0 end
 	local data = PlayerDataService.GetData(player)
-	local p = findEquippedPet(data)
-	if not p then return 0 end
-	local ccfg = classCfg(p.class)
-	if not ccfg or ccfg.effect ~= "hp" then return 0 end
-	return math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
+	local total = 0
+	for _, p in ipairs(getEquippedPets(data)) do
+		local ccfg = classCfg(p.class)
+		if ccfg and ccfg.effect == "hp" then
+			total = total + math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
+		end
+	end
+	return total
 end
 
 -- ── Visual pet (server-side spawn, wszyscy widzą) ──────────────────────────
@@ -200,15 +254,34 @@ local function petModelTemplate(rarity: string, isGold: boolean?): Instance?
 	return folder and folder:FindFirstChild(name)
 end
 
-local function despawnVisual(player: Player)
-	local v = activeVisual[player]
-	if not v then return end
+-- Despawn ALL visuals for a player (no specific pet).
+local function despawnAllVisuals(player: Player)
+	local entries = activeVisual[player]
+	if not entries then return end
 	activeVisual[player] = nil
-	if v.model and v.model.Parent then v.model:Destroy() end
+	for _, v in pairs(entries) do
+		if v.model and v.model.Parent then v.model:Destroy() end
+	end
 end
 
-local function spawnVisual(player: Player, pet)
-	despawnVisual(player)  -- na wszelki wypadek
+-- Despawn JEDEN pet visual po petId. Nie używamy w hot-path bardzo często.
+local function despawnVisualOne(player: Player, petId: string)
+	local entries = activeVisual[player]
+	if not entries then return end
+	local v = entries[petId]
+	if not v then return end
+	entries[petId] = nil
+	if v.model and v.model.Parent then v.model:Destroy() end
+	if next(entries) == nil then activeVisual[player] = nil end
+end
+
+local function spawnVisual(player: Player, pet, slotIdx: number)
+	-- Idempotent: jeśli już mamy tego peta visual'em — nic
+	local entries = activeVisual[player]
+	if entries and entries[pet.id] and entries[pet.id].model and entries[pet.id].model.Parent then
+		entries[pet.id].slotIdx = slotIdx
+		return
+	end
 	local template = petModelTemplate(pet.rarity, pet.gold == true)
 	if not template then
 		local fp = (pet.gold and cfg.GoldModelsFolderPath) or cfg.ModelsFolderPath
@@ -273,55 +346,76 @@ local function spawnVisual(player: Player, pet)
 	end
 
 	clone.Parent = getActivePetsFolder()
-	activeVisual[player] = { model = clone, primary = primary, equippedId = pet.id }
+	activeVisual[player] = activeVisual[player] or {}
+	activeVisual[player][pet.id] = { model = clone, primary = primary, slotIdx = slotIdx }
 end
 
--- Sync wizualnego peta ze stanem (called po każdej zmianie equipped)
+-- Sync wszystkich wizualnych petów do stanu data.EquippedPets.
+-- Usuwa visuals nieobecnych w liście, spawnuje brakujących.
 local function syncVisual(player: Player)
 	local data = PlayerDataService.GetData(player)
-	local equipped = findEquippedPet(data)
-	local cur = activeVisual[player]
+	local equippedList = getEquippedPets(data)
 
-	if not equipped then
-		despawnVisual(player)
-		return
+	local entries = activeVisual[player] or {}
+	local wanted: { [string]: boolean } = {}
+	for i, p in ipairs(equippedList) do
+		wanted[p.id] = true
+		if not (entries[p.id] and entries[p.id].model and entries[p.id].model.Parent) then
+			spawnVisual(player, p, i)
+		else
+			entries[p.id].slotIdx = i
+		end
 	end
-	-- Jeśli już wyświetlamy tego samego peta — nic
-	if cur and cur.equippedId == equipped.id and cur.model and cur.model.Parent then
-		return
+	-- Despawn tych których już nie ma na liście
+	for petId in pairs(entries) do
+		if not wanted[petId] then despawnVisualOne(player, petId) end
 	end
-	-- Inaczej spawn (despawn old jest w spawnVisual)
-	spawnVisual(player, equipped)
 end
 PetService.SyncVisual = syncVisual
 
--- Heartbeat follow — wszyscy gracze, lerp pozycji do za graczem + bobbing.
+-- Heartbeat follow — dla każdego gracza iterujemy WSZYSTKIE jego pety.
+-- Pety rozłożone po obwodzie kątowym za graczem (slot 1 = lewo, slot 2 = prawo).
+local PET_SIDE_SPREAD = 1.6  -- studs ofset lateralny dla 2+ petów
+
 RunService.Heartbeat:Connect(function(dt)
-	for player, v in pairs(activeVisual) do
+	for player, entries in pairs(activeVisual) do
 		local char = player.Character
 		local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart
-		if not hrp or not v.primary or not v.primary.Parent then
-			continue
-		end
-		local lookFlat = hrp.CFrame.LookVector
-		lookFlat = Vector3.new(lookFlat.X, 0, lookFlat.Z)
-		if lookFlat.Magnitude < 0.01 then lookFlat = Vector3.new(0, 0, -1) end
-		lookFlat = lookFlat.Unit
-		local bob = math.sin(os.clock() * PET_BOB_FREQ) * PET_BOB_AMP
-		local targetPos = hrp.Position - lookFlat * PET_FOLLOW_DIST
-			+ Vector3.new(0, PET_HEIGHT_OFFSET + bob, 0)
+		if not hrp then continue end
+		for _, v in pairs(entries) do
+			if not v.primary or not v.primary.Parent then continue end
+			local lookFlat = hrp.CFrame.LookVector
+			lookFlat = Vector3.new(lookFlat.X, 0, lookFlat.Z)
+			if lookFlat.Magnitude < 0.01 then lookFlat = Vector3.new(0, 0, -1) end
+			lookFlat = lookFlat.Unit
+			-- Lateral offset: slot 1 → -spread, slot 2 → +spread (jeśli max=1, lateral=0)
+			local rightVec = Vector3.new(-lookFlat.Z, 0, lookFlat.X)  -- 90° CCW od look (planar)
+			local slot = v.slotIdx or 1
+			local lateral = 0
+			-- Liczba petów u tego gracza (potrzebne do równomiernego rozłożenia)
+			local n = 0
+			for _ in pairs(entries) do n += 1 end
+			if n > 1 then
+				-- Slot 1 → lewo (-), slot 2 → prawo (+), slot 3 → 2× lewo, slot 4 → 2× prawo, ...
+				local sign = (slot % 2 == 1) and -1 or 1
+				local mag  = math.ceil(slot / 2)
+				lateral = sign * PET_SIDE_SPREAD * mag
+			end
+			local bob = math.sin(os.clock() * PET_BOB_FREQ + slot * 0.7) * PET_BOB_AMP
+			local targetPos = hrp.Position - lookFlat * PET_FOLLOW_DIST
+				+ rightVec * lateral
+				+ Vector3.new(0, PET_HEIGHT_OFFSET + bob, 0)
 
-		-- Lerp z dt (frame-rate independent)
-		local alpha = math.min(1, PET_LERP_SPEED * dt)
-		local curPos = v.primary.Position
-		local newPos = curPos:Lerp(targetPos, alpha)
-		-- Patrz na gracza
-		local newCFrame = CFrame.new(newPos, hrp.Position)
+			local alpha = math.min(1, PET_LERP_SPEED * dt)
+			local curPos = v.primary.Position
+			local newPos = curPos:Lerp(targetPos, alpha)
+			local newCFrame = CFrame.new(newPos, hrp.Position)
 
-		if v.model:IsA("Model") then
-			v.model:PivotTo(newCFrame)
-		else
-			v.primary.CFrame = newCFrame
+			if v.model:IsA("Model") then
+				v.model:PivotTo(newCFrame)
+			else
+				v.primary.CFrame = newCFrame
+			end
 		end
 	end
 end)
@@ -353,7 +447,9 @@ function PetService.PushStatus(player: Player)
 	local data = PlayerDataService.GetData(player)
 	PetStatusUpdate:FireClient(player, {
 		pets        = data.Pets or {},
-		equippedId  = data.EquippedPet or "",
+		equippedId  = data.EquippedPet or "",          -- legacy: pierwszy z listy
+		equippedIds = data.EquippedPets or {},          -- nowe pole: lista wyposażonych
+		maxEquipped = data.MaxEquippedPets or 1,        -- ile slotów (1 albo 2)
 		bankPets    = data.BankPets or {},
 		hasGamepass = gamepassCache[player] == true,
 		bonuses     = {
@@ -498,22 +594,32 @@ EquipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
 	if not petIndex(data.Pets or {}, petId) then return end
-	data.EquippedPet = petId
+	-- Toggle: jeśli już wyposażony → zdejmij. Inaczej dodaj jeśli jest slot.
+	if isEquipped(data, petId) then
+		unequipById(data, petId)
+	else
+		if not equipById(data, petId) then return end  -- max reached
+	end
 	PetService.PushStatus(player)
 	applyPetEffects(player)
 	syncVisual(player)
-	-- Story quest hook: założenie peta
 	pcall(function()
 		require(script.Parent.StoryQuestService).AddProgress(player, "equip_pet", 1)
 	end)
 end)
 
-UnequipPet.OnServerEvent:Connect(function(player: Player)
+UnequipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	local now = os.clock()
 	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
 	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
-	data.EquippedPet = ""
+	-- Z petId: zdejmij konkretnego. Bez petId (legacy/zdejmij-wszystko): wyczyść listę.
+	if type(petId) == "string" and petId ~= "" then
+		unequipById(data, petId)
+	else
+		data.EquippedPets = {}
+		data.EquippedPet = ""
+	end
 	PetService.PushStatus(player)
 	applyPetEffects(player)
 	syncVisual(player)
@@ -521,7 +627,6 @@ end)
 
 DiscardPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	if type(petId) ~= "string" then return end
-	-- Zakaz wyrzucania itemów (petów) w strefie PvP
 	if player:GetAttribute("InPvPZone") == true then return end
 	local now = os.clock()
 	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
@@ -529,9 +634,7 @@ DiscardPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	local data = PlayerDataService.GetData(player)
 	local idx = petIndex(data.Pets or {}, petId)
 	if not idx then return end
-	if data.EquippedPet == petId then
-		data.EquippedPet = ""
-	end
+	unequipById(data, petId)
 	table.remove(data.Pets, idx)
 	pushHud(player)
 	PetService.PushStatus(player)
@@ -641,7 +744,7 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 Players.PlayerRemoving:Connect(function(p)
-	despawnVisual(p)
+	despawnAllVisuals(p)
 	gamepassCache[p]   = nil
 	lastOpenAt[p]      = nil
 	lastPetActionAt[p] = nil
@@ -657,7 +760,7 @@ if not forceDespawnPetEvent then
 end
 forceDespawnPetEvent.Event:Connect(function(player: Player)
 	if typeof(player) ~= "Instance" or not player:IsA("Player") then return end
-	despawnVisual(player)  -- idempotentne
+	despawnAllVisuals(player)  -- idempotentne
 end)
 
 -- Po wyjściu z PVP/SAFEZONE pet wraca — sprawdzamy w Heartbeat (co 0.5s żeby nie spamować).
@@ -668,7 +771,7 @@ task.spawn(function()
 		for _, player in ipairs(Players:GetPlayers()) do
 			if player.Parent then
 				local data = PlayerDataService.GetData(player)
-				if data.EquippedPet ~= "" and not activeVisual[player] then
+				if (data.EquippedPets and #data.EquippedPets > 0) and not activeVisual[player] then
 					-- Sprawdź czy gracz NIE jest w strefie (raycast/bbox check w prostym wykonaniu)
 					local char = player.Character
 					local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart

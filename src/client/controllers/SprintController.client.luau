@@ -26,7 +26,7 @@ local SPRINT_BONUS   = 12   -- było 5 — różnica chodzenie/sprint za mało z
 local STAMINA_MAX_BASE = 100
 local DRAIN_PER_SEC  = 25   -- 4 sekundy pełnego sprintu
 local REGEN_PER_SEC  = 18
-local SPRINT_KEY     = Enum.KeyCode.LeftShift
+local SPRINT_KEY     = Enum.KeyCode.LeftControl  -- Shift zwolniony pod Roblox ShiftLock (EnableMouseLockOption)
 local DEFAULT_SPEED  = 16
 local BAR_HEIGHT     = 5
 

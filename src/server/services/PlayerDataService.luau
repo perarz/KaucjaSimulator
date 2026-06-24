@@ -40,6 +40,7 @@ local DEFAULT_DATA = {
 	},
 	RedeemedCodes = {},  -- [codeKey] = true — kody promocyjne już użyte (jednorazowe per gracz)
 	OwnedDecks    = {},     -- [deckKey] = true — posiadane deski (skateboardy)
+	OwnedZones    = {},     -- [zoneKey] = true — odblokowane strefy z bramkami (Pustynia, ...)
 	EquippedDeck  = "",     -- klucz wyposażonej deski ("" = brak; R jeździ najlepszą posiadaną)
 	HatOwned      = false,  -- czapka z HatShop — permanentny zakup, daje +HP +stamina +speed
 	BankCapLevel  = 0,      -- liczba kupionych ulepszeń pojemności skarbca (każde +1 cap, koszt rośnie liniowo)
@@ -62,7 +63,9 @@ local DEFAULT_DATA = {
 	-- Zajmuje 1 slot pojemności (tak jak butelka). Equipped daje bonusy (money/speed/HP).
 	-- BankPets — pety przechowywane w skarbcu (osobno od EQ, jak butelki w banku).
 	Pets               = {},
-	EquippedPet        = "",
+	EquippedPet        = "",    -- legacy single-pet (zostawione dla migracji starych zapisów)
+	EquippedPets       = {},    -- lista UUID wyposażonych petów, max len = MaxEquippedPets
+	MaxEquippedPets    = 1,     -- zwiększane przez PetSlotShop (workspace.Poland) — 1→2 za 7000 zł + 10 Mit
 	BankPets           = {},
 	-- ── Statystyki (panel STATS, zapisywane w DataStore) ──────────────────────
 	-- StatsBottles = ile butelek danej rzadkości gracz zebrał łącznie (lifetime).
@@ -93,6 +96,16 @@ local function mergeWithDefaults(data: { [string]: any }): { [string]: any }
 		else
 			merged[k] = v
 		end
+	end
+	-- Migracja: legacy `EquippedPet` (single string) → `EquippedPets` (list).
+	-- Starzy gracze mają tylko EquippedPet — pierwszy load zamieniamy na nową listę.
+	if (not merged.EquippedPets or #merged.EquippedPets == 0)
+		and type(merged.EquippedPet) == "string" and merged.EquippedPet ~= ""
+	then
+		merged.EquippedPets = { merged.EquippedPet }
+	end
+	if type(merged.MaxEquippedPets) ~= "number" or merged.MaxEquippedPets < 1 then
+		merged.MaxEquippedPets = 1
 	end
 	return merged
 end

@@ -228,9 +228,18 @@ local function doSpin(player: Player, payload)
 		local equippedRemoved = false
 		for _, p in ipairs(data.Pets or {}) do
 			if removeSet[p.id] then
+				-- Pety wchłonięte w gold upgrade — usuwamy z EquippedPets jeśli były wyposażone
 				if data.EquippedPet == p.id then
 					data.EquippedPet = ""
 					equippedRemoved = true
+				end
+				if data.EquippedPets then
+					for i = #data.EquippedPets, 1, -1 do
+						if data.EquippedPets[i] == p.id then
+							table.remove(data.EquippedPets, i)
+							equippedRemoved = true
+						end
+					end
 				end
 			else
 				table.insert(kept, p)

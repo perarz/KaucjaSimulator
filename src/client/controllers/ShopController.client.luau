@@ -25,6 +25,7 @@ local function playSfx(name: string)
 end
 
 local Config         = require(ReplicatedStorage:WaitForChild("Config"))
+local Util           = require(ReplicatedStorage:WaitForChild("Util"))
 local Events         = ReplicatedStorage:WaitForChild("Events")
 local OpenShop       = Events:WaitForChild("OpenShop")
 local BuyBackpack    = Events:WaitForChild("BuyBackpack")
@@ -67,6 +68,7 @@ shopGui.Name           = "Shop"
 shopGui.ResetOnSpawn   = false
 shopGui.IgnoreGuiInset = true
 shopGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+shopGui.DisplayOrder   = 30   -- nad HUD btnami (DO=10); overlay panelu przykrywa ikonki HUD
 shopGui.Enabled        = false
 shopGui.Parent         = playerGui
 
@@ -167,13 +169,26 @@ end
 
 -- ── Kontener kart ─────────────────────────────────────────────────────────
 
-local cardsContainer = Instance.new("Frame")
+-- ScrollingFrame — karty plecaków układane UIListLayout, scroll Y gdy L5+ nie mieści się.
+local cardsContainer = Instance.new("ScrollingFrame")
 cardsContainer.Size                   = UDim2.new(1, -PADDING * 2, 0, CARDS_H)
 cardsContainer.Position               = UDim2.fromOffset(PADDING, HEADER_H + PADDING)
 cardsContainer.BackgroundTransparency = 1
 cardsContainer.BorderSizePixel        = 0
+cardsContainer.CanvasSize             = UDim2.fromOffset(0, 0)  -- AutomaticCanvasSize liczy sam
+cardsContainer.AutomaticCanvasSize    = Enum.AutomaticSize.Y
+cardsContainer.ScrollBarThickness     = 6
+cardsContainer.ScrollBarImageColor3   = Color3.fromRGB(80, 120, 100)
+cardsContainer.ScrollingDirection     = Enum.ScrollingDirection.Y
 cardsContainer.ZIndex                 = 3
 cardsContainer.Parent                 = panel
+do
+	local list = Instance.new("UIListLayout")
+	list.Padding              = UDim.new(0, CARD_GAP)
+	list.SortOrder            = Enum.SortOrder.LayoutOrder
+	list.HorizontalAlignment  = Enum.HorizontalAlignment.Center
+	list.Parent               = cardsContainer
+end
 
 -- ── Karta plecaka ─────────────────────────────────────────────────────────
 
@@ -191,11 +206,11 @@ local cards: { CardHandle } = {}
 
 local function buildCard(level: number, upgrade: any): CardHandle
 	local frame = Instance.new("Frame")
-	frame.Size                   = UDim2.new(1, 0, 0, CARD_H)
-	frame.Position               = UDim2.fromOffset(0, (level - 1) * (CARD_H + CARD_GAP))
+	frame.Size                   = UDim2.new(1, -12, 0, CARD_H)  -- -12 na ScrollBar
 	frame.BackgroundColor3       = C_CARD
 	frame.BackgroundTransparency = 0
 	frame.BorderSizePixel        = 0
+	frame.LayoutOrder            = level
 	frame.ZIndex                 = 3
 	frame.Parent                 = cardsContainer
 	do
@@ -236,16 +251,22 @@ local function buildCard(level: number, upgrade: any): CardHandle
 	nameLbl.ZIndex                 = 4
 	nameLbl.Parent                 = frame
 
-	-- Pojemność
+	-- Pojemność — total + split per kategoria (butelki / pety / akcesoria).
+	-- Liczone tym samym Util.getCategoryCaps co serwer i EQ → wartości spójne.
+	local caps = Util.getCategoryCaps(upgrade.Capacity, Config.BackpackCategorySplit)
 	local capLbl = Instance.new("TextLabel")
-	capLbl.Size                   = UDim2.new(0, 280, 0, 20)
-	capLbl.Position               = UDim2.fromOffset(84, 42)
+	capLbl.Size                   = UDim2.new(0, 380, 0, 38)
+	capLbl.Position               = UDim2.fromOffset(84, 40)
 	capLbl.BackgroundTransparency = 1
-	capLbl.Text                   = "Pojemność: " .. upgrade.Capacity .. " butelek"
+	capLbl.Text                   = string.format(
+		"Pojemność: %d miejsc\n%d butelek · %d petów · %d akcesoriów",
+		upgrade.Capacity, caps.bottles, caps.pets, caps.accessories
+	)
 	capLbl.TextSize               = 13
 	capLbl.Font                   = FONT
 	capLbl.TextColor3             = C_DIMTEXT
 	capLbl.TextXAlignment         = Enum.TextXAlignment.Left
+	capLbl.TextYAlignment         = Enum.TextYAlignment.Top
 	capLbl.ZIndex                 = 4
 	capLbl.Parent                 = frame
 
@@ -374,9 +395,11 @@ local function setOpen(open: boolean)
 	if open and not shopMoveLocked then
 		shopMoveLocked = true
 		if _G["__lockMovement"] then _G["__lockMovement"]() end
+		if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("BACKPACK_SHOP") end
 	elseif not open and shopMoveLocked then
 		shopMoveLocked = false
 		if _G["__unlockMovement"] then _G["__unlockMovement"]() end
+		if _G["__hudPanelClose"] then _G["__hudPanelClose"]("BACKPACK_SHOP") end
 	end
 	if open then
 		shopGui.Enabled              = true

@@ -250,7 +250,7 @@ return {
 		[2] = { Zwykla = 0.60, Rzadka = 0.28, Epicka = 0.11, Legendarna = 0.01, Mityczny = 0.00 }, -- średnio
 		[3] = { Zwykla = 0.35, Rzadka = 0.35, Epicka = 0.25, Legendarna = 0.05, Mityczny = 0.00 }, -- daleko
 		[4] = { Zwykla = 0.15, Rzadka = 0.30, Epicka = 0.40, Legendarna = 0.15, Mityczny = 0.00 }, -- endgame
-		[5] = { Zwykla = 0.00, Rzadka = 0.00, Epicka = 0.50, Legendarna = 0.45, Mityczny = 0.05 }, -- mityczna strefa (Mit 5% — była 20%, prawdziwie rzadka)
+		[5] = { Zwykla = 0.00, Rzadka = 0.46, Epicka = 0.36, Legendarna = 0.17, Mityczny = 0.01 }, -- nerf 2026: Mit 5→1%, Leg 45→17%, więcej Rzadkich/Epickich
 	},
 
 	BottleRespawnTime = 6,
@@ -346,10 +346,38 @@ return {
 	-- Sklep: Plecak (pojemność) — osobny sklep, NIE skill tree
 	-- REBALANS: L4 droższy żeby był symbolem endgame'u
 	BackpackUpgrades = {
-		{ Level = 1, Capacity = 10, Cost = 0, CostType = "Zlotowki", Name = "Reklamówka" },
-		{ Level = 2, Capacity = 25, Cost = 200, CostType = "Zlotowki", Name = "Plecak szkolny" },
-		{ Level = 3, Capacity = 35, Cost = 900, CostType = "Zlotowki", Name = "Wielki worek" },
-		{ Level = 4, Capacity = 50, Cost = 10000, CostType = "Zlotowki", Name = "Wózek sklepowy" }, -- było 2800
+		{ Level = 1, Capacity = 10, Cost = 0,     CostType = "Zlotowki", Name = "Reklamówka" },
+		{ Level = 2, Capacity = 25, Cost = 100,   CostType = "Zlotowki", Name = "Plecak szkolny" },
+		{ Level = 3, Capacity = 35, Cost = 500,   CostType = "Zlotowki", Name = "Wielki worek" },
+		{ Level = 4, Capacity = 50, Cost = 5000,  CostType = "Zlotowki", Name = "Wózek sklepowy" },
+		{ Level = 5, Capacity = 80, Cost = 25000, CostType = "Zlotowki", Name = "Wielki wózek" },
+	},
+
+	-- Sklep slotów na pety — NPC w workspace.Poland. Odblokowuje MaxEquippedPets 1→2.
+	-- Hardcoded jeden upgrade (1→2). Cena: 7000 zł + 10 Mityczny butelek z EQ.
+	-- Atomowy server-side: -PLN, -10 Mit z BackpackContents, +sync InventoryStacks
+	-- (HatShop nie syncuje stacks → bywał buggy, tu robimy poprawnie).
+	PetSlotShop = {
+		NpcModel       = "Poland",   -- workspace.<NpcModel> — szukamy rekurencyjnie BasePart
+		PromptText     = "Kup dodatkowy slot na peta",
+		CostZl         = 7000,
+		CostBottles    = { Mityczny = 10 },
+		FromMax        = 1,          -- gracz musi mieć MaxEquippedPets == FromMax żeby kupić
+		ToMax          = 2,          -- po zakupie ustawiamy na ToMax
+	},
+
+	-- Strefy odblokowywane bramkami (ProximityPrompt → Kup → entry znika per-player).
+	-- Klucz = nazwa strefy w PlayerData.OwnedZones. FolderName = nazwa folderu w workspace,
+	-- EntryModelName = nazwa modelu w środku (anchor + reszta partów → znikają lokalnie u kupującego).
+	Zones = {
+		Pustynia = {
+			Cost           = 5000,
+			CostType       = "Zlotowki",
+			DisplayName    = "Pustynia",
+			FolderName     = "2strefaentry",
+			EntryModelName = "entry",
+			PromptText     = "Kup wstęp do Pustyni",
+		},
 	},
 
 	-- Podział pojemności plecaka na kategorie (EQ z 3 zakładkami: BUTELKI / PETY / AKCESORIA).

@@ -830,7 +830,6 @@ local function buildPromptUi(prompt: ProximityPrompt)
 	if not kind then return end
 
 	local accent = (kind == "triple") and Color3.fromRGB(230, 190, 60) or C_ACC_GREEN
-	local emoji  = (kind == "triple") and "🥚🥚🥚" or "🥚"
 	local keyTxt = (prompt.KeyboardKeyCode == Enum.KeyCode.T) and "T" or "E"
 
 	local bb = Instance.new("BillboardGui")
@@ -874,12 +873,12 @@ local function buildPromptUi(prompt: ProximityPrompt)
 	keyLbl.TextColor3             = Color3.new(0, 0, 0)
 	keyLbl.Parent                 = keyBox
 
-	-- Prawa: emoji + action text + cost
+	-- Prawa: action text + cost
 	local actionLbl = Instance.new("TextLabel")
 	actionLbl.Size                   = UDim2.new(1, -84, 0, 24)
 	actionLbl.Position               = UDim2.fromOffset(78, 12)
 	actionLbl.BackgroundTransparency = 1
-	actionLbl.Text                   = string.format("%s  %s", emoji, prompt.ActionText)
+	actionLbl.Text                   = prompt.ActionText
 	actionLbl.Font                   = FONT
 	actionLbl.TextSize               = 17
 	actionLbl.TextColor3             = C_WHITE
