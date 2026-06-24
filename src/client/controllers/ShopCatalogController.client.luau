@@ -93,15 +93,15 @@ shopBtn.ScaleType              = Enum.ScaleType.Fit
 shopBtn.AutoButtonColor        = false
 shopBtn.Parent                 = gui
 do
-	local sc = Instance.new("UIScale"); sc.Parent = shopBtn
+	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad)
+	local baseSize = UDim2.fromOffset(SHOP_W, SHOP_H)
+	local hoverSize = UDim2.fromOffset(math.floor(SHOP_W * 1.12), math.floor(SHOP_H * 1.12))
 	shopBtn.MouseEnter:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
-		TweenService:Create(shopBtn, ti, { Rotation = -6 }):Play()
+		TweenService:Create(shopBtn, ti, { Size = hoverSize, Rotation = -6 }):Play()
 	end)
 	shopBtn.MouseLeave:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-		TweenService:Create(shopBtn, ti, { Rotation = 0 }):Play()
+		TweenService:Create(shopBtn, ti, { Size = baseSize, Rotation = 0 }):Play()
 	end)
 end
 

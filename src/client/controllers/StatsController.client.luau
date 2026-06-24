@@ -86,15 +86,16 @@ statsBtn.ScaleType              = Enum.ScaleType.Fit
 statsBtn.AutoButtonColor        = false
 statsBtn.Parent                 = hudGui
 do
-	local sc = Instance.new("UIScale"); sc.Parent = statsBtn
+	-- Hover przez Size (NIE UIScale) — żeby responsywny __MobileUIScale został jedynym
+	-- UIScale na przycisku i przycisk skalował się na mniejszych ekranach.
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad)
+	local baseSize = UDim2.fromOffset(BTN_W, BTN_H)
+	local hoverSize = UDim2.fromOffset(math.floor(BTN_W * 1.12), math.floor(BTN_H * 1.12))
 	statsBtn.MouseEnter:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
-		TweenService:Create(statsBtn, ti, { Rotation = 6 }):Play()
+		TweenService:Create(statsBtn, ti, { Size = hoverSize, Rotation = 6 }):Play()
 	end)
 	statsBtn.MouseLeave:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-		TweenService:Create(statsBtn, ti, { Rotation = 0 }):Play()
+		TweenService:Create(statsBtn, ti, { Size = baseSize, Rotation = 0 }):Play()
 	end)
 end
 

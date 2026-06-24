@@ -92,16 +92,15 @@ menuBtn.Parent                 = gui
 
 -- Hover: powiększenie + leciutki obrót
 do
-	local sc = Instance.new("UIScale")
-	sc.Parent = menuBtn
+	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku MENU
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local baseSize = UDim2.fromOffset(203, 135)
+	local hoverSize = UDim2.fromOffset(math.floor(203 * 1.12), math.floor(135 * 1.12))
 	menuBtn.MouseEnter:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
-		TweenService:Create(menuBtn, ti, { Rotation = 6 }):Play()
+		TweenService:Create(menuBtn, ti, { Size = hoverSize, Rotation = 6 }):Play()
 	end)
 	menuBtn.MouseLeave:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-		TweenService:Create(menuBtn, ti, { Rotation = 0 }):Play()
+		TweenService:Create(menuBtn, ti, { Size = baseSize, Rotation = 0 }):Play()
 	end)
 end
 
