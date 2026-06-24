@@ -379,6 +379,7 @@ return {
 	-- cyfrę 1/2/3 (np. "Spot1", "Miejsce2", "3"). HumanoidRootPart anchored = stoją w miejscu.
 	Podium = {
 		FolderName    = "Podium",
+		KillsFolderName = "PodiumKilli",  -- podium eliminacji (rigi Spot1/2/3)
 		-- Skala rigów per miejsce (1/2/3). Nakładana przez HumanoidDescription (uniform).
 		Scales        = { 2.582, 2.091, 2.091 },
 		-- Różna animacja tańca (R15) na każdym rigu. Indeks = miejsce.
