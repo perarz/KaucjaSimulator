@@ -11,6 +11,8 @@ local TeleportTo = Events:WaitForChild("TeleportTo")
 
 local cfg = Config.Teleport or {}
 
+local TeleportService = {}
+
 -- Dozwolone klucze (anti-exploit — tylko z configu)
 local allowed: { [string]: boolean } = {}
 for _, loc in ipairs(cfg.Locations or {}) do allowed[loc.key] = true end
@@ -18,20 +20,17 @@ for _, loc in ipairs(cfg.Locations or {}) do allowed[loc.key] = true end
 local lastTp: { [Player]: number } = {}
 
 local function getFolder(): Instance?
-	local f = workspace:FindFirstChild(cfg.FolderName or "strefy teleportu")
-	if f then return f end
-	-- fallback: rekurencyjnie (gdyby katalog był zagnieżdżony)
-	return workspace:FindFirstChild(cfg.FolderName or "strefy teleportu", true)
+	return workspace:FindFirstChild(cfg.FolderName or "strefymapy")
 end
 
 -- Pozycja docelowa partu (BasePart lub Model)
 local function targetCFrame(key: string): CFrame?
 	local folder = getFolder()
 	if not folder then
-		warn("[TeleportService] Brak katalogu '" .. (cfg.FolderName or "strefy teleportu") .. "' w workspace")
+		warn("[TeleportService] Brak katalogu '" .. (cfg.FolderName or "strefymapy") .. "' w workspace")
 		return nil
 	end
-	local target = folder:FindFirstChild(key) or folder:FindFirstChild(key, true)
+	local target = folder:FindFirstChild(key)
 	if not target then
 		warn("[TeleportService] Brak partu/locacji '" .. key .. "' w", folder:GetFullName())
 		return nil
@@ -68,3 +67,5 @@ end)
 Players.PlayerRemoving:Connect(function(p) lastTp[p] = nil end)
 
 print("[TeleportService] gotowy — lokalizacje:", #(cfg.Locations or {}))
+
+return TeleportService
