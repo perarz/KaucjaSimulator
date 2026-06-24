@@ -4,7 +4,8 @@
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local Config            = require(ReplicatedStorage:WaitForChild("Config"))
+local PlayerDataService = require(script.Parent.PlayerDataService)
 
 local Events     = ReplicatedStorage:WaitForChild("Events")
 local TeleportTo = Events:WaitForChild("TeleportTo")
@@ -13,9 +14,13 @@ local cfg = Config.Teleport or {}
 
 local TeleportService = {}
 
--- Dozwolone klucze (anti-exploit — tylko z configu)
+-- Dozwolone klucze (anti-exploit — tylko z configu) + wymagane strefy (requiresZone)
 local allowed: { [string]: boolean } = {}
-for _, loc in ipairs(cfg.Locations or {}) do allowed[loc.key] = true end
+local requiresZone: { [string]: string } = {}
+for _, loc in ipairs(cfg.Locations or {}) do
+	allowed[loc.key] = true
+	if loc.requiresZone then requiresZone[loc.key] = loc.requiresZone end
+end
 
 local lastTp: { [Player]: number } = {}
 
@@ -53,6 +58,13 @@ TeleportTo.OnServerEvent:Connect(function(player: Player, key: any)
 	local now = os.clock()
 	if (lastTp[player] or 0) + (cfg.Throttle or 0.5) > now then return end
 	lastTp[player] = now
+
+	-- Gating strefowy (np. Pustynia) — gracz musi mieć kupioną strefę.
+	local zone = requiresZone[key]
+	if zone then
+		local data = PlayerDataService.GetData(player)
+		if not (data and data.OwnedZones and data.OwnedZones[zone]) then return end
+	end
 
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")

@@ -73,8 +73,11 @@ for zoneKey in pairs(Config.Zones or {}) do
 	end)
 end
 
--- LocalTransparencyModifier może być zresetowane przez Roblox dla niektórych edge-case'ów
--- (np. zmiana kamery, character respawn). Lekkie heartbeat re-apply (raz na sekundę).
+-- LocalTransparencyModifier ORAZ ProximityPrompt.Enabled mogą zostać zresetowane przez
+-- Roblox dla edge-case'ów (zmiana kamery, respawn, ponowne wejście w zasięg promptu) —
+-- przez to na kupionej (niewidocznej) bramie znów pokazywał się prompt "Kup wstęp", choć
+-- nic tam już nie ma. Heartbeat re-apply (raz na sekundę) wymusza pełny stan ukrycia
+-- (party + wyłączony prompt) dla posiadanych stref.
 local lastReapply = 0
 RunService.Heartbeat:Connect(function()
 	local now = os.clock()
@@ -88,6 +91,8 @@ RunService.Heartbeat:Connect(function()
 			for _, d in ipairs(entry:GetDescendants()) do
 				if d:IsA("BasePart") and d.LocalTransparencyModifier < 1 then
 					setHidden(d, true)
+				elseif d:IsA("ProximityPrompt") and d.Enabled then
+					d.Enabled = false
 				end
 			end
 		end

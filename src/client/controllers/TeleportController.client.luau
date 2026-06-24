@@ -9,11 +9,22 @@ local SoundService      = game:GetService("SoundService")
 
 local Config = require(ReplicatedStorage:WaitForChild("Config"))
 
-local Events     = ReplicatedStorage:WaitForChild("Events")
-local TeleportTo = Events:WaitForChild("TeleportTo")
+local Events          = ReplicatedStorage:WaitForChild("Events")
+local TeleportTo      = Events:WaitForChild("TeleportTo")
+local ZoneOwnedUpdate = Events:WaitForChild("ZoneOwnedUpdate")
 
 local localPlayer = Players.LocalPlayer
 local playerGui   = localPlayer:WaitForChild("PlayerGui")
+
+-- Strefy posiadane przez gracza (sync z ZoneEntryService) — do gatingu teleportu (Pustynia).
+local ownedZones: { [string]: boolean } = {}
+ZoneOwnedUpdate.OnClientEvent:Connect(function(snapshot)
+	if type(snapshot) ~= "table" then return end
+	ownedZones = {}
+	for k, v in pairs(snapshot) do
+		if v then ownedZones[k] = true end
+	end
+end)
 
 local cfg       = Config.Teleport or {}
 local LOCATIONS = cfg.Locations or {}
@@ -170,6 +181,35 @@ do
 	layout.Parent = list
 end
 
+-- Toast (komunikat o zablokowanej lokalizacji, np. brak kupionej Pustyni)
+local toast = Instance.new("TextLabel")
+toast.AnchorPoint            = Vector2.new(0.5, 1)
+toast.Position               = UDim2.new(0.5, 0, 1, -10)
+toast.Size                   = UDim2.new(1, -24, 0, 44)
+toast.BackgroundColor3       = C_HEADER
+toast.BackgroundTransparency = 0.05
+toast.BorderSizePixel        = 0
+toast.Text                   = ""
+toast.TextWrapped            = true
+toast.TextSize               = 16
+toast.Font                   = FONT
+toast.TextColor3             = X_RED
+toast.Visible                = false
+toast.ZIndex                 = 8
+toast.Parent                 = panel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = toast
+	local s = Instance.new("UIStroke"); s.Color = X_RED; s.Thickness = 2; s.Transparency = 0.3; s.Parent = toast
+end
+local toastToken = 0
+local function showToast(msg: string)
+	toast.Text = msg
+	toast.Visible = true
+	toastToken += 1
+	local my = toastToken
+	task.delay(2.5, function() if toastToken == my then toast.Visible = false end end)
+end
+
 -- ── Movement lock ──────────────────────────────────────────────────────────
 local locked = false
 local function lockMove() if not locked then locked = true; if _G["__lockMovement"] then _G["__lockMovement"]() end end end
@@ -180,6 +220,8 @@ _G["__hudBtnRegistry"] = _G["__hudBtnRegistry"] or {}
 _G["__hudBtnRegistry"]["TELEPORT"] = tpBtn
 if _G["__hudRegisterBtn"] then _G["__hudRegisterBtn"]("TELEPORT", tpBtn) end
 
+local resetHover  -- forward declaration (definicja po zbudowaniu przycisków)
+
 local function closePanel()
 	gui.Enabled = false
 	unlockMove()
@@ -189,13 +231,19 @@ end
 local function openPanel()
 	gui.Enabled = true
 	lockMove()
+	if resetHover then resetHover() end  -- świeży stan przycisków (bez przyklejonego hovera)
+	toast.Visible = false
 	if _G["__hudPanelOpen"] then _G["__hudPanelOpen"]("TELEPORT") end
 	panel.Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85)
 	TweenService:Create(panel, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 		{ Size = UDim2.fromOffset(PANEL_W, PANEL_H) }):Play()
 end
 
--- Buduj przyciski lokalizacji
+-- Buduj przyciski lokalizacji. Trzymamy referencje (btn/stroke/scale) żeby zresetować
+-- stan hover przy każdym otwarciu — inaczej klik+zamknięcie zostawia podświetlenie na zielono
+-- (MouseLeave nie odpala bo panel znika spod kursora).
+local btnEntries: { { stroke: UIStroke, scale: UIScale } } = {}
+
 for i, loc in ipairs(LOCATIONS) do
 	local b = Instance.new("TextButton")
 	b.Size                   = UDim2.new(1, 0, 0, BTN_H)
@@ -212,6 +260,7 @@ for i, loc in ipairs(LOCATIONS) do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 12); c.Parent = b
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 2; s.Parent = b
 	local sc = Instance.new("UIScale"); sc.Parent = b
+	table.insert(btnEntries, { stroke = s, scale = sc })
 	local ti = TweenInfo.new(0.1)
 	b.MouseEnter:Connect(function()
 		TweenService:Create(sc, ti, { Scale = 1.03 }):Play()
@@ -223,9 +272,22 @@ for i, loc in ipairs(LOCATIONS) do
 	end)
 	b.MouseButton1Click:Connect(function()
 		playSfx("Click")
+		-- Gating strefowy — np. Pustynia wymaga kupionej strefy.
+		if loc.requiresZone and not ownedZones[loc.requiresZone] then
+			showToast(loc.lockedMsg or ("Musisz najpierw odblokować: " .. (loc.label or loc.key)))
+			return
+		end
 		TeleportTo:FireServer(loc.key)
 		closePanel()
 	end)
+end
+
+-- Reset stanu hover wszystkich przycisków do bazowego (wywoływane przy otwarciu panelu).
+function resetHover()
+	for _, e in ipairs(btnEntries) do
+		e.scale.Scale  = 1.0
+		e.stroke.Color = C_BORDER
+	end
 end
 
 -- ── Wiring ───────────────────────────────────────────────────────────────────
