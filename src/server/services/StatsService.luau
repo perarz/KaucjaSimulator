@@ -18,28 +18,33 @@ local StatsService = {}
 local lastReq: { [Player]: number } = {}
 
 -- Najlepszy pet: najwyższa rzadkość (Config.Pets.Rarities[r].order), remis → gold > zwykły.
--- Szukamy w EQ (data.Pets) i skarbcu (data.BankPets).
-local function bestPet(data): string
+-- Szukamy w EQ (data.Pets) i skarbcu (data.BankPets). Zwraca pet object (lub nil).
+local function bestPet(data)
 	local petCfg = Config.Pets and Config.Pets.Rarities
 	local best, bestScore = nil, -1
 	local function consider(p)
 		if not (p and p.rarity) then return end
 		local order = (petCfg and petCfg[p.rarity] and petCfg[p.rarity].order) or 0
-		-- gold dolicza +0.5 żeby wygrywał remisy tej samej rzadkości
-		local score = order * 2 + (p.gold and 1 or 0)
+		local score = order * 2 + (p.gold and 1 or 0)  -- gold wygrywa remis
 		if score > bestScore then bestScore = score; best = p end
 	end
 	for _, p in ipairs(data.Pets or {}) do consider(p) end
 	for _, p in ipairs(data.BankPets or {}) do consider(p) end
-	if not best then return "Brak" end
-	local rname = (petCfg and petCfg[best.rarity] and petCfg[best.rarity].displayName) or best.rarity
-	return string.format("%s%s %s", best.gold and "Złoty " or "", rname, best.class or "")
+	return best
+end
+
+local function bestPetName(p): string
+	if not p then return "Brak" end
+	local petCfg = Config.Pets and Config.Pets.Rarities
+	local rname = (petCfg and petCfg[p.rarity] and petCfg[p.rarity].displayName) or p.rarity
+	return string.format("%s%s %s", p.gold and "Złoty " or "", rname, p.class or "")
 end
 
 local function buildSnapshot(player: Player)
 	local data = PlayerDataService.GetData(player)
 	if not data then return nil end
 	local sb = data.StatsBottles or {}
+	local bp = bestPet(data)
 	return {
 		nick        = player.DisplayName ~= "" and player.DisplayName or player.Name,
 		userId      = player.UserId,
@@ -53,7 +58,8 @@ local function buildSnapshot(player: Player)
 			Mityczny   = sb.Mityczny or 0,
 		},
 		pvpKills        = data.StatPvpKills or 0,
-		bestPet         = bestPet(data),
+		bestPet         = bestPetName(bp),
+		bestPetInfo     = bp and { rarity = bp.rarity, class = bp.class, gold = bp.gold == true } or nil,
 		accessoriesUsed = data.StatAccessoriesUsed or 0,
 	}
 end
