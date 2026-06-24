@@ -178,6 +178,9 @@
       "StatsService": {
         "$path": "src/server/services/StatsService.luau"
       },
+      "PodiumService": {
+        "$path": "src/server/services/PodiumService.luau"
+      },
       "PlayerCollisionService": {
         "$path": "src/server/services/PlayerCollisionService.luau"
       },

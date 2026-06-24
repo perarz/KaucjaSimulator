@@ -88,6 +88,12 @@ type RowHandle = {
 
 local rowFrames: { [number]: RowHandle } = {}
 
+-- Cache top-listy (uid+value) — czytane przez PodiumService (podium top-3).
+local topCache: { { uid: number, value: number } } = {}
+function LeaderboardService.GetTop(): { { uid: number, value: number } }
+	return topCache
+end
+
 local CANVAS_W = 800
 local CANVAS_H = 1100
 local HEADER_H = 140
@@ -209,6 +215,13 @@ local function updateDisplay()
 		return
 	end
 	local top = pages:GetCurrentPage()
+
+	-- Odśwież cache top-listy (dla PodiumService)
+	topCache = {}
+	for _, entry in ipairs(top) do
+		local uid = tonumber(entry.key)
+		if uid then table.insert(topCache, { uid = uid, value = entry.value }) end
+	end
 
 	for i = 1, Config.LeaderboardMaxEntries do
 		local row = rowFrames[i]
