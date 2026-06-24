@@ -62,6 +62,10 @@ local function collectSlots()
 				local prim = getPrimary(child)
 				if prim then
 					if not child.PrimaryPart then child.PrimaryPart = prim end
+					-- Ukryj domyślny nick/health riga (np. "Spot1") nad głową
+					hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+					hum.HealthDisplayDistance = 0
+					hum.NameDisplayDistance = 0
 					local bb0, sz0 = child:GetBoundingBox()
 					slots[n] = {
 						model = child,
@@ -124,8 +128,8 @@ local function setNameTag(slot: Slot, rank: number, name: string)
 	if not bb then
 		bb = Instance.new("BillboardGui")
 		bb.Name = "PodiumTag"
-		bb.Size = UDim2.fromOffset(220, 60)
-		bb.StudsOffset = Vector3.new(0, 3, 0)
+		bb.Size = UDim2.fromOffset(120, 26)
+		bb.StudsOffset = Vector3.new(0, 3.5, 0)
 		bb.AlwaysOnTop = true
 		bb.MaxDistance = 120
 		bb.Parent = head
@@ -134,7 +138,8 @@ local function setNameTag(slot: Slot, rank: number, name: string)
 		lbl.Size = UDim2.fromScale(1, 1)
 		lbl.BackgroundTransparency = 1
 		lbl.Font = Enum.Font.GothamBold
-		lbl.TextScaled = true
+		lbl.TextScaled = false
+		lbl.TextSize = 18
 		lbl.TextStrokeTransparency = 0.4
 		lbl.Parent = bb
 	end
