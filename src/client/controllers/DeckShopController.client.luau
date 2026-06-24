@@ -285,8 +285,8 @@ menuGui.Parent = playerGui
 local hoverBtn = Instance.new("ImageButton")
 hoverBtn.Name = "HoverboardButton"
 hoverBtn.AnchorPoint = Vector2.new(0, 0.5)
-hoverBtn.Position = UDim2.new(0, 16, 0.35, 158)
-hoverBtn.Size = UDim2.fromOffset(135, 135)
+hoverBtn.Position = UDim2.new(0, 16, 0.5, -95)  -- lewa strona, środek (nad teleportem)
+hoverBtn.Size = UDim2.fromOffset(156, 156)
 hoverBtn.BackgroundTransparency = 1
 hoverBtn.BorderSizePixel = 0
 hoverBtn.Image = Config.DeckMenuIconId
@@ -297,8 +297,8 @@ hoverBtn.Parent = menuGui
 do
 	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku deski
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local baseSize = UDim2.fromOffset(135, 135)
-	local hoverSize = UDim2.fromOffset(151, 151)
+	local baseSize = UDim2.fromOffset(156, 156)
+	local hoverSize = UDim2.fromOffset(175, 175)
 	hoverBtn.MouseEnter:Connect(function()
 		TweenService:Create(hoverBtn, ti, { Size = hoverSize, Rotation = 6 }):Play()
 	end)

@@ -82,7 +82,7 @@ local menuBtn = Instance.new("ImageButton")
 menuBtn.Name                   = "MenuButton"
 menuBtn.AnchorPoint            = Vector2.new(0.5, 1)
 menuBtn.Position               = UDim2.new(0.5, 0, 1, -HUD_BTN_BOTTOM_OFFSET)
-menuBtn.Size                   = UDim2.fromOffset(203, 135)
+menuBtn.Size                   = UDim2.fromOffset(230, 153)
 menuBtn.BackgroundTransparency = 1
 menuBtn.BorderSizePixel        = 0
 menuBtn.Image                  = "rbxassetid://80450607603898"
@@ -94,8 +94,8 @@ menuBtn.Parent                 = gui
 do
 	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku MENU
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	local baseSize = UDim2.fromOffset(203, 135)
-	local hoverSize = UDim2.fromOffset(math.floor(203 * 1.12), math.floor(135 * 1.12))
+	local baseSize = UDim2.fromOffset(230, 153)
+	local hoverSize = UDim2.fromOffset(math.floor(230 * 1.12), math.floor(153 * 1.12))
 	menuBtn.MouseEnter:Connect(function()
 		TweenService:Create(menuBtn, ti, { Size = hoverSize, Rotation = 6 }):Play()
 	end)

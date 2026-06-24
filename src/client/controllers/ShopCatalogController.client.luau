@@ -72,11 +72,11 @@ gui.Parent         = playerGui
 -- ── Przycisk SKLEP w HUD ────────────────────────────────────────────────────
 -- Pozycja: środek dół, po lewo od MENU. MENU jest centered (203x135) na (0.5, 0, 1, -20).
 -- Offset = -(MENU_W/2 + GAP + SHOP_W/2). MENU_W=203, SHOP_W=135, GAP=14 → -184.
-local MENU_W   = 203
+local MENU_W   = 230
 -- Ikona sklepu ma natywne wymiary 1536×1024 (3:2). Dopasowane do MENU (też 3:2 → 203×135),
 -- żeby grafika nie była ścinana ScaleType.Fit + żeby wizualnie pasowały obok siebie w HUD.
-local SHOP_W   = 203
-local SHOP_H   = 135
+local SHOP_W   = 230
+local SHOP_H   = 153
 local HUD_GAP  = -18  -- bliżej MENU (lekki zakład na transparentne marginesy ikon); STATS ma ten sam offset
 local HUD_OFFSET_BOTTOM = 20
 local SHOP_X_OFFSET = -(MENU_W / 2 + HUD_GAP + SHOP_W / 2)
