@@ -260,11 +260,23 @@ local killsBoard = makeBoard({
 	format   = function(v) return tostring(math.floor(v)) end,
 })
 
-local boards = { moneyBoard, killsBoard }
+local bottlesBoard = makeBoard({
+	storeKey = "Leaderboard_Butelki_v1",
+	partName = "LeaderboardTablicaButelek",
+	title    = "RANKING BUTELEK — TOP " .. Config.LeaderboardMaxEntries,
+	suffix   = "",
+	getValue = function(data) return data.TotalBottles or 0 end,
+	toInt    = function(v) return math.floor(v) end,
+	fromInt  = function(i) return i end,
+	format   = function(v) return tostring(math.floor(v)) end,
+})
+
+local boards = { moneyBoard, killsBoard, bottlesBoard }
 
 -- ── Public: top-listy dla podium ────────────────────────────────────────────
 function LeaderboardService.GetTopMoney() return moneyBoard.topCache end
 function LeaderboardService.GetTopKills() return killsBoard.topCache end
+function LeaderboardService.GetTopBottles() return bottlesBoard.topCache end
 -- backward compat
 function LeaderboardService.GetTop() return moneyBoard.topCache end
 
