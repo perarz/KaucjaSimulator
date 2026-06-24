@@ -180,12 +180,14 @@ local function makeBoard(opts)
 	end
 
 	function board.build()
-		local part = workspace:FindFirstChild(opts.partName)
+		-- rekurencyjnie — part może być zagnieżdżony w modelu/folderze, nie tylko bezpośrednio w workspace
+		local part = workspace:FindFirstChild(opts.partName, true)
 		if not part or not part:IsA("BasePart") then
 			warn("[Leaderboard] Brak BasePart '" .. opts.partName .. "' w workspace — tablica pominięta")
 			return false
 		end
 		board.rowFrames = buildSurfaceGui(part :: BasePart, opts.title)
+		print("[Leaderboard] Tablica zbudowana →", part:GetFullName())
 		return true
 	end
 
@@ -284,7 +286,18 @@ local function startLoops()
 end
 
 local function setup()
-	for _, board in ipairs(boards) do board.build() end
+	-- Retry budowy — part może pojawić się chwilę po starcie (streaming/late load)
+	for _, board in ipairs(boards) do
+		task.spawn(function()
+			for _ = 1, 30 do
+				if board.build() then
+					board.update()  -- wypełnij od razu po zbudowaniu (nie czekaj na pętlę)
+					break
+				end
+				task.wait(1)
+			end
+		end)
+	end
 	startLoops()
 	print("[LeaderboardService] Tablice gotowe (pieniądze + eliminacje) — refresh co",
 		Config.LeaderboardUpdateInterval, "s")
