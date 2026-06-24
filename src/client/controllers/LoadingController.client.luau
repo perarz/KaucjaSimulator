@@ -193,6 +193,16 @@ task.spawn(function()
 		end
 	end
 
+	-- Ikony panelu STATS — preload (anty pop-in)
+	for _, id in ipairs({
+		"rbxassetid://86261545855043",  "rbxassetid://106132679637933",
+		"rbxassetid://100029024637808", "rbxassetid://104978964430210",
+		"rbxassetid://74111457265393",  "rbxassetid://124962493500922",
+		"rbxassetid://93561657019134",
+	}) do
+		table.insert(assets, id)
+	end
+
 	-- Tekstury butelek w slotach EQ/banku — preload (jw. anty pop-in)
 	if Config.BottleImages then
 		for _, img in pairs(Config.BottleImages) do

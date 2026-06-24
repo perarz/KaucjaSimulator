@@ -151,19 +151,9 @@ do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 16); c.Parent = header
 end
 
-local titleIcon = Instance.new("TextLabel")
-titleIcon.Size                   = UDim2.fromOffset(44, 58)
-titleIcon.Position               = UDim2.fromOffset(16, 0)
-titleIcon.BackgroundTransparency = 1
-titleIcon.Text                   = "📊"
-titleIcon.TextSize               = 30
-titleIcon.Font                   = FONT_TITLE
-titleIcon.ZIndex                 = 4
-titleIcon.Parent                 = header
-
 local title = Instance.new("TextLabel")
 title.Size                   = UDim2.new(0, 300, 1, 0)
-title.Position               = UDim2.fromOffset(64, 0)
+title.Position               = UDim2.fromOffset(20, 0)
 title.BackgroundTransparency = 1
 title.Text                   = "STATYSTYKI"
 title.TextSize               = 24
@@ -187,19 +177,23 @@ headerNick.TextTruncate           = Enum.TextTruncate.AtEnd
 headerNick.ZIndex                 = 4
 headerNick.Parent                 = header
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size                   = UDim2.fromOffset(40, 40)
+local closeBtn = Instance.new("ImageButton")
+closeBtn.Size                   = UDim2.fromOffset(46, 46)
 closeBtn.AnchorPoint            = Vector2.new(1, 0.5)
 closeBtn.Position               = UDim2.new(1, -12, 0.5, 0)
 closeBtn.BackgroundTransparency = 1
 closeBtn.BorderSizePixel        = 0
-closeBtn.Text                   = "✕"
-closeBtn.TextSize               = 26
-closeBtn.Font                   = FONT_TITLE
-closeBtn.TextColor3             = X_RED
+closeBtn.Image                  = "rbxassetid://124962493500922"
+closeBtn.ScaleType              = Enum.ScaleType.Fit
 closeBtn.AutoButtonColor        = false
 closeBtn.ZIndex                 = 5
 closeBtn.Parent                 = header
+do
+	local sc = Instance.new("UIScale"); sc.Parent = closeBtn
+	local ti = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	closeBtn.MouseEnter:Connect(function() TweenService:Create(sc, ti, { Scale = 1.15 }):Play() end)
+	closeBtn.MouseLeave:Connect(function() TweenService:Create(sc, ti, { Scale = 1.0 }):Play() end)
+end
 
 -- Body
 local body = Instance.new("Frame")
@@ -257,21 +251,25 @@ local function makeStatCard(parent: Instance, opts): TextLabel
 		padX = 28
 	end
 
-	-- Ikonka
-	local icon = Instance.new("TextLabel")
-	icon.Size                   = UDim2.fromOffset(34, 34)
-	icon.Position               = UDim2.fromOffset(padX, 12)
-	icon.BackgroundTransparency = 1
-	icon.Text                   = opts.icon or ""
-	icon.TextSize               = 24
-	icon.Font                   = FONT_VALUE
-	icon.ZIndex                 = 5
-	icon.Parent                 = card
+	-- Ikonka (ImageLabel) — wyśrodkowana pionowo po lewej
+	local textX = padX
+	if opts.image then
+		local icon = Instance.new("ImageLabel")
+		icon.Size                   = UDim2.fromOffset(46, 46)
+		icon.AnchorPoint            = Vector2.new(0, 0.5)
+		icon.Position               = UDim2.new(0, padX, 0.5, 0)
+		icon.BackgroundTransparency = 1
+		icon.Image                  = opts.image
+		icon.ScaleType              = Enum.ScaleType.Fit
+		icon.ZIndex                 = 5
+		icon.Parent                 = card
+		textX = padX + 56
+	end
 
 	-- Etykieta (mała)
 	local lbl = Instance.new("TextLabel")
-	lbl.Size                   = UDim2.new(1, -(padX + 44), 0, 18)
-	lbl.Position               = UDim2.fromOffset(padX + 40, 12)
+	lbl.Size                   = UDim2.new(1, -(textX + 16), 0, 18)
+	lbl.Position               = UDim2.fromOffset(textX, 12)
 	lbl.BackgroundTransparency = 1
 	lbl.Text                   = opts.label
 	lbl.TextSize               = 13
@@ -284,8 +282,8 @@ local function makeStatCard(parent: Instance, opts): TextLabel
 
 	-- Wartość (duża)
 	local val = Instance.new("TextLabel")
-	val.Size                   = UDim2.new(1, -(padX + 16), 0, (opts.valueSize or 30) + 6)
-	val.Position               = UDim2.fromOffset(padX, 36)
+	val.Size                   = UDim2.new(1, -(textX + 16), 0, (opts.valueSize or 30) + 6)
+	val.Position               = UDim2.fromOffset(textX, 36)
 	val.BackgroundTransparency = 1
 	val.Text                   = "0"
 	val.TextSize               = opts.valueSize or 30
@@ -320,12 +318,13 @@ do
 	local list = Instance.new("UIListLayout")
 	list.Padding = UDim.new(0, 10); list.SortOrder = Enum.SortOrder.LayoutOrder; list.Parent = col1
 end
-local valTotal  = makeStatCard(col1, { icon = "📦", label = "ZEBRANE BUTELKI ŁĄCZNIE", h = 96, valueSize = 38, valueColor = C_GREEN })
-local valZwykla = makeStatCard(col1, { icon = "⚪", label = "ZWYKŁE",     h = 80, valueSize = 26, barColor = RARITY_COLORS.Zwykla })
-local valRzadka = makeStatCard(col1, { icon = "🟦", label = "RZADKIE",    h = 80, valueSize = 26, barColor = RARITY_COLORS.Rzadka })
-local valEpicka = makeStatCard(col1, { icon = "🟪", label = "EPICKIE",    h = 80, valueSize = 26, barColor = RARITY_COLORS.Epicka })
-local valLegend = makeStatCard(col1, { icon = "🟨", label = "LEGENDARNE", h = 80, valueSize = 26, barColor = RARITY_COLORS.Legendarna })
-local valMit    = makeStatCard(col1, { icon = "🟣", label = "MITYCZNE",   h = 80, valueSize = 26, barColor = RARITY_COLORS.Mityczny })
+local BI = Config.BottleImages or {}
+local valTotal  = makeStatCard(col1, { image = "rbxassetid://86261545855043", label = "ZEBRANE BUTELKI ŁĄCZNIE", h = 96, valueSize = 38, valueColor = C_GREEN })
+local valZwykla = makeStatCard(col1, { image = BI.Zwykla,     label = "ZWYKŁE",     h = 80, valueSize = 26, barColor = RARITY_COLORS.Zwykla })
+local valRzadka = makeStatCard(col1, { image = BI.Rzadka,     label = "RZADKIE",    h = 80, valueSize = 26, barColor = RARITY_COLORS.Rzadka })
+local valEpicka = makeStatCard(col1, { image = BI.Epicka,     label = "EPICKIE",    h = 80, valueSize = 26, barColor = RARITY_COLORS.Epicka })
+local valLegend = makeStatCard(col1, { image = BI.Legendarna, label = "LEGENDARNE", h = 80, valueSize = 26, barColor = RARITY_COLORS.Legendarna })
+local valMit    = makeStatCard(col1, { image = BI.Mityczny,   label = "MITYCZNE",   h = 80, valueSize = 26, barColor = RARITY_COLORS.Mityczny })
 
 -- ── COL2: ViewportFrame z najlepszym petem (główny punkt) ───────────────────
 local petCard = Instance.new("Frame")
@@ -344,15 +343,25 @@ do
 	g.Parent = petCard
 end
 
+local petHeadIcon = Instance.new("ImageLabel")
+petHeadIcon.Size                   = UDim2.fromOffset(30, 30)
+petHeadIcon.Position               = UDim2.fromOffset(14, 12)
+petHeadIcon.BackgroundTransparency = 1
+petHeadIcon.Image                  = "rbxassetid://104978964430210"
+petHeadIcon.ScaleType              = Enum.ScaleType.Fit
+petHeadIcon.ZIndex                 = 5
+petHeadIcon.Parent                 = petCard
+
 local petHeading = Instance.new("TextLabel")
-petHeading.Size                   = UDim2.new(1, -24, 0, 26)
-petHeading.Position               = UDim2.fromOffset(12, 12)
+petHeading.Size                   = UDim2.new(1, -88, 0, 30)
+petHeading.Position               = UDim2.fromOffset(52, 12)
 petHeading.BackgroundTransparency = 1
-petHeading.Text                   = "🐾  NAJLEPSZY PET"
-petHeading.TextSize               = 14
+petHeading.Text                   = "NAJLEPSZY PET"
+petHeading.TextSize               = 15
 petHeading.Font                   = FONT_LABEL
 petHeading.TextColor3             = C_DIM
-petHeading.TextXAlignment         = Enum.TextXAlignment.Center
+petHeading.TextXAlignment         = Enum.TextXAlignment.Left
+petHeading.TextYAlignment         = Enum.TextYAlignment.Center
 petHeading.ZIndex                 = 5
 petHeading.Parent                 = petCard
 
@@ -385,9 +394,9 @@ do
 	local list = Instance.new("UIListLayout")
 	list.Padding = UDim.new(0, 12); list.SortOrder = Enum.SortOrder.LayoutOrder; list.Parent = col3
 end
-local valPln  = makeStatCard(col3, { icon = "💰", label = "ILOŚĆ PLN", h = 150, valueSize = 42, valueColor = C_GREEN })
-local valKill = makeStatCard(col3, { icon = "⚔️", label = "KILLE W STREFIE PVP", h = 120, valueSize = 38, valueColor = X_RED })
-local valAcc  = makeStatCard(col3, { icon = "🎒", label = "UŻYTE AKCESORIA", h = 120, valueSize = 38, valueColor = Color3.fromRGB(235, 150, 95) })
+local valPln  = makeStatCard(col3, { image = "rbxassetid://74111457265393",  label = "ILOŚĆ PLN", h = 150, valueSize = 42, valueColor = C_GREEN })
+local valKill = makeStatCard(col3, { image = "rbxassetid://100029024637808", label = "ELIMINACJE W STREFIE PVP", h = 120, valueSize = 38, valueColor = X_RED })
+local valAcc  = makeStatCard(col3, { image = "rbxassetid://106132679637933", label = "UŻYTE AKCESORIA", h = 120, valueSize = 38, valueColor = Color3.fromRGB(235, 150, 95) })
 
 -- ── Viewport: ładowanie + obrót modelu peta ─────────────────────────────────
 local function petTemplate(rarity: string, gold: boolean): Instance?
