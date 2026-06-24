@@ -377,7 +377,7 @@ return {
 	-- Teleportacja — przycisk w HUD (pod deską) → GUI z lokalizacjami. Każda lokalizacja
 	-- = part o tej samej nazwie w workspace["strefy teleportu"]. Server weryfikuje klucz.
 	Teleport = {
-		FolderName   = "strefy teleportu",  -- katalog z partami docelowymi
+		FolderName   = "strefymapy",  -- katalog z partami docelowymi
 		HeightOffset = 5,                    -- ile studs nad partem stawiamy gracza
 		Throttle     = 0.5,
 		IconId       = "rbxassetid://70773777562362",
