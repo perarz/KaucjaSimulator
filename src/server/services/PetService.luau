@@ -806,6 +806,69 @@ for _, p in ipairs(Players:GetPlayers()) do
 	if p.Character then task.spawn(onCharacter, p, p.Character) end
 end
 
+-- ── Trade API (TradeService używa — pet logic zostaje tu jako single source of truth) ──
+
+-- Limit slotów na pety (20% pojemności plecaka) — do walidacji odbioru w wymianie.
+function PetService.GetPetCap(data): number
+	if not data then return 0 end
+	local capacity = getCapacity(data)
+	local caps = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	return caps.pets
+end
+
+function PetService.CountPets(data): number
+	return #(data.Pets or {})
+end
+
+-- Pet object z EQ po id (lub nil). Tylko data.Pets (skarbiec poza wymianą).
+function PetService.FindPet(data, id: string)
+	if not data then return nil end
+	for _, p in ipairs(data.Pets or {}) do
+		if p.id == id then return p end
+	end
+	return nil
+end
+
+-- Usuwa pety o podanych id z data.Pets (i z EquippedPets jeśli były założone + despawn visual).
+-- Zwraca listę usuniętych pet-objectów (do przekazania drugiej stronie). NIE zapisuje / nie pushuje.
+function PetService.RemovePets(player: Player, ids: { string }): { any }
+	local data = PlayerDataService.GetData(player)
+	if not data then return {} end
+	local idset: { [string]: boolean } = {}
+	for _, id in ipairs(ids) do idset[id] = true end
+	local removed, kept = {}, {}
+	for _, p in ipairs(data.Pets or {}) do
+		if idset[p.id] then
+			table.insert(removed, p)
+			if isEquipped(data, p.id) then unequipById(data, p.id) end
+			despawnVisualOne(player, p.id)
+		else
+			table.insert(kept, p)
+		end
+	end
+	data.Pets = kept
+	return removed
+end
+
+-- Dodaje pet-objecty do EQ (data.Pets). NIE equipuje, NIE waliduje pojemności (robi to TradeService).
+function PetService.AddPets(player: Player, pets: { any })
+	local data = PlayerDataService.GetData(player)
+	if not data then return end
+	data.Pets = data.Pets or {}
+	for _, p in ipairs(pets) do
+		table.insert(data.Pets, p)
+	end
+end
+
+-- Po zmianach z wymiany: refresh wizualnych petów + efekty + HUD + status.
+function PetService.RefreshAfterTrade(player: Player)
+	if not player or not player.Parent then return end
+	syncVisual(player)
+	applyPetEffects(player)
+	pushHud(player)
+	PetService.PushStatus(player)
+end
+
 print("[PetService] gotowy — rarities:", table.concat(listRaritiesOrdered(), ", "))
 
 return PetService

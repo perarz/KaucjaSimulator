@@ -311,7 +311,17 @@
         "GoldUpgradeResult":   { "$className": "RemoteEvent" },
         "GoldUpgradeClaim":    { "$className": "RemoteEvent" },
         "GoldUpgradeBuy":      { "$className": "RemoteEvent" },
-        "GoldUpgradeProduct":  { "$className": "RemoteEvent" }
+        "GoldUpgradeProduct":  { "$className": "RemoteEvent" },
+        "TradeInvite":         { "$className": "RemoteEvent" },
+        "TradeInvited":        { "$className": "RemoteEvent" },
+        "TradeRespond":        { "$className": "RemoteEvent" },
+        "TradeInviteResult":   { "$className": "RemoteEvent" },
+        "TradeStart":          { "$className": "RemoteEvent" },
+        "TradeOffer":          { "$className": "RemoteEvent" },
+        "TradeSync":           { "$className": "RemoteEvent" },
+        "TradeAccept":         { "$className": "RemoteEvent" },
+        "TradeCancel":         { "$className": "RemoteEvent" },
+        "TradeEnd":            { "$className": "RemoteEvent" }
       }
     },
 

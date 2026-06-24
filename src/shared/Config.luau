@@ -431,6 +431,20 @@ return {
 		},
 	},
 
+	-- Wymiana (trading) — gracz ↔ gracz, pety + pieniądze. Serwer autorytatywny.
+	-- Zakres: pety z EQ (data.Pets), włącznie z założonym (auto-unequip przy transferze).
+	-- Anti-scam: jakakolwiek zmiana oferty resetuje obie akceptacje. Po obu 'Akceptuj'
+	-- 3s odliczanie; 'Anuluj' (dostępny też w trakcie odliczania) przerywa bez transferu.
+	Trade = {
+		ButtonIconId   = "rbxassetid://102471495116579",  -- przycisk WYMIANA w HUD
+		AcceptIconId   = "rbxassetid://77598935140150",    -- akceptacja zaproszenia
+		CancelIconId   = "rbxassetid://124962493500922",   -- odrzucenie/anulowanie
+		CountdownSec   = 3,     -- odliczanie po obustronnym Akceptuj
+		InviteTimeout  = 30,    -- po tylu sek niepotwierdzone zaproszenie wygasa
+		Throttle       = 0.5,   -- anty-spam akcji client→server
+		MaxMoney       = 1000000000,  -- twardy limit kwoty oferty
+	},
+
 	-- Podium top-3 (3 rigi z wczytanym skinem top graczy + animacja tańca).
 	-- Rigi: workspace.Podium z 3 modelami (R15, Humanoid) nazwanymi tak by zawierały
 	-- cyfrę 1/2/3 (np. "Spot1", "Miejsce2", "3"). HumanoidRootPart anchored = stoją w miejscu.
