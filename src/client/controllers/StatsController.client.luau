@@ -400,18 +400,13 @@ local valAcc  = makeStatCard(col3, { image = "rbxassetid://106132679637933", lab
 
 -- ── Viewport: ładowanie + obrót modelu peta ─────────────────────────────────
 local function petTemplate(rarity: string, gold: boolean): Instance?
+	-- Gold: ReplicatedStorage.Pets.PetyGold; zwykłe: ReplicatedStorage.Pets.PetyZwykle.
 	local segs = gold and (Config.Pets.GoldModelsFolderPath or { "Pets", "PetyGold" })
-		or (Config.Pets.ModelsFolderPath or { "Pets", "PetyEnchanted" })
-	local tryPaths = { segs, { "Pets", "PetyEnchanted" }, { "Pets", "PetyZwykle" } }
-	if gold then tryPaths = { segs, { "Pets", "PetyGold" } } end
+		or (Config.Pets.ModelsFolderPath or { "Pets", "PetyZwykle" })
 	local name = (Config.Pets.ModelNamePrefix or "Pet") .. rarity
-	for _, path in ipairs(tryPaths) do
-		local folder: Instance? = ReplicatedStorage
-		for _, s in ipairs(path) do folder = folder and folder:FindFirstChild(s) end
-		local m = folder and folder:FindFirstChild(name)
-		if m then return m end
-	end
-	return nil
+	local folder: Instance? = ReplicatedStorage
+	for _, s in ipairs(segs) do folder = folder and folder:FindFirstChild(s) end
+	return folder and folder:FindFirstChild(name)
 end
 
 local vpModel: Model? = nil

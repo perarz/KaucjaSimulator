@@ -189,26 +189,15 @@ local function getActivePetsFolder(): Folder
 end
 
 local function petModelTemplate(rarity: string, isGold: boolean?): Instance?
-	-- Gold pety mają osobny folder modeli (PetyGold), reszta z PetyEnchanted.
-	-- Dla zwykłych: fallback na starą nazwę folderu (PetyZwykle) gdyby ktoś nie zmienił.
-	local pathLists
-	if isGold then
-		pathLists = { cfg.GoldModelsFolderPath or { "Pets", "PetyGold" } }
-	else
-		pathLists = { cfg.ModelsFolderPath, { "Pets", "PetyEnchanted" }, { "Pets", "PetyZwykle" } }
-	end
+	-- Gold pety: ReplicatedStorage.Pets.PetyGold; zwykłe: ReplicatedStorage.Pets.PetyZwykle.
+	local segments = isGold and (cfg.GoldModelsFolderPath or { "Pets", "PetyGold" })
+		or (cfg.ModelsFolderPath or { "Pets", "PetyZwykle" })
 	local name = (cfg.ModelNamePrefix or "Pet") .. rarity
-	for _, segments in ipairs(pathLists) do
-		if segments then
-			local folder: Instance? = ReplicatedStorage
-			for _, segment in ipairs(segments) do
-				folder = folder and folder:FindFirstChild(segment)
-			end
-			local model = folder and folder:FindFirstChild(name)
-			if model then return model end
-		end
+	local folder: Instance? = ReplicatedStorage
+	for _, segment in ipairs(segments) do
+		folder = folder and folder:FindFirstChild(segment)
 	end
-	return nil
+	return folder and folder:FindFirstChild(name)
 end
 
 local function despawnVisual(player: Player)

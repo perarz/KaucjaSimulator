@@ -94,8 +94,8 @@ return {
 	-- speed/HP addytywnie do bazy (deska/sprint/MaxHealth).
 	Pets = {
 		-- Folder modeli wizualnych (1 model per rzadkość — Sprinter i Tank wyglądają tak samo wizualnie).
-		-- Ścieżka: ReplicatedStorage.Pets.PetyEnchanted.PetCommon (itd.)
-		ModelsFolderPath = { "Pets", "PetyEnchanted" },
+		-- Ścieżka: ReplicatedStorage.Pets.PetyZwykle.PetCommon (itd.)
+		ModelsFolderPath = { "Pets", "PetyZwykle" },
 		-- Modele ZŁOTYCH petów (gold upgrade): ReplicatedStorage.Pets.PetyGold.Pet<Rarity>
 		GoldModelsFolderPath = { "Pets", "PetyGold" },
 		ModelNamePrefix  = "Pet",  -- ModelNamePrefix .. rarity → "PetCommon", "PetHuge", ...
