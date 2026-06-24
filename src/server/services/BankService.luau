@@ -83,18 +83,34 @@ local function loadBank(player: Player): { [string]: number }
 	return data
 end
 
+-- Koalescencja zapisów per gracz — PlayerRemoving i BindToClose odpalają saveBank dla tego
+-- samego klucza niemal jednocześnie przy zamknięciu serwera. Dwa SetAsync na ten sam klucz =
+-- "DataStore request was added to queue". Drugie wywołanie czeka na trwający zapis.
+local saveInFlight: { [Player]: BindableEvent } = {}
+
 local function saveBank(player: Player)
 	local d = cache[player]
 	if not d then return end
 	if d.__loadFailed then return end  -- nie nadpisuj pustym jeśli load failnął
+
+	local inflight = saveInFlight[player]
+	if inflight then
+		inflight.Event:Wait()
+		return
+	end
+	local ev = Instance.new("BindableEvent")
+	saveInFlight[player] = ev
+
 	local key = "BankData_v1_" .. player.UserId
 	local lastErr: any = nil
 	for attempt = 0, #RETRY_DELAYS do
 		local ok, err = pcall(function() BANK_DS:SetAsync(key, d) end)
-		if ok then return end
+		if ok then saveInFlight[player] = nil; ev:Fire(); return end
 		lastErr = err
 		if attempt < #RETRY_DELAYS then task.wait(RETRY_DELAYS[attempt + 1]) end
 	end
+	saveInFlight[player] = nil
+	ev:Fire()
 	warn("[BankService] SetAsync failed po 3 próbach:", lastErr)
 end
 
