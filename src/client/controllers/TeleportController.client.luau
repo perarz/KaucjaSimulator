@@ -60,15 +60,15 @@ tpBtn.ScaleType              = Enum.ScaleType.Fit
 tpBtn.AutoButtonColor        = false
 tpBtn.Parent                 = hudGui
 do
-	local sc = Instance.new("UIScale"); sc.Parent = tpBtn
+	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad)
+	local baseSize = UDim2.fromOffset(135, 135)
+	local hoverSize = UDim2.fromOffset(151, 151)
 	tpBtn.MouseEnter:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
-		TweenService:Create(tpBtn, ti, { Rotation = -6 }):Play()
+		TweenService:Create(tpBtn, ti, { Size = hoverSize, Rotation = -6 }):Play()
 	end)
 	tpBtn.MouseLeave:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-		TweenService:Create(tpBtn, ti, { Rotation = 0 }):Play()
+		TweenService:Create(tpBtn, ti, { Size = baseSize, Rotation = 0 }):Play()
 	end)
 end
 

@@ -285,16 +285,15 @@ hoverBtn.AutoButtonColor = false
 hoverBtn.Parent = menuGui
 -- Hover: powiększenie + leciutki obrót (jak przycisk MENU)
 do
-	local sc = Instance.new("UIScale")
-	sc.Parent = hoverBtn
+	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku deski
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	local baseSize = UDim2.fromOffset(135, 135)
+	local hoverSize = UDim2.fromOffset(151, 151)
 	hoverBtn.MouseEnter:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.12 }):Play()
-		TweenService:Create(hoverBtn, ti, { Rotation = 6 }):Play()
+		TweenService:Create(hoverBtn, ti, { Size = hoverSize, Rotation = 6 }):Play()
 	end)
 	hoverBtn.MouseLeave:Connect(function()
-		TweenService:Create(sc, ti, { Scale = 1.0 }):Play()
-		TweenService:Create(hoverBtn, ti, { Rotation = 0 }):Play()
+		TweenService:Create(hoverBtn, ti, { Size = baseSize, Rotation = 0 }):Play()
 	end)
 end
 
