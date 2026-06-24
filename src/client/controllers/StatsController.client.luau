@@ -69,8 +69,8 @@ hudGui.IgnoreGuiInset = true
 hudGui.DisplayOrder   = 30
 hudGui.Parent         = playerGui
 
-local MENU_W = 203
-local BTN_W, BTN_H = 203, 135
+local MENU_W = 230
+local BTN_W, BTN_H = 230, 153
 local HUD_GAP = -18  -- bliżej MENU (jak SKLEP)
 local STATS_X_OFFSET = (MENU_W / 2 + HUD_GAP + BTN_W / 2)  -- symetrycznie do SKLEPU (po prawo)
 

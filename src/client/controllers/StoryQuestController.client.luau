@@ -44,7 +44,7 @@ local function mkStroke(parent, color, th) local s = Instance.new("UIStroke"); s
 local cornerPanel = Instance.new("Frame")
 cornerPanel.AnchorPoint = Vector2.new(1, 1)
 cornerPanel.Position    = UDim2.new(1, -16, 1, -16)
-cornerPanel.Size        = UDim2.fromOffset(460, 130)
+cornerPanel.Size        = UDim2.fromOffset(548, 156)
 cornerPanel.BackgroundColor3       = C_BG
 cornerPanel.BackgroundTransparency = 0.05
 cornerPanel.BorderSizePixel        = 0
@@ -53,22 +53,22 @@ cornerPanel.Parent                 = gui
 mkCorner(cornerPanel, 8); mkStroke(cornerPanel, C_BORDER, 4)
 
 local cornerHeader = Instance.new("TextLabel")
-cornerHeader.Size                   = UDim2.new(1, -16, 0, 18)
-cornerHeader.Position               = UDim2.fromOffset(8, 6)
+cornerHeader.Size                   = UDim2.new(1, -20, 0, 22)
+cornerHeader.Position               = UDim2.fromOffset(10, 8)
 cornerHeader.BackgroundTransparency = 1
 cornerHeader.Font                   = FONT_MAIN
-cornerHeader.TextSize               = 13
+cornerHeader.TextSize               = 16
 cornerHeader.TextColor3             = C_GOLD
 cornerHeader.TextXAlignment         = Enum.TextXAlignment.Left
 cornerHeader.Text                   = "FABUŁA — 1/6"
 cornerHeader.Parent                 = cornerPanel
 
 local cornerDesc = Instance.new("TextLabel")
-cornerDesc.Size                   = UDim2.new(1, -16, 0, 50)
-cornerDesc.Position               = UDim2.fromOffset(8, 24)
+cornerDesc.Size                   = UDim2.new(1, -20, 0, 60)
+cornerDesc.Position               = UDim2.fromOffset(10, 30)
 cornerDesc.BackgroundTransparency = 1
 cornerDesc.Font                   = FONT_MAIN
-cornerDesc.TextSize               = 15
+cornerDesc.TextSize               = 18
 cornerDesc.TextColor3             = C_WHITE
 cornerDesc.TextXAlignment         = Enum.TextXAlignment.Left
 cornerDesc.TextYAlignment         = Enum.TextYAlignment.Top
@@ -78,11 +78,11 @@ cornerDesc.Parent                 = cornerPanel
 
 -- Nagroda — pod opisem, gold accent
 local cornerReward = Instance.new("TextLabel")
-cornerReward.Size                   = UDim2.new(1, -16, 0, 16)
-cornerReward.Position               = UDim2.fromOffset(8, 78)
+cornerReward.Size                   = UDim2.new(1, -20, 0, 19)
+cornerReward.Position               = UDim2.fromOffset(10, 94)
 cornerReward.BackgroundTransparency = 1
 cornerReward.Font                   = FONT_MAIN
-cornerReward.TextSize               = 14
+cornerReward.TextSize               = 17
 cornerReward.TextColor3             = C_GOLD
 cornerReward.TextXAlignment         = Enum.TextXAlignment.Left
 cornerReward.Text                   = "Nagroda: +0 zł"
@@ -90,8 +90,8 @@ cornerReward.Parent                 = cornerPanel
 
 -- Pasek progresu
 local progBg = Instance.new("Frame")
-progBg.Size = UDim2.new(1, -16, 0, 12)
-progBg.Position = UDim2.new(0, 8, 1, -20)
+progBg.Size = UDim2.new(1, -20, 0, 15)
+progBg.Position = UDim2.new(0, 10, 1, -24)
 progBg.BackgroundColor3 = C_HEADER
 progBg.BorderSizePixel = 0
 progBg.Parent = cornerPanel
@@ -108,7 +108,7 @@ local progLbl = Instance.new("TextLabel")
 progLbl.Size = UDim2.new(1, 0, 1, 0)
 progLbl.BackgroundTransparency = 1
 progLbl.Font = FONT_MAIN
-progLbl.TextSize = 11
+progLbl.TextSize = 13
 progLbl.TextColor3 = C_WHITE
 progLbl.TextStrokeColor3 = Color3.new(0, 0, 0)
 progLbl.TextStrokeTransparency = 0.4
@@ -117,13 +117,13 @@ progLbl.Parent = progBg
 
 -- Przycisk ODBIERZ (zastępuje progBg gdy quest gotowy do odbioru)
 local claimBtn = Instance.new("TextButton")
-claimBtn.Size = UDim2.new(1, -16, 0, 22)
-claimBtn.Position = UDim2.new(0, 8, 1, -30)
+claimBtn.Size = UDim2.new(1, -20, 0, 28)
+claimBtn.Position = UDim2.new(0, 10, 1, -36)
 claimBtn.BackgroundColor3 = C_ACCENT_GREEN
 claimBtn.BorderSizePixel = 0
 claimBtn.Text = "ODBIERZ"
 claimBtn.Font = FONT_MAIN
-claimBtn.TextSize = 16
+claimBtn.TextSize = 19
 claimBtn.TextColor3 = Color3.new(0, 0, 0)
 claimBtn.AutoButtonColor = false
 claimBtn.Visible = false

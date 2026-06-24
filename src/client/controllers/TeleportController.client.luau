@@ -51,8 +51,8 @@ hudGui.Parent         = playerGui
 local tpBtn = Instance.new("ImageButton")
 tpBtn.Name                   = "TeleportButton"
 tpBtn.AnchorPoint            = Vector2.new(0, 0.5)
-tpBtn.Position               = UDim2.new(0, 16, 0.35, 309)  -- pod hoverboard (deska) button
-tpBtn.Size                   = UDim2.fromOffset(135, 135)
+tpBtn.Position               = UDim2.new(0, 16, 0.5, 95)  -- lewa strona, środek (pod deską)
+tpBtn.Size                   = UDim2.fromOffset(156, 156)
 tpBtn.BackgroundTransparency = 1
 tpBtn.BorderSizePixel        = 0
 tpBtn.Image                  = ICON_ID
@@ -62,8 +62,8 @@ tpBtn.Parent                 = hudGui
 do
 	-- Hover przez Size (nie UIScale) — by responsywny __MobileUIScale działał na przycisku
 	local ti = TweenInfo.new(0.16, Enum.EasingStyle.Quad)
-	local baseSize = UDim2.fromOffset(135, 135)
-	local hoverSize = UDim2.fromOffset(151, 151)
+	local baseSize = UDim2.fromOffset(156, 156)
+	local hoverSize = UDim2.fromOffset(175, 175)
 	tpBtn.MouseEnter:Connect(function()
 		TweenService:Create(tpBtn, ti, { Size = hoverSize, Rotation = -6 }):Play()
 	end)
