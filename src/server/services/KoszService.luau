@@ -138,6 +138,10 @@ local function setupKoszPrompt(kosz: Instance)
 		-- Aktualizacja danych
 		data.BackpackContents[rarity] += count
 		data.TotalBottles            += count
+		-- Statystyka lifetime per rzadkość (panel STATS)
+		if data.StatsBottles and data.StatsBottles[rarity] ~= nil then
+			data.StatsBottles[rarity] += count
+		end
 
 		-- Quest progress: każda butelka z kosza liczy się jako collect
 		QuestService.AddProgress(player, "collect", { rarity = rarity, amount = count })

@@ -91,6 +91,9 @@
         },
         "GoldUpgradeController": {
           "$path": "src/client/controllers/GoldUpgradeController.client.luau"
+        },
+        "StatsController": {
+          "$path": "src/client/controllers/StatsController.client.luau"
         }
       }
     },
@@ -168,6 +171,9 @@
       },
       "GoldPetService": {
         "$path": "src/server/services/GoldPetService.luau"
+      },
+      "StatsService": {
+        "$path": "src/server/services/StatsService.luau"
       },
       "PlayerCollisionService": {
         "$path": "src/server/services/PlayerCollisionService.luau"
@@ -266,6 +272,8 @@
         "DiscardPet":          { "$className": "RemoteEvent" },
         "PetStatusUpdate":     { "$className": "RemoteEvent" },
         "PromptPetGamepassBuy":{ "$className": "RemoteEvent" },
+        "StatsRequest":        { "$className": "RemoteEvent" },
+        "StatsData":           { "$className": "RemoteEvent" },
         "OpenGoldUpgrade":     { "$className": "RemoteEvent" },
         "GoldUpgradeSpin":     { "$className": "RemoteEvent" },
         "GoldUpgradeResult":   { "$className": "RemoteEvent" },

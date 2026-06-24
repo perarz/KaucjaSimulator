@@ -763,6 +763,10 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 
 	data.BackpackContents[rarity] += 1
 	data.TotalBottles             += 1
+	-- Statystyka lifetime per rzadkość (panel STATS)
+	if data.StatsBottles and data.StatsBottles[rarity] ~= nil then
+		data.StatsBottles[rarity] += 1
+	end
 
 	QuestService.AddProgress(player, "collect", { rarity = rarity, amount = 1 })
 	pcall(function()
