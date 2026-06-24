@@ -66,12 +66,20 @@ local function rankColor(i: number): Color3
 end
 
 local function buildSurfaceGui(part: BasePart, titleText: string): { [number]: RowHandle }
-	local existing = part:FindFirstChild("LeaderboardGui")
-	if existing then existing:Destroy() end
+	-- Ścianę bierzemy z istniejącej SurfaceGui jaką user ustawił w Studio (placeholder),
+	-- żeby napis pojawił się na właściwej stronie partu (bez zgadywania Front).
+	local face = Enum.NormalId.Front
+	local prevLeaderboard = part:FindFirstChild("LeaderboardGui")
+	if prevLeaderboard then prevLeaderboard:Destroy() end
+	local placeholder = part:FindFirstChildWhichIsA("SurfaceGui")
+	if placeholder then
+		face = placeholder.Face
+		placeholder:Destroy()  -- usuń pusty placeholder, zastępujemy własnym
+	end
 
 	local sg = Instance.new("SurfaceGui")
 	sg.Name           = "LeaderboardGui"
-	sg.Face           = Enum.NormalId.Front
+	sg.Face           = face
 	sg.SizingMode     = Enum.SurfaceGuiSizingMode.FixedSize
 	sg.CanvasSize     = Vector2.new(CANVAS_W, CANVAS_H)
 	sg.LightInfluence = 0
