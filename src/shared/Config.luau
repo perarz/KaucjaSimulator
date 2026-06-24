@@ -594,19 +594,21 @@ return {
 	-- UI: pierwsza inicjacja questa → wielki napis na środku 4s → zmniejsza się i ląduje w rogu (HUD).
 	-- Po wykonaniu: WYKONANO na środku + nagroda, po 2s następny.
 	StoryQuests = {
-		{ id = "collect_10",       desc = "Zbierz 10 butelek",                  kind = "collect_any",    target = 10,  reward = 30  },
-		{ id = "deposit_2",        desc = "Oddaj butelki do butelkomatu 2 razy", kind = "deposit",        target = 2,   reward = 50  },
+		{ id = "collect_10",       desc = "Zbierz 10 butelek",                  kind = "collect_any",    target = 10,  reward = 100 },
+		{ id = "deposit_2",        desc = "Oddaj butelki do butelkomatu 2 razy", kind = "deposit",        target = 2,   reward = 100 },
 		{ id = "buy_2_skills",     desc = "Kup 2 ulepszenia w drzewku (Menu → Umiejętności)", kind = "buy_skill", target = 2, reward = 100 },
 		{ id = "buy_backpack",     desc = "Kup lepszy plecak w sklepie",         kind = "buy_backpack",   target = 1,   reward = 150 },
 		{ id = "buy_egg",          desc = "Kup 1 jajko z petem w gablocie petów", kind = "buy_egg",       target = 1,   reward = 250 },
 		{ id = "equip_pet",        desc = "Załóż peta (Menu → Ekwipunek → ZAŁÓŻ)", kind = "equip_pet",    target = 1,   reward = 300 },
-		{ id = "buy_deck",         desc = "Kup deskę lvl 1 w gablocie (1000 zł)", kind = "buy_deck",      deckKey = "Default", target = 1, reward = 400 },
-		{ id = "collect_100",      desc = "Zbierz 100 butelek",                 kind = "collect_any",    target = 100, reward = 600 },
+		{ id = "buy_deck",         desc = "Kup jakąkolwiek deskę w gablocie",   kind = "buy_deck",       target = 1,   reward = 500 },
+		{ id = "collect_50",       desc = "Zbierz 50 butelek",                  kind = "collect_any",    target = 50,  reward = 600 },
+		{ id = "use_magnet",       desc = "Użyj magnesu (kup go w Żabce)",      kind = "use_magnet",     target = 1,   reward = 300 },
 		{ id = "collect_5_legendary", desc = "Zbierz 5 Legendarnych butelek",   kind = "collect_rarity", rarity = "Legendarna", target = 5, reward = 400 },
 		{ id = "upgrade_bank",     desc = "Ulepsz pojemność skarbca (Bank → ULEPSZ)", kind = "upgrade_bank", target = 1, reward = 500 },
 		{ id = "grandpa_done",     desc = "Pomóż Dziadkowi z syropem klonowym",  kind = "grandpa_done",   target = 1,   reward = 150 },
-		{ id = "buy_deck_red",     desc = "Kup deskę lvl 2 - Red (3000 zł)",    kind = "buy_deck",       deckKey = "Red",  target = 1, reward = 200 },
-		{ id = "pet_legendary",    desc = "Wylosuj Legendarnego peta z jajka",  kind = "pet_rarity",     petRarity = "Legendary", target = 1, reward = 500 },
-		{ id = "buy_deck_blue",    desc = "Kup deskę lvl 3 - Blue (5000 zł)",   kind = "buy_deck",       deckKey = "Blue", target = 1, reward = 500 },
+		{ id = "pet_epic",         desc = "Wylosuj Epickiego peta z jajka",     kind = "pet_rarity",     petRarity = "Epic", target = 1, reward = 500 },
+		{ id = "unlock_pustynia",  desc = "Odblokuj krainę Pustynię",           kind = "unlock_zone",    zone = "Pustynia", target = 1, reward = 1000 },
+		{ id = "gold_pet",         desc = "Ulepsz peta na złotego",             kind = "gold_pet",       target = 1,   reward = 500 },
+		{ id = "pet_slot",         desc = "Zwiększ ilość slotów na pety",       kind = "pet_slot",       target = 1,   reward = 500 },
 	},
 }

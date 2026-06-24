@@ -154,6 +154,7 @@ UseMagnet.OnServerEvent:Connect(function(player: Player)
 
 	data.MagnetCount -= 1
 	data.StatAccessoriesUsed = (data.StatAccessoriesUsed or 0) + 1  -- panel STATS
+	pcall(function() require(script.Parent.StoryQuestService).AddProgress(player, "use_magnet", 1) end)  -- linia fabularna
 	-- NIE SaveData w hot path — DataStore yielduje 1-2s i opóźnia zniknięcie z EQ.
 	-- Persystencja przez auto-save co 60s + PlayerRemoving. Ryzyko utraty zużycia <60s akceptowalne.
 	activate(player)  -- już woła PushStatus z secondsLeft + nowym count

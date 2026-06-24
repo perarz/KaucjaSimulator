@@ -182,21 +182,25 @@ do
 end
 
 -- Toast (komunikat o zablokowanej lokalizacji, np. brak kupionej Pustyni).
--- Plain text, bez neonowego obrysu; wyświetlany wysoko (tuż pod headerem panelu).
+-- Czarny box, większa czcionka; wyświetlany wysoko (tuż pod headerem panelu).
 local toast = Instance.new("TextLabel")
 toast.AnchorPoint            = Vector2.new(0.5, 0)
 toast.Position               = UDim2.new(0.5, 0, 0, HEADER_H + 8)
-toast.Size                   = UDim2.new(1, -24, 0, 44)
-toast.BackgroundTransparency = 1
+toast.Size                   = UDim2.new(1, -24, 0, 50)
+toast.BackgroundColor3       = Color3.new(0, 0, 0)
+toast.BackgroundTransparency = 0.15
 toast.BorderSizePixel        = 0
 toast.Text                   = ""
 toast.TextWrapped            = true
-toast.TextSize               = 17
+toast.TextSize               = 20
 toast.Font                   = FONT
 toast.TextColor3             = X_RED
 toast.Visible                = false
 toast.ZIndex                 = 8
 toast.Parent                 = panel
+do
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 10); c.Parent = toast
+end
 local toastToken = 0
 local function showToast(msg: string)
 	toast.Text = msg

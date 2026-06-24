@@ -103,6 +103,7 @@ local function setupZone(zoneKey: string, cfg)
 		PlayerDataService.UpdateLeaderstats(player)
 		PlayerDataService.SaveData(player)
 		sendSnapshot(player)
+		pcall(function() require(script.Parent.StoryQuestService).AddProgress(player, "unlock_zone", 1, { zone = zoneKey }) end)  -- linia fabularna
 	end)
 
 	print(string.format("[ZoneEntryService] Strefa %s gotowa (entry=%s, koszt=%d zł)",
