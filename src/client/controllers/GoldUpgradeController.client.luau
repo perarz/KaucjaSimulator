@@ -79,6 +79,7 @@ local selectedRarity: string? = nil
 local luckActive = false          -- kupione 2x luck na następny spin (preview ×2)
 local phase = "select"            -- select | spinning | won | lost
 local pendingGoldImage: string? = nil
+local lastResultPercent = 0       -- % ostatniego spinu (do natychmiastowego ×2 po kupnie luck w fazie lost)
 
 local function eligibleRarity(r: string): boolean
 	return cfgInit.images[r] ~= nil
@@ -104,7 +105,7 @@ overlay.AutoButtonColor        = false
 overlay.ZIndex                 = 1
 overlay.Parent                 = gui
 
-local PANEL_W, PANEL_H = 1320, 700
+local PANEL_W, PANEL_H = 1400, 780
 local panel = Instance.new("Frame")
 panel.Size             = UDim2.fromOffset(PANEL_W, PANEL_H)
 panel.AnchorPoint      = Vector2.new(0.5, 0.5)
@@ -476,13 +477,15 @@ spinBtn.AnchorPoint = Vector2.new(0.5, 0)
 spinBtn.Position    = UDim2.new(0.5, 0, 0, WHEEL_D + 116)
 spinLbl.TextSize    = 26
 
--- Sam obrazek (bez ramki/napisu), tylko hover-scale.
-local PROD_W, PROD_H = 200, 84
-local function makeProductBtn(xOff: number): ImageButton
+-- Sam obrazek (bez ramki/napisu), tylko hover-scale. Wyśrodkowane w kolumnie, ułożone w pionie.
+local PROD_H = 84
+local LUCK_Y   = WHEEL_D + 174           -- 2x LUCK (na górze, szerszy)
+local REROLL_Y = LUCK_Y + PROD_H + 10    -- REROLL pojawia się POD 2x LUCK
+local function makeProductBtn(yOff: number, w: number): ImageButton
 	local b = Instance.new("ImageButton")
-	b.Size                   = UDim2.fromOffset(PROD_W, PROD_H)
+	b.Size                   = UDim2.fromOffset(w, PROD_H)
 	b.AnchorPoint            = Vector2.new(0.5, 0)
-	b.Position               = UDim2.new(0.5, xOff, 0, WHEEL_D + 178)
+	b.Position               = UDim2.new(0.5, 0, 0, yOff)
 	b.BackgroundTransparency = 1
 	b.BorderSizePixel        = 0
 	b.AutoButtonColor        = false
@@ -496,14 +499,14 @@ local function makeProductBtn(xOff: number): ImageButton
 	return b
 end
 
--- REROLL (Robux) — po przegranej
-local rerollBtn = makeProductBtn(-110)
+-- 2x LUCK (Robux) — przed spinem oraz po przegranej (per spin). Szerszy, na górze.
+local luckBtn = makeProductBtn(LUCK_Y, 300)
+luckBtn.Image = (gcfg.DoubleLuck and gcfg.DoubleLuck.Image) or ""
+
+-- REROLL (Robux) — po przegranej, pod 2x LUCK
+local rerollBtn = makeProductBtn(REROLL_Y, 240)
 rerollBtn.Image   = (gcfg.Reroll and gcfg.Reroll.Image) or ""
 rerollBtn.Visible = false
-
--- 2x LUCK (Robux) — przed spinem oraz po przegranej (per spin)
-local luckBtn = makeProductBtn(110)
-luckBtn.Image = (gcfg.DoubleLuck and gcfg.DoubleLuck.Image) or ""
 
 -- ── COL3: gold pet + ODBIERZ ────────────────────────────────────────────────
 local goldFrame = Instance.new("Frame")
@@ -915,6 +918,7 @@ GoldUpgradeResult.OnClientEvent:Connect(function(res)
 	-- (też na reroll po przegranej), aż do wygranej/zamknięcia.
 	if res.pets then petsState = res.pets; rebuildPets() end
 	selected = {}; selectedSet = {}; selectedRarity = nil
+	lastResultPercent = res.percent or 0  -- zapamiętaj % (do ×2 po kupnie luck w fazie lost)
 
 	animateSpin(res.percent or 0, res.won == true, function()
 		if res.won then
@@ -964,7 +968,17 @@ GoldUpgradeProduct.OnClientEvent:Connect(function(payload)
 		luckTag.Visible = true
 		luckBtn.Visible = false   -- już aktywne — nie kupuj drugi raz
 		showToast("2x LUCK aktywne — szansa podwojona!", C_GOLD)
-		if phase == "select" then refreshPreview() end
+		if phase == "select" then
+			refreshPreview()
+		elseif phase == "lost" then
+			-- Od razu po kupnie (nie czekając na reroll) pokaż podwojoną szansę na reroll.
+			local np = math.clamp(lastResultPercent * 2, 0, 100)
+			lastResultPercent = np
+			setArc(np)
+			percentLbl.Visible   = true
+			percentLbl.Text      = string.format("%d%%", np)
+			percentLbl.TextColor3 = C_GOLD
+		end
 	elseif payload.kind == "reroll" then
 		if payload.hasStake then
 			phase = "lost"
