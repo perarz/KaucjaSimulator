@@ -374,6 +374,26 @@ return {
 	LeaderboardUpdateInterval = 60,
 	LeaderboardMaxEntries = 10,
 
+	-- Teleportacja — przycisk w HUD (pod deską) → GUI z lokalizacjami. Każda lokalizacja
+	-- = part o tej samej nazwie w workspace["strefy teleportu"]. Server weryfikuje klucz.
+	Teleport = {
+		FolderName   = "strefy teleportu",  -- katalog z partami docelowymi
+		HeightOffset = 5,                    -- ile studs nad partem stawiamy gracza
+		Throttle     = 0.5,
+		IconId       = "rbxassetid://70773777562362",
+		-- Kolejność na liście = kolejność wyświetlania. key = nazwa partu, label = napis na przycisku.
+		Locations = {
+			{ key = "butelkomaniacy", label = "Butelkomaniacy" },
+			{ key = "bank",           label = "Bank" },
+			{ key = "strefapvp",      label = "Strefa PvP" },
+			{ key = "deski",          label = "Deski" },
+			{ key = "park",           label = "Park" },
+			{ key = "zabka",          label = "Żabka" },
+			{ key = "sklep",          label = "Sklep" },
+			{ key = "pustynia",       label = "Pustynia" },
+		},
+	},
+
 	-- Podium top-3 (3 rigi z wczytanym skinem top graczy + animacja tańca).
 	-- Rigi: workspace.Podium z 3 modelami (R15, Humanoid) nazwanymi tak by zawierały
 	-- cyfrę 1/2/3 (np. "Spot1", "Miejsce2", "3"). HumanoidRootPart anchored = stoją w miejscu.

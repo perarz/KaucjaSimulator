@@ -97,6 +97,9 @@
         },
         "MusicController": {
           "$path": "src/client/controllers/MusicController.client.luau"
+        },
+        "TeleportController": {
+          "$path": "src/client/controllers/TeleportController.client.luau"
         }
       }
     },
@@ -180,6 +183,9 @@
       },
       "PodiumService": {
         "$path": "src/server/services/PodiumService.luau"
+      },
+      "TeleportService": {
+        "$path": "src/server/services/TeleportService.luau"
       },
       "PlayerCollisionService": {
         "$path": "src/server/services/PlayerCollisionService.luau"
@@ -280,6 +286,7 @@
         "PromptPetGamepassBuy":{ "$className": "RemoteEvent" },
         "StatsRequest":        { "$className": "RemoteEvent" },
         "StatsData":           { "$className": "RemoteEvent" },
+        "TeleportTo":          { "$className": "RemoteEvent" },
         "OpenGoldUpgrade":     { "$className": "RemoteEvent" },
         "GoldUpgradeSpin":     { "$className": "RemoteEvent" },
         "GoldUpgradeResult":   { "$className": "RemoteEvent" },
