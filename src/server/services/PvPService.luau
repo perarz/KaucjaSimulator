@@ -7,9 +7,29 @@ local Players             = game:GetService("Players")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local PlayerDataService = require(script.Parent:WaitForChild("PlayerDataService"))
+
 local Events         = ReplicatedStorage:WaitForChild("Events")
 local OpenPvPEntry   = Events:WaitForChild("OpenPvPEntry")
 local ClosePvPEntry  = Events:WaitForChild("ClosePvPEntry")
+
+-- Atrybucja killi PVP: ClassicSword ustawia ObjectValue "creator" w Humanoid ofiary.
+-- Na Died odczytujemy zabójcę i podbijamy jego StatPvpKills (panel STATS).
+local function hookDeaths(player: Player, char: Model)
+	local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 5)
+	if not hum then return end
+	local handled = false
+	hum.Died:Connect(function()
+		if handled then return end
+		handled = true
+		local creator = hum:FindFirstChild("creator")
+		local killer = creator and creator.Value
+		if killer and killer:IsA("Player") and killer ~= player then
+			local kd = PlayerDataService.GetData(killer)
+			if kd then kd.StatPvpKills = (kd.StatPvpKills or 0) + 1 end
+		end
+	end)
+end
 
 -- BindableEvent na force dismount deski — tworzony przez DeskaService.
 -- Może jeszcze nie istnieć przy require'cie PvPService, więc szukamy lazy.
@@ -401,18 +421,21 @@ end)
 -- Wskazówka: bilet (PvPAccess) NIE jest resetowany przy respawnie — jeśli gracz zapłacił i zginął
 -- zanim wszedł, to po respawnie wciąż ma bilet i wejdzie bez ponownej opłaty.
 Players.PlayerAdded:Connect(function(player)
-	player.CharacterAdded:Connect(function()
+	player.CharacterAdded:Connect(function(char)
 		inZone[player] = nil
 		guiShownFor[player] = nil
 		inSafeZone[player] = nil
+		hookDeaths(player, char)
 	end)
 end)
 for _, p in ipairs(Players:GetPlayers()) do
-	p.CharacterAdded:Connect(function()
+	p.CharacterAdded:Connect(function(char)
 		inZone[p] = nil
 		guiShownFor[p] = nil
 		inSafeZone[p] = nil
+		hookDeaths(p, char)
 	end)
+	if p.Character then hookDeaths(p, p.Character) end
 end
 
 return {}

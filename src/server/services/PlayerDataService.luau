@@ -64,6 +64,19 @@ local DEFAULT_DATA = {
 	Pets               = {},
 	EquippedPet        = "",
 	BankPets           = {},
+	-- ── Statystyki (panel STATS, zapisywane w DataStore) ──────────────────────
+	-- StatsBottles = ile butelek danej rzadkości gracz zebrał łącznie (lifetime).
+	-- TotalBottles (wyżej) = suma wszystkich zebranych. StatPvpKills = kille w PVPZone.
+	-- StatAccessoriesUsed = ile razy użyto akcesoriów (magnesy itp.).
+	StatsBottles = {
+		Zwykla     = 0,
+		Rzadka     = 0,
+		Epicka     = 0,
+		Legendarna = 0,
+		Mityczny   = 0,
+	},
+	StatPvpKills        = 0,
+	StatAccessoriesUsed = 0,
 }
 
 local deepCopy = Util.deepCopy
