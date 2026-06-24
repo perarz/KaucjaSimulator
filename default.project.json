@@ -94,6 +94,9 @@
         },
         "StatsController": {
           "$path": "src/client/controllers/StatsController.client.luau"
+        },
+        "MusicController": {
+          "$path": "src/client/controllers/MusicController.client.luau"
         }
       }
     },
