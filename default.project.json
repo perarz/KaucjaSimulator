@@ -109,6 +109,9 @@
         },
         "TeleportController": {
           "$path": "src/client/controllers/TeleportController.client.luau"
+        },
+        "TradeController": {
+          "$path": "src/client/controllers/TradeController.client.luau"
         }
       }
     },
@@ -198,6 +201,9 @@
       },
       "ZoneEntryService": {
         "$path": "src/server/services/ZoneEntryService.luau"
+      },
+      "TradeService": {
+        "$path": "src/server/services/TradeService.luau"
       },
       "PetSlotShopService": {
         "$path": "src/server/services/PetSlotShopService.luau"
