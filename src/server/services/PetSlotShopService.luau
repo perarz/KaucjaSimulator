@@ -163,6 +163,7 @@ BuyPetSlot.OnServerEvent:Connect(function(player: Player)
 	-- (5) Save + sync
 	PlayerDataService.UpdateLeaderstats(player)
 	PlayerDataService.SaveData(player)
+	pcall(function() require(script.Parent.StoryQuestService).AddProgress(player, "pet_slot", 1) end)  -- linia fabularna
 
 	-- Sync HUD (zmiana BackpackContents + InventoryStacks → klient layout musi się przeliczyć)
 	local cap = Config.BackpackUpgrades[data.BackpackLevel] and Config.BackpackUpgrades[data.BackpackLevel].Capacity or 10

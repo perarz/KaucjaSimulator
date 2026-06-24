@@ -62,6 +62,19 @@ local function thumbUrl(userId: number): string
 	return string.format("rbxthumb://type=AvatarHeadShot&id=%d&w=150&h=150", userId)
 end
 
+-- Ustawia awatar: natychmiast rbxthumb, potem (async) pewniejszy GetUserThumbnailAsync.
+local function setAvatar(img: ImageLabel, userId: number)
+	img.Image = thumbUrl(userId)
+	task.spawn(function()
+		local ok, content = pcall(function()
+			return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size150x150)
+		end)
+		if ok and content and content ~= "" and img and img.Parent then
+			img.Image = content
+		end
+	end)
+end
+
 -- ── Movement lock (ref-counted, balansowany per-gui) ─────────────────────────
 local lockedGuis: { [string]: boolean } = {}
 local function lockMove(tag: string)
@@ -190,7 +203,7 @@ listOverlay.Size = UDim2.fromScale(1, 1); listOverlay.BackgroundColor3 = Color3.
 listOverlay.BackgroundTransparency = 0.5; listOverlay.BorderSizePixel = 0
 listOverlay.Text = ""; listOverlay.AutoButtonColor = false; listOverlay.ZIndex = 1; listOverlay.Parent = listGui
 
-local LIST_W, LIST_H = 460, 600
+local LIST_W, LIST_H = 540, 620
 local listPanel = Instance.new("Frame")
 listPanel.Size             = UDim2.fromOffset(LIST_W, LIST_H)
 listPanel.AnchorPoint      = Vector2.new(0.5, 0.5)
@@ -247,9 +260,10 @@ local function rebuildList()
 		local av = Instance.new("ImageLabel")
 		av.Size = UDim2.fromOffset(48, 48); av.AnchorPoint = Vector2.new(0, 0.5)
 		av.Position = UDim2.new(0, 10, 0.5, 0); av.BackgroundColor3 = C_HEADER
-		av.BorderSizePixel = 0; av.Image = thumbUrl(p.UserId); av.ScaleType = Enum.ScaleType.Fit
+		av.BorderSizePixel = 0; av.ScaleType = Enum.ScaleType.Fit
 		av.ZIndex = 5; av.Parent = row
 		local ac = Instance.new("UICorner"); ac.CornerRadius = UDim.new(1, 0); ac.Parent = av
+		setAvatar(av, p.UserId)
 
 		local nick = Instance.new("TextLabel")
 		nick.Size = UDim2.new(1, -200, 1, 0); nick.Position = UDim2.fromOffset(68, 0)
@@ -407,7 +421,7 @@ tOverlay.Size = UDim2.fromScale(1, 1); tOverlay.BackgroundColor3 = Color3.new(0,
 tOverlay.BackgroundTransparency = 0.5; tOverlay.BorderSizePixel = 0
 tOverlay.Text = ""; tOverlay.AutoButtonColor = false; tOverlay.ZIndex = 1; tOverlay.Parent = tradeGui
 
-local TW_W, TW_H = 940, 600
+local TW_W, TW_H = 1080, 660
 local tPanel = Instance.new("Frame")
 tPanel.Size             = UDim2.fromOffset(TW_W, TW_H)
 tPanel.AnchorPoint      = Vector2.new(0.5, 0.5)

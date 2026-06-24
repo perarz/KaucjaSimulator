@@ -142,23 +142,25 @@ Workflow większych zmian: **plan → pytania → potwierdzenie → robota → r
 ## Linia fabularna (StoryQuestService + StoryQuestController + sekcja FABUŁA w QuestController)
 
 ### Cel
-Onboarding — gracz wie co robić. 14 questów w ustalonej kolejności (Config.StoryQuests). Po wykonaniu kliknij ODBIERZ → wypłata + auto-start następnego.
+Onboarding — gracz wie co robić. 16 questów w ustalonej kolejności (Config.StoryQuests). Po wykonaniu kliknij ODBIERZ → wypłata + auto-start następnego.
 
 ### Chain (Config.StoryQuests)
-1. Zbierz 10 butelek (30 zł)
-2. Oddaj do butelkomatu 2× (50 zł)
+1. Zbierz 10 butelek (100 zł)
+2. Oddaj do butelkomatu 2× (100 zł)
 3. Kup 2 ulepszenia w drzewku (100 zł)
 4. Kup lepszy plecak (150 zł)
 5. Kup 1 jajko z petem (250 zł)
 6. Załóż peta (300 zł)
-7. Kup deskę lvl 1 - Default (400 zł)
-8. Zbierz 100 butelek (600 zł)
-9. Zbierz 5 Legendarnych butelek (400 zł)
-10. Ulepsz skarbiec (500 zł)
-11. Pomóż Dziadkowi (150 zł)
-12. Kup deskę lvl 2 - Red (200 zł)
-13. Wylosuj Legendarnego peta (500 zł)
-14. Kup deskę lvl 3 - Blue (500 zł)
+7. Kup jakąkolwiek deskę (500 zł) — `buy_deck` bez `deckKey`
+8. Zbierz 50 butelek (600 zł)
+9. Użyj magnesu — kup w Żabce (300 zł)
+10. Zbierz 5 Legendarnych butelek (400 zł)
+11. Ulepsz skarbiec (500 zł)
+12. Pomóż Dziadkowi (150 zł)
+13. Wylosuj Epickiego peta z jajka (500 zł)
+14. Odblokuj Pustynię (1000 zł) — VFX naprowadzający (Highlight + strzałka nad entry, ZoneEntryController)
+15. Ulepsz peta na złotego (500 zł)
+16. Zwiększ ilość slotów na pety (500 zł)
 
 ### Mechanika
 - `StoryQuestService.AddProgress(player, kind, amount, params?)` — hooki w istniejących serwisach (BottleService.CollectBottle/EmptyBackpack, KoszService, UpgradeService.Buy*, ShopService.tryBuyBackpack, DeskaService.grantDeckInternal, GrandpaService.GrandpaTurnIn, PetService.OpenEgg/EquipPet, BankService.UpgradeBank). Wszystkie przez `pcall(require...)`.
@@ -171,6 +173,8 @@ Onboarding — gracz wie co robić. 14 questów w ustalonej kolejności (Config.
 - `deposit`, `buy_skill`, `buy_backpack`, `buy_deck`, `grandpa_done`
 - `buy_egg` (otwarcie jajka), `equip_pet` (założenie peta), `upgrade_bank` (ULEPSZ skarbca)
 - `pet_rarity` (wylosowanie peta — `params.rarity == q.petRarity`)
+- `use_magnet` (MagnetService.UseMagnet), `unlock_zone` (ZoneEntryService — `params.zone == q.zone`)
+- `gold_pet` (GoldPetService claim złotego peta), `pet_slot` (PetSlotShopService — +slot na peta)
 
 ### UI
 - **Corner HUD** (`StoryQuestController`) — prawy dolny róg, 460×130. Header "FABUŁA X/Y", desc, nagroda gold, pasek/ODBIERZ.

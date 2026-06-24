@@ -319,6 +319,7 @@ GoldUpgradeClaim.OnServerEvent:Connect(function(player)
 	sessions[player] = nil
 	PetService.PushHud(player)
 	PetService.PushStatus(player)
+	pcall(function() require(script.Parent.StoryQuestService).AddProgress(player, "gold_pet", 1) end)  -- linia fabularna
 	fireResult(player, { ok = true, claimed = true, pets = petsSnapshot(data) })
 end)
 

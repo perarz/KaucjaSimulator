@@ -85,6 +85,21 @@ local function preFillProgress(data, q): number
 			return false
 		end
 		if hasRarity(data.Pets) or hasRarity(data.BankPets) then return q.target end
+	elseif q.kind == "use_magnet" then
+		-- Użyte akcesoria (magnesy) z panelu STATS — jak już kiedyś użył, zalicz
+		if (data.StatAccessoriesUsed or 0) >= q.target then return q.target end
+	elseif q.kind == "unlock_zone" then
+		if data.OwnedZones and data.OwnedZones[q.zone] then return q.target end
+	elseif q.kind == "gold_pet" then
+		-- Ma już złotego peta w EQ lub skarbcu
+		local function hasGold(list): boolean
+			if not list then return false end
+			for _, p in ipairs(list) do if p.gold == true then return true end end
+			return false
+		end
+		if hasGold(data.Pets) or hasGold(data.BankPets) then return q.target end
+	elseif q.kind == "pet_slot" then
+		if (data.MaxEquippedPets or 1) > 1 then return q.target end
 	end
 	return 0
 end
@@ -174,6 +189,10 @@ function StoryQuestService.AddProgress(player: Player, kind: string, amount: num
 	elseif q.kind == "equip_pet"      and kind == "equip_pet"    then matched = true
 	elseif q.kind == "upgrade_bank"   and kind == "upgrade_bank" then matched = true
 	elseif q.kind == "pet_rarity"     and kind == "pet_rarity" and params and params.rarity == q.petRarity then matched = true
+	elseif q.kind == "use_magnet"     and kind == "use_magnet"   then matched = true
+	elseif q.kind == "unlock_zone"    and kind == "unlock_zone" and params and params.zone == q.zone then matched = true
+	elseif q.kind == "gold_pet"       and kind == "gold_pet"     then matched = true
+	elseif q.kind == "pet_slot"       and kind == "pet_slot"     then matched = true
 	end
 	if not matched then return end
 
