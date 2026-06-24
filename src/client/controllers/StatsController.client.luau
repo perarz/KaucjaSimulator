@@ -127,7 +127,8 @@ panel.BackgroundColor3 = Color3.fromRGB(16, 58, 46)
 panel.BorderSizePixel  = 0
 panel.ZIndex           = 2
 panel.Parent           = gui
-local panelScale = Instance.new("UIScale"); panelScale.Parent = panel
+-- UWAGA: brak własnego UIScale na panelu — MobileScaleController dokłada responsywny
+-- UIScale, a dwa UIScale na jednym obiekcie się gryzą. Animacja otwierania przez Size.
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 22); c.Parent = panel
 	local s = Instance.new("UIStroke"); s.Color = C_STROKE; s.Thickness = 1.5; s.Transparency = 0.35; s.Parent = panel
@@ -490,10 +491,11 @@ StatsData.OnClientEvent:Connect(applyStats)
 local function openPanel()
 	gui.Enabled = true
 	lockMove()
-	-- animacja otwierania (pop)
-	panelScale.Scale = 0.7
+	-- animacja otwierania (pop przez Size — responsywny UIScale zostaje jedynym na panelu)
+	panel.Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85)
 	overlay.BackgroundTransparency = 1
-	TweenService:Create(panelScale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	TweenService:Create(panel, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Size = UDim2.fromOffset(PANEL_W, PANEL_H) }):Play()
 	TweenService:Create(overlay, TweenInfo.new(0.25), { BackgroundTransparency = 0.5 }):Play()
 	StatsRequest:FireServer()
 end

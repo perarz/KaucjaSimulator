@@ -9,10 +9,10 @@ local RunService    = game:GetService("RunService")
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- DESIGN dopasowany do największego paneluw (MENU = 1480×880). Bez tego na małych
--- telefonach (np. 360×640) menu wystawało poza ekran i X-close nie dało się kliknąć.
-local DESIGN_X  = 1480
-local DESIGN_Y  = 880
+-- Baza projektowa = 1920×1080 (referencja desktop). Na 1920×1080 skala = 1.0 (UI bez zmian).
+-- Każdy mniejszy ekran → skala < 1.0 proporcjonalnie (telefony/tablety mieszczą całe UI).
+local DESIGN_X  = 1920
+local DESIGN_Y  = 1080
 local MIN_SCALE = 0.30
 local MAX_SCALE = 1.00
 local TAG_NAME  = "__MobileUIScale"

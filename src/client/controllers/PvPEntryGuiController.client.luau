@@ -101,9 +101,8 @@ do
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 4; s.Parent = panel
 end
 
-local panelScale = Instance.new("UIScale")
-panelScale.Scale = 0.8
-panelScale.Parent = panel
+-- Brak własnego UIScale na panelu — responsywny UIScale dokłada MobileScaleController
+-- (dwa UIScale na jednym obiekcie się gryzą). Pop otwierania/zamykania przez Size.
 
 -- Header
 local header = Instance.new("Frame")
@@ -282,16 +281,18 @@ local function openGui()
 	msgLbl.Text = ""
 	balanceLbl.Text = "Twoje saldo: " .. formatAmount(getBalance()) .. " PLN"
 	gui.Enabled = true
-	panelScale.Scale = 0.8
-	TweenService:Create(panelScale, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.0 }):Play()
+	panel.Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85)
+	TweenService:Create(panel, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Size = UDim2.fromOffset(PANEL_W, PANEL_H) }):Play()
 end
 
 local function closeGui()
-	local t = TweenService:Create(panelScale, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Scale = 0.85 })
+	local t = TweenService:Create(panel, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+		{ Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85) })
 	t:Play()
 	t.Completed:Connect(function()
 		gui.Enabled = false
-		panelScale.Scale = 0.8
+		panel.Size = UDim2.fromOffset(PANEL_W, PANEL_H)
 	end)
 end
 
