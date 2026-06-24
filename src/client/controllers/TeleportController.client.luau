@@ -105,7 +105,7 @@ panel.BackgroundColor3 = C_PANEL
 panel.BorderSizePixel  = 0
 panel.ZIndex           = 2
 panel.Parent           = gui
-local panelScale = Instance.new("UIScale"); panelScale.Parent = panel
+-- brak własnego UIScale na panelu (MobileScaleController dokłada responsywny; dwa się gryzą)
 do
 	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 16); c.Parent = panel
 	local s = Instance.new("UIStroke"); s.Color = C_BORDER; s.Thickness = 3; s.Parent = panel
@@ -178,8 +178,9 @@ end
 local function openPanel()
 	gui.Enabled = true
 	lockMove()
-	panelScale.Scale = 0.8
-	TweenService:Create(panelScale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	panel.Size = UDim2.fromOffset(PANEL_W * 0.85, PANEL_H * 0.85)
+	TweenService:Create(panel, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Size = UDim2.fromOffset(PANEL_W, PANEL_H) }):Play()
 end
 
 -- Buduj przyciski lokalizacji
