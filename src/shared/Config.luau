@@ -374,6 +374,18 @@ return {
 	LeaderboardUpdateInterval = 60,
 	LeaderboardMaxEntries = 10,
 
+	-- Podium top-3 (3 rigi z wczytanym skinem top graczy + animacja tańca).
+	-- Rigi: workspace.Podium z 3 modelami (R15, Humanoid) nazwanymi tak by zawierały
+	-- cyfrę 1/2/3 (np. "Spot1", "Miejsce2", "3"). HumanoidRootPart anchored = stoją w miejscu.
+	Podium = {
+		FolderName    = "Podium",
+		-- Animacja tańca (R15). Domyślnie klasyczny Roblox dance — podmień na swoją.
+		DanceAnimId   = "rbxassetid://507771019",
+		-- Co ile sekund sprawdzać czy zmienił się top-3 (diff względem cache).
+		RefreshSec    = 10,
+		ShowNameTag   = true,  -- billboard z nickiem + miejscem nad rigiem
+	},
+
 	-- Questy — 3 aktywne losowane z puli, refresh co X godzin
 	QuestActiveCount = 3,
 	QuestRefreshHours = 6,
