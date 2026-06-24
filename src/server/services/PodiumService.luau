@@ -205,6 +205,7 @@ end
 -- ── Start obu podiów ─────────────────────────────────────────────────────────
 makePodium(cfg.FolderName or "Podium", LeaderboardService.GetTopMoney)
 makePodium(cfg.KillsFolderName or "PodiumKilli", LeaderboardService.GetTopKills)
+makePodium(cfg.BottlesFolderName or "PodiumButelek", LeaderboardService.GetTopBottles)
 
 print("[PodiumService] gotowy")
 return PodiumService
