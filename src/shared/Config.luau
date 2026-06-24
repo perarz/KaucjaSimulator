@@ -379,8 +379,15 @@ return {
 	-- cyfrę 1/2/3 (np. "Spot1", "Miejsce2", "3"). HumanoidRootPart anchored = stoją w miejscu.
 	Podium = {
 		FolderName    = "Podium",
-		-- Animacja tańca (R15). Domyślnie klasyczny Roblox dance — podmień na swoją.
-		DanceAnimId   = "rbxassetid://507771019",
+		-- Skala rigów per miejsce (1/2/3). Nakładana przez HumanoidDescription (uniform).
+		Scales        = { 2.582, 2.091, 2.091 },
+		-- Różna animacja tańca (R15) na każdym rigu. Indeks = miejsce.
+		DanceAnimIds  = {
+			"rbxassetid://507771019",  -- #1
+			"rbxassetid://507776043",  -- #2
+			"rbxassetid://507777268",  -- #3
+		},
+		DanceAnimId   = "rbxassetid://507771019",  -- fallback gdy brak w DanceAnimIds
 		-- Co ile sekund sprawdzać czy zmienił się top-3 (diff względem cache).
 		RefreshSec    = 10,
 		ShowNameTag   = true,  -- billboard z nickiem + miejscem nad rigiem

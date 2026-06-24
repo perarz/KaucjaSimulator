@@ -25,6 +25,7 @@ type Slot = {
 	model: Model,
 	humanoid: Humanoid,
 	baseCF: CFrame,
+	groundY: number,     -- Y spodu riga w momencie startu (żeby po skalowaniu stopy zostały na podium)
 	uid: number?,        -- aktualnie wczytany userId (cache)
 	track: AnimationTrack?,
 	loading: boolean,
@@ -61,10 +62,12 @@ local function collectSlots()
 				local prim = getPrimary(child)
 				if prim then
 					if not child.PrimaryPart then child.PrimaryPart = prim end
+					local bb0, sz0 = child:GetBoundingBox()
 					slots[n] = {
 						model = child,
 						humanoid = hum,
 						baseCF = child:GetPivot(),
+						groundY = bb0.Position.Y - sz0.Y / 2,  -- spód riga (stopy) przy skali z Studio
 						uid = nil,
 						track = nil,
 						loading = false,
@@ -83,8 +86,8 @@ local function collectSlots()
 	return true
 end
 
--- ── Animacja tańca ───────────────────────────────────────────────────────────
-local function playDance(slot: Slot)
+-- ── Animacja tańca (różna per miejsce) ───────────────────────────────────────
+local function playDance(slot: Slot, rank: number)
 	local hum = slot.humanoid
 	local animator = hum:FindFirstChildOfClass("Animator")
 	if not animator then
@@ -96,8 +99,9 @@ local function playDance(slot: Slot)
 		slot.track:Stop()
 		slot.track = nil
 	end
+	local animId = (cfg.DanceAnimIds and cfg.DanceAnimIds[rank]) or cfg.DanceAnimId or "rbxassetid://507771019"
 	local anim = Instance.new("Animation")
-	anim.AnimationId = cfg.DanceAnimId or "rbxassetid://507771019"
+	anim.AnimationId = animId
 	local ok, track = pcall(function()
 		return animator:LoadAnimation(anim)
 	end)
@@ -147,10 +151,16 @@ local function applyUser(slot: Slot, rank: number, uid: number)
 	if slot.loading then return end
 	slot.loading = true
 	task.spawn(function()
+		local scale = (cfg.Scales and cfg.Scales[rank]) or 1
 		local okDesc, desc = pcall(function()
 			return Players:GetHumanoidDescriptionFromUserId(uid)
 		end)
 		if okDesc and desc then
+			-- Uniform scale przez HumanoidDescription (nakładany razem ze skinem)
+			desc.HeightScale = scale
+			desc.WidthScale  = scale
+			desc.DepthScale  = scale
+			desc.HeadScale   = scale
 			local okApply = pcall(function()
 				slot.humanoid:ApplyDescription(desc)
 			end)
@@ -160,16 +170,20 @@ local function applyUser(slot: Slot, rank: number, uid: number)
 		else
 			warn("[PodiumService] GetHumanoidDescriptionFromUserId nieudane dla uid", uid)
 		end
-		-- ApplyDescription mógł przesunąć/odkotwiczyć riga — przywróć pozycję + anchor + taniec
+		-- ApplyDescription/skala mogły przesunąć riga — przywróć XZ z baseCF i podnieś tak,
+		-- żeby stopy zostały na poziomie groundY (inaczej powiększony rig zapada się w podium).
 		local prim = getPrimary(slot.model)
 		if prim then
 			slot.model:PivotTo(slot.baseCF)
+			local bb, sz = slot.model:GetBoundingBox()
+			local bottom = bb.Position.Y - sz.Y / 2
+			slot.model:PivotTo(slot.baseCF + Vector3.new(0, slot.groundY - bottom, 0))
 			prim.Anchored = true
 		end
 		-- nick
 		local okName, name = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
 		setNameTag(slot, rank, (okName and name) or ("User" .. uid))
-		playDance(slot)
+		playDance(slot, rank)
 		slot.uid = uid
 		slot.loading = false
 	end)
