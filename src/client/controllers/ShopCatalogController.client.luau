@@ -77,7 +77,7 @@ local MENU_W   = 203
 -- żeby grafika nie była ścinana ScaleType.Fit + żeby wizualnie pasowały obok siebie w HUD.
 local SHOP_W   = 203
 local SHOP_H   = 135
-local HUD_GAP  = 2   -- bliżej MENU (było 14); STATS po prawej ma ten sam offset (symetria)
+local HUD_GAP  = -18  -- bliżej MENU (lekki zakład na transparentne marginesy ikon); STATS ma ten sam offset
 local HUD_OFFSET_BOTTOM = 20
 local SHOP_X_OFFSET = -(MENU_W / 2 + HUD_GAP + SHOP_W / 2)
 

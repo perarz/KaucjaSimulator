@@ -26,6 +26,7 @@ require(script.Parent.PetService)
 require(script.Parent.GoldPetService)          -- ulepszanie peta na złotego (rig steve10die)
 require(script.Parent.StatsService)            -- panel STATS (snapshot statystyk z DataStore)
 require(script.Parent.PodiumService)           -- podium top-3 (rigi ze skinem + taniec)
+require(script.Parent.TeleportService)         -- teleportacja do stref mapy
 require(script.Parent.PlayerCollisionService)  -- gracze przechodzą przez siebie (brak kolizji)
 -- DeskaService to standalone Script (.server.luau) — uruchamia się sam,
 -- NIE wymagaj go tutaj (require na Script rzuca "invalid argument").
