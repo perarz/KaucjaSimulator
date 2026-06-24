@@ -203,6 +203,16 @@ task.spawn(function()
 		table.insert(assets, id)
 	end
 
+	-- Obrazki desek (karty w GUI) + ikona menu desek
+	if Config.Decks then
+		for _, deck in ipairs(Config.Decks) do
+			if type(deck.image) == "string" and deck.image ~= "" then table.insert(assets, deck.image) end
+		end
+	end
+	if type(Config.DeckMenuIconId) == "string" and Config.DeckMenuIconId ~= "" then
+		table.insert(assets, Config.DeckMenuIconId)
+	end
+
 	-- Tekstury butelek w slotach EQ/banku — preload (jw. anty pop-in)
 	if Config.BottleImages then
 		for _, img in pairs(Config.BottleImages) do

@@ -39,6 +39,7 @@ return {
 			Cost = 1000,
 			gablota = 1,
 			color = Color3.fromRGB(190, 190, 190),
+			image = "rbxassetid://103950684093599",  -- szara deska (card w GUI)
 		},
 		{
 			key = "Red",
@@ -49,6 +50,7 @@ return {
 			Cost = 3000,
 			gablota = 2,
 			color = Color3.fromRGB(205, 70, 70),
+			image = "rbxassetid://89871458447606",  -- czerwona
 		},
 		{
 			key = "Blue",
@@ -59,6 +61,7 @@ return {
 			Cost = 5000,
 			gablota = 3,
 			color = Color3.fromRGB(70, 120, 205),
+			image = "rbxassetid://117881814764260",  -- niebieska
 		},
 		{
 			key = "VIP",
@@ -70,13 +73,14 @@ return {
 			RobuxPrice = 39,                -- info-only do UI
 			gablota = 4,
 			color = Color3.fromRGB(230, 190, 60),
+			image = "rbxassetid://134648772285569",  -- vip
 		},
 	},
 	-- WalkSpeed/JumpHeight przywracane po zejściu z deski
 	DeckDismountWalkSpeed = 16,
 	DeckDismountJumpHeight = 7.2,
 	-- Ikona przycisku hoverboard (HUD) — otwiera menu desek
-	DeckMenuIconId = "rbxassetid://71645152463222",
+	DeckMenuIconId = "rbxassetid://126476844725167",
 
 	-- Bank: bazowa pojemność + cena ulepszeń (przycisk ULEPSZ w UI banku).
 	-- Każde ulepszenie daje +1 cap. Pierwsze kosztuje BaseCost, każde następne +CostStep.

@@ -161,7 +161,7 @@ end
 makeXButton(buyHeader, function() setBuyOpen(false) end)
 buyOverlay.MouseButton1Click:Connect(function() end)  -- klik w tło nie zamyka
 
--- Swatch (kolor deski)
+-- Swatch (obrazek deski)
 local buySwatch = Instance.new("Frame")
 buySwatch.AnchorPoint = Vector2.new(0.5, 0)
 buySwatch.Position = UDim2.new(0.5, 0, 0, 84)
@@ -171,11 +171,20 @@ buySwatch.BorderSizePixel = 0
 buySwatch.Parent = buyPanel
 mkCorner(buySwatch, 10)
 local buySwatchStroke = mkStroke(buySwatch, C_BORDER, 3)
+local buySwatchImg = Instance.new("ImageLabel")
+buySwatchImg.BackgroundTransparency = 1
+buySwatchImg.Size = UDim2.fromScale(0.92, 0.92)
+buySwatchImg.AnchorPoint = Vector2.new(0.5, 0.5)
+buySwatchImg.Position = UDim2.fromScale(0.5, 0.5)
+buySwatchImg.ScaleType = Enum.ScaleType.Fit
+buySwatchImg.ZIndex = 1
+buySwatchImg.Parent = buySwatch
 local buySwatchName = Instance.new("TextLabel")
 buySwatchName.BackgroundTransparency = 1
 buySwatchName.Size = UDim2.fromScale(1, 1)
 buySwatchName.Font = FONT_MAIN; buySwatchName.TextSize = 24; buySwatchName.TextColor3 = C_WHITE
 buySwatchName.TextStrokeTransparency = 0.4
+buySwatchName.ZIndex = 2
 buySwatchName.Text = ""
 buySwatchName.Parent = buySwatch
 
@@ -221,8 +230,9 @@ local function refreshBuyPanel()
 	local deck = deckByKey(currentBuyKey)
 	if not deck then return end
 	buyTitle.Text = "SKLEP — " .. string.upper(deck.name)
-	buySwatch.BackgroundColor3 = deck.color or C_SLOT
-	buySwatchStroke.Color = deck.color or C_BORDER
+	buySwatchImg.Image = deck.image or ""
+	buySwatchImg.Visible = deck.image ~= nil
+	buySwatchStroke.Color = C_BORDER
 	buySwatchName.Text = deck.name
 	buySpeed.Text = "Prędkość: " .. deck.Speed
 	buyPrice.Text = priceText(deck)
@@ -393,6 +403,13 @@ detSwatch.BorderSizePixel = 0
 detSwatch.Parent = detail
 mkCorner(detSwatch, 10)
 local detSwatchStroke = mkStroke(detSwatch, C_BORDER, 3)
+local detSwatchImg = Instance.new("ImageLabel")
+detSwatchImg.BackgroundTransparency = 1
+detSwatchImg.Size = UDim2.fromScale(0.92, 0.92)
+detSwatchImg.AnchorPoint = Vector2.new(0.5, 0.5)
+detSwatchImg.Position = UDim2.fromScale(0.5, 0.5)
+detSwatchImg.ScaleType = Enum.ScaleType.Fit
+detSwatchImg.Parent = detSwatch
 
 local detName = Instance.new("TextLabel")
 detName.BackgroundTransparency = 1
@@ -438,11 +455,12 @@ local function refreshDetail()
 	if not deck then
 		detName.Text = "—"; detSpeed.Text = ""; detStatus.Text = "Wybierz deskę"
 		equipBtn.Visible = false
-		detSwatch.BackgroundColor3 = C_SLOT; detSwatchStroke.Color = C_BORDER
+		detSwatchImg.Image = ""; detSwatchStroke.Color = C_BORDER
 		return
 	end
-	detSwatch.BackgroundColor3 = deck.color or C_SLOT
-	detSwatchStroke.Color = deck.color or C_BORDER
+	detSwatchImg.Image = deck.image or ""
+	detSwatchImg.Visible = deck.image ~= nil
+	detSwatchStroke.Color = C_BORDER
 	detName.Text = deck.name
 	detSpeed.Text = "Prędkość: " .. deck.Speed
 	equipBtn.Visible = true
@@ -507,15 +525,27 @@ local function makeCard(deck, order: number)
 	swatch.AnchorPoint = Vector2.new(0.5, 0)
 	swatch.Position = UDim2.new(0.5, 0, 0, 16)
 	swatch.Size = UDim2.fromOffset(170, 100)
-	swatch.BackgroundColor3 = deck.color or C_SLOT
+	swatch.BackgroundColor3 = C_SLOT
 	swatch.BorderSizePixel = 0
 	swatch.Parent = card
 	mkCorner(swatch, 8); mkStroke(swatch, C_BORDER, 2)
+
+	local swatchImg = Instance.new("ImageLabel")
+	swatchImg.BackgroundTransparency = 1
+	swatchImg.Size = UDim2.fromScale(0.92, 0.92)
+	swatchImg.AnchorPoint = Vector2.new(0.5, 0.5)
+	swatchImg.Position = UDim2.fromScale(0.5, 0.5)
+	swatchImg.ScaleType = Enum.ScaleType.Fit
+	swatchImg.Image = deck.image or ""
+	swatchImg.Visible = deck.image ~= nil
+	swatchImg.ZIndex = 1
+	swatchImg.Parent = swatch
 
 	local lock = Instance.new("TextLabel")
 	lock.BackgroundTransparency = 1
 	lock.Size = UDim2.fromScale(1, 1)
 	lock.Font = FONT_MAIN; lock.TextSize = 40; lock.TextColor3 = C_WHITE
+	lock.ZIndex = 2
 	lock.TextStrokeTransparency = 0.3
 	lock.Text = "🔒"
 	lock.Visible = false
