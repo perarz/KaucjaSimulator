@@ -549,6 +549,7 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 	-- Wszystko OK — deductuj, dropuj, push.
 	lastOpenAt[player] = now
 	data.Zlotowki -= cost
+	data.StatEggsOpened = (data.StatEggsOpened or 0) + count  -- panel STATS
 	PlayerDataService.UpdateLeaderstats(player)
 	data.Pets = data.Pets or {}
 

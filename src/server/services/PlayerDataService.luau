@@ -80,6 +80,7 @@ local DEFAULT_DATA = {
 	},
 	StatPvpKills        = 0,
 	StatAccessoriesUsed = 0,
+	StatEggsOpened      = 0,   -- ile jajek z petem gracz otworzył (panel STATS)
 }
 
 local deepCopy = Util.deepCopy
@@ -172,13 +173,30 @@ function PlayerDataService.GetData(player: Player): { [string]: any }
 	return data
 end
 
+-- Koalescencja zapisów per gracz — przy zamykaniu playtesta PlayerRemoving i BindToClose
+-- odpalają SaveData dla tego samego klucza niemal jednocześnie. Dwa SetAsync na ten sam
+-- klucz = "DataStore request was added to queue". Drugie wywołanie czeka na trwający zapis
+-- zamiast dublować request.
+local saveInFlight: { [Player]: BindableEvent } = {}
+
 function PlayerDataService.SaveData(player: Player)
 	local data = cache[player]
 	if not data then return end
 	if data.__loadFailed then return end  -- nie nadpisuj stanu gdy load się nie udał
 
+	local inflight = saveInFlight[player]
+	if inflight then
+		-- Zapis tego gracza już trwa — poczekaj na jego koniec, nie odpalaj drugiego SetAsync.
+		inflight.Event:Wait()
+		return
+	end
+
+	local ev = Instance.new("BindableEvent")
+	saveInFlight[player] = ev
 	local key = Config.DataStoreKey .. "_" .. player.UserId
 	setWithRetry(key, data)
+	saveInFlight[player] = nil
+	ev:Fire()
 end
 
 -- Auto-save co 60 sekund (równolegle per gracz — sekwencyjny zapycha kolejkę DataStore

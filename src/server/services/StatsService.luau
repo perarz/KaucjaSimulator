@@ -61,6 +61,7 @@ local function buildSnapshot(player: Player)
 		bestPet         = bestPetName(bp),
 		bestPetInfo     = bp and { rarity = bp.rarity, class = bp.class, gold = bp.gold == true } or nil,
 		accessoriesUsed = data.StatAccessoriesUsed or 0,
+		eggsOpened      = data.StatEggsOpened or 0,
 	}
 end
 

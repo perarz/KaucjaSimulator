@@ -399,6 +399,7 @@ end
 local valPln  = makeStatCard(col3, { image = "rbxassetid://74111457265393",  label = "ILOŚĆ PLN", h = 150, valueSize = 42, valueColor = C_GREEN })
 local valKill = makeStatCard(col3, { image = "rbxassetid://100029024637808", label = "ELIMINACJE W STREFIE PVP", h = 120, valueSize = 38, valueColor = X_RED })
 local valAcc  = makeStatCard(col3, { image = "rbxassetid://106132679637933", label = "UŻYTE AKCESORIA", h = 120, valueSize = 38, valueColor = Color3.fromRGB(235, 150, 95) })
+local valEgg  = makeStatCard(col3, { image = "rbxassetid://136213715609242", label = "OTWARTE JAJKA", h = 120, valueSize = 38, valueColor = C_GOLD })
 
 -- ── Viewport: ładowanie + obrót modelu peta ─────────────────────────────────
 local function petTemplate(rarity: string, gold: boolean): Instance?
@@ -482,6 +483,7 @@ local function applyStats(s)
 	valPln.Text    = (pln == math.floor(pln)) and (fmtNum(pln) .. " PLN") or string.format("%.2f PLN", pln)
 	valKill.Text   = fmtNum(s.pvpKills)
 	valAcc.Text    = fmtNum(s.accessoriesUsed)
+	valEgg.Text    = fmtNum(s.eggsOpened)
 	petNameLbl.Text = tostring(s.bestPet or "Brak")
 	loadPet(s.bestPetInfo)
 end
