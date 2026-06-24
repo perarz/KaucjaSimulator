@@ -1,5 +1,8 @@
 -- LeaderboardService.luau
--- Ranking aktualnego salda (Zlotowki) — top 10, SurfaceGui na workspace.LeaderboardTablica
+-- Dwa rankingi (SurfaceGui + cache top-listy dla podium):
+--   • PIENIĄDZE — aktualne Zlotowki, workspace.LeaderboardTablica
+--   • ELIMINACJE — StatPvpKills, workspace.LeaderboardTablicaKilli
+-- Oba zbudowane z tego samego "Board" factory — identyczny wygląd, inna wartość.
 
 local Players             = game:GetService("Players")
 local DataStoreService    = game:GetService("DataStoreService")
@@ -9,31 +12,21 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config            = require(ReplicatedStorage.Config)
 local PlayerDataService = require(ServerScriptService.PlayerDataService)
 
-local LEADERBOARD_KEY = "Leaderboard_Zlotowki_v1"
-local store           = DataStoreService:GetOrderedDataStore(LEADERBOARD_KEY)
-
 local LeaderboardService = {}
 
 -- ── Helpery ───────────────────────────────────────────────────────────────
-
 local nameCache: { [number]: string } = {}
 
 local function getNameFromUserId(uid: number): string
 	if nameCache[uid] then return nameCache[uid] end
-	-- Spróbuj najpierw po Players (online)
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p.UserId == uid then
 			nameCache[uid] = p.DisplayName ~= "" and p.DisplayName or p.Name
 			return nameCache[uid]
 		end
 	end
-	local ok, name = pcall(function()
-		return Players:GetNameFromUserIdAsync(uid)
-	end)
-	if ok and name then
-		nameCache[uid] = name
-		return name
-	end
+	local ok, name = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
+	if ok and name then nameCache[uid] = name; return name end
 	return "User" .. tostring(uid)
 end
 
@@ -45,29 +38,7 @@ local function formatAmount(amount: number): string
 	return string.format("%.2f", rounded)
 end
 
--- ── Zapis do OrderedDataStore ─────────────────────────────────────────────
--- OrderedDataStore akceptuje tylko integery → trzymamy grosze (×100).
-
-local function savePlayer(player: Player)
-	local data = PlayerDataService.GetData(player)
-	if not data then return end
-	local grosze = math.floor((data.Zlotowki or 0) * 100)
-	local ok, err = pcall(function()
-		store:SetAsync(tostring(player.UserId), grosze)
-	end)
-	if not ok then
-		warn("[LeaderboardService] SetAsync failed for", player.Name, ":", err)
-	end
-end
-
-local function saveAllOnline()
-	for _, p in ipairs(Players:GetPlayers()) do
-		task.spawn(savePlayer, p)
-	end
-end
-
--- ── SurfaceGui na tablicy ─────────────────────────────────────────────────
-
+-- ── Stałe wyglądu (wspólne dla obu tablic) ─────────────────────────────────
 local FONT       = Enum.Font.GothamBlack
 local C_PANEL    = Color3.fromRGB(60, 60, 60)
 local C_BG       = Color3.fromRGB(52, 52, 52)
@@ -80,24 +51,12 @@ local C_GOLD     = Color3.fromRGB(255, 195, 70)
 local C_SILVER   = Color3.fromRGB(200, 200, 220)
 local C_BRONZE   = Color3.fromRGB(205, 130, 70)
 
-type RowHandle = {
-	rankLbl:   TextLabel,
-	nameLbl:   TextLabel,
-	amountLbl: TextLabel,
-}
-
-local rowFrames: { [number]: RowHandle } = {}
-
--- Cache top-listy (uid+value) — czytane przez PodiumService (podium top-3).
-local topCache: { { uid: number, value: number } } = {}
-function LeaderboardService.GetTop(): { { uid: number, value: number } }
-	return topCache
-end
+type RowHandle = { rankLbl: TextLabel, nameLbl: TextLabel, amountLbl: TextLabel }
 
 local CANVAS_W = 800
 local CANVAS_H = 1100
 local HEADER_H = 140
-local ROW_H    = (CANVAS_H - HEADER_H - 20) / Config.LeaderboardMaxEntries  -- ~95
+local ROW_H    = (CANVAS_H - HEADER_H - 20) / Config.LeaderboardMaxEntries
 
 local function rankColor(i: number): Color3
 	if i == 1 then return C_GOLD end
@@ -106,8 +65,7 @@ local function rankColor(i: number): Color3
 	return C_DIMTEXT
 end
 
-local function buildSurfaceGui(part: BasePart)
-	-- Wyczyść istniejący
+local function buildSurfaceGui(part: BasePart, titleText: string): { [number]: RowHandle }
 	local existing = part:FindFirstChild("LeaderboardGui")
 	if existing then existing:Destroy() end
 
@@ -120,14 +78,12 @@ local function buildSurfaceGui(part: BasePart)
 	sg.AlwaysOnTop    = false
 	sg.Parent         = part
 
-	-- Tło panel
 	local bg = Instance.new("Frame")
 	bg.Size            = UDim2.fromScale(1, 1)
 	bg.BackgroundColor3 = C_PANEL
 	bg.BorderSizePixel = 0
 	bg.Parent          = sg
 
-	-- Header
 	local header = Instance.new("Frame")
 	header.Size            = UDim2.new(1, 0, 0, HEADER_H)
 	header.BackgroundColor3 = C_HEADER
@@ -137,13 +93,12 @@ local function buildSurfaceGui(part: BasePart)
 	local headerLbl = Instance.new("TextLabel")
 	headerLbl.Size                   = UDim2.fromScale(1, 1)
 	headerLbl.BackgroundTransparency = 1
-	headerLbl.Text                   = "RANKING KAUCYJNY — TOP " .. Config.LeaderboardMaxEntries
+	headerLbl.Text                   = titleText
 	headerLbl.TextSize               = 48
 	headerLbl.Font                   = FONT
 	headerLbl.TextColor3             = C_WHITE
 	headerLbl.Parent                 = header
 
-	-- Separator pod headerem
 	local sep = Instance.new("Frame")
 	sep.Size            = UDim2.new(1, 0, 0, 4)
 	sep.Position        = UDim2.fromOffset(0, HEADER_H)
@@ -151,8 +106,7 @@ local function buildSurfaceGui(part: BasePart)
 	sep.BorderSizePixel = 0
 	sep.Parent          = bg
 
-	-- Wiersze
-	rowFrames = {}
+	local rowFrames: { [number]: RowHandle } = {}
 	local startY = HEADER_H + 12
 	for i = 1, Config.LeaderboardMaxEntries do
 		local row = Instance.new("Frame")
@@ -202,96 +156,151 @@ local function buildSurfaceGui(part: BasePart)
 
 		rowFrames[i] = { rankLbl = rankLbl, nameLbl = nameLbl, amountLbl = amountLbl }
 	end
+	return rowFrames
 end
 
--- ── Aktualizacja widoku ──────────────────────────────────────────────────
+-- ── Board factory ───────────────────────────────────────────────────────────
+-- opts: { storeKey, partName, title, suffix, getValue(data)->number, toInt(v)->int, fromInt(int)->v, format(v)->string }
+local function makeBoard(opts)
+	local board = {
+		store     = DataStoreService:GetOrderedDataStore(opts.storeKey),
+		rowFrames = nil :: any,
+		topCache  = {} :: { { uid: number, value: number } },
+		opts      = opts,
+	}
 
-local function updateDisplay()
-	local ok, pages = pcall(function()
-		return store:GetSortedAsync(false, Config.LeaderboardMaxEntries)
-	end)
-	if not ok or not pages then
-		warn("[LeaderboardService] GetSortedAsync failed:", pages)
-		return
+	function board.save(player: Player)
+		local data = PlayerDataService.GetData(player)
+		if not data then return end
+		local v = opts.toInt(opts.getValue(data))
+		local ok, err = pcall(function()
+			board.store:SetAsync(tostring(player.UserId), v)
+		end)
+		if not ok then warn("[Leaderboard:" .. opts.storeKey .. "] SetAsync failed for", player.Name, ":", err) end
 	end
-	local top = pages:GetCurrentPage()
 
-	-- Odśwież cache top-listy (dla PodiumService)
-	topCache = {}
-	for _, entry in ipairs(top) do
-		local uid = tonumber(entry.key)
-		if uid then table.insert(topCache, { uid = uid, value = entry.value }) end
+	function board.build()
+		local part = workspace:FindFirstChild(opts.partName)
+		if not part or not part:IsA("BasePart") then
+			warn("[Leaderboard] Brak BasePart '" .. opts.partName .. "' w workspace — tablica pominięta")
+			return false
+		end
+		board.rowFrames = buildSurfaceGui(part :: BasePart, opts.title)
+		return true
 	end
 
-	for i = 1, Config.LeaderboardMaxEntries do
-		local row = rowFrames[i]
-		if not row then break end
-		local entry = top[i]
-		if entry then
-			local uid    = tonumber(entry.key)
-			local grosze = entry.value
-			local zl     = grosze / 100
-			row.nameLbl.Text   = uid and getNameFromUserId(uid) or "—"
-			row.amountLbl.Text = formatAmount(zl) .. " ZŁ"
-			row.rankLbl.TextColor3 = rankColor(i)
-		else
-			row.nameLbl.Text   = "—"
-			row.amountLbl.Text = ""
-			row.rankLbl.TextColor3 = C_DIMTEXT
+	function board.update()
+		local ok, pages = pcall(function()
+			return board.store:GetSortedAsync(false, Config.LeaderboardMaxEntries)
+		end)
+		if not ok or not pages then
+			warn("[Leaderboard:" .. opts.storeKey .. "] GetSortedAsync failed:", pages)
+			return
+		end
+		local top = pages:GetCurrentPage()
+
+		board.topCache = {}
+		for _, entry in ipairs(top) do
+			local uid = tonumber(entry.key)
+			if uid then table.insert(board.topCache, { uid = uid, value = entry.value }) end
+		end
+
+		if not board.rowFrames then return end
+		for i = 1, Config.LeaderboardMaxEntries do
+			local row = board.rowFrames[i]
+			if not row then break end
+			local entry = top[i]
+			if entry then
+				local uid = tonumber(entry.key)
+				local v   = opts.fromInt(entry.value)
+				row.nameLbl.Text       = uid and getNameFromUserId(uid) or "—"
+				row.amountLbl.Text     = opts.format(v) .. opts.suffix
+				row.rankLbl.TextColor3 = rankColor(i)
+			else
+				row.nameLbl.Text       = "—"
+				row.amountLbl.Text     = ""
+				row.rankLbl.TextColor3 = C_DIMTEXT
+			end
+		end
+	end
+
+	return board
+end
+
+-- ── Definicje tablic ────────────────────────────────────────────────────────
+local moneyBoard = makeBoard({
+	storeKey = "Leaderboard_Zlotowki_v1",
+	partName = "LeaderboardTablica",
+	title    = "RANKING KAUCYJNY — TOP " .. Config.LeaderboardMaxEntries,
+	suffix   = " ZŁ",
+	getValue = function(data) return data.Zlotowki or 0 end,
+	toInt    = function(v) return math.floor(v * 100) end,   -- grosze
+	fromInt  = function(i) return i / 100 end,
+	format   = formatAmount,
+})
+
+local killsBoard = makeBoard({
+	storeKey = "Leaderboard_Kille_v1",
+	partName = "LeaderboardTablicaKilli",
+	title    = "RANKING ELIMINACJI — TOP " .. Config.LeaderboardMaxEntries,
+	suffix   = "",
+	getValue = function(data) return data.StatPvpKills or 0 end,
+	toInt    = function(v) return math.floor(v) end,
+	fromInt  = function(i) return i end,
+	format   = function(v) return tostring(math.floor(v)) end,
+})
+
+local boards = { moneyBoard, killsBoard }
+
+-- ── Public: top-listy dla podium ────────────────────────────────────────────
+function LeaderboardService.GetTopMoney() return moneyBoard.topCache end
+function LeaderboardService.GetTopKills() return killsBoard.topCache end
+-- backward compat
+function LeaderboardService.GetTop() return moneyBoard.topCache end
+
+-- ── Pętle save/refresh ───────────────────────────────────────────────────────
+local function saveAllOnline()
+	for _, p in ipairs(Players:GetPlayers()) do
+		for _, board in ipairs(boards) do
+			task.spawn(board.save, p)
 		end
 	end
 end
 
--- ── Setup ────────────────────────────────────────────────────────────────
-
--- Osobne pętle: save i refresh działają niezależnie, oba co LeaderboardUpdateInterval (60s)
-local function startSaveLoop()
+local function startLoops()
 	task.spawn(function()
 		while true do
 			task.wait(Config.LeaderboardUpdateInterval)
 			saveAllOnline()
 		end
 	end)
-end
-
-local function startRefreshLoop()
 	task.spawn(function()
-		-- Initial refresh przy starcie — pobierz istniejący ranking
-		updateDisplay()
+		for _, board in ipairs(boards) do board.update() end
 		while true do
 			task.wait(Config.LeaderboardUpdateInterval)
-			updateDisplay()
+			for _, board in ipairs(boards) do board.update() end
 		end
 	end)
 end
 
-local function setupLeaderboard()
-	-- Znajdź tablicę
-	local part = workspace:FindFirstChild("LeaderboardTablica")
-	if not part or not part:IsA("BasePart") then
-		warn("[LeaderboardService] Brak BasePart 'LeaderboardTablica' w workspace — tablica nie zostanie utworzona")
-		return
-	end
-	buildSurfaceGui(part :: BasePart)
-
-	startSaveLoop()
-	startRefreshLoop()
-
-	print("[LeaderboardService] Tablica gotowa →", part:GetFullName(),
-		"— refresh co", Config.LeaderboardUpdateInterval, "s")
+local function setup()
+	for _, board in ipairs(boards) do board.build() end
+	startLoops()
+	print("[LeaderboardService] Tablice gotowe (pieniądze + eliminacje) — refresh co",
+		Config.LeaderboardUpdateInterval, "s")
 end
 
--- Save przy wyjściu (żeby ostatnia kwota gracza była utrwalona)
-Players.PlayerRemoving:Connect(savePlayer)
+Players.PlayerRemoving:Connect(function(player)
+	for _, board in ipairs(boards) do board.save(player) end
+end)
 
--- Initial save gracza zaraz po dołączeniu (żeby pojawił się w rankingu bez czekania na pętlę)
 Players.PlayerAdded:Connect(function(player)
-	task.wait(3)  -- dajemy czas PlayerDataService na załadowanie danych z DataStore
-	if player.Parent then  -- nie zniknął w trakcie
-		savePlayer(player)
+	task.wait(3)
+	if player.Parent then
+		for _, board in ipairs(boards) do board.save(player) end
 	end
 end)
 
-task.spawn(setupLeaderboard)
+task.spawn(setup)
 
 return LeaderboardService
