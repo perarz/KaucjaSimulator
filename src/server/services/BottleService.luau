@@ -985,6 +985,9 @@ EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 	data.Zlotowki += earned
 	data.TotalEarned += earned
 	data.BackpackContents = { Zwykla = 0, Rzadka = 0, Epicka = 0, Legendarna = 0, Mityczny = 0 }
+	-- Wyczyść też layout slotów — inaczej InventoryStacks trzyma stare stacki po wypłacie
+	-- i przy rejoinie klient na chwilę pokazuje "duchy" butelek których już nie ma.
+	data.InventoryStacks = {}
 	PlayerDataService.UpdateLeaderstats(player)
 
 	-- Quest progress: zarobione zł + 1 opróżnienie plecaka

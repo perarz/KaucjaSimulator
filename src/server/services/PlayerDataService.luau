@@ -9,6 +9,49 @@ local PlayerDataService = {}
 
 local store = DataStoreService:GetDataStore(Config.DataStoreKey)
 
+-- ── Diagnostyka utraty danych ──────────────────────────────────────────────
+-- DATA_DEBUG=true → loguje wynik KAŻDEGO load/save (nowy/wczytany/błąd + saldo + klucz).
+-- Bez tego "znikają dane" to czarna skrzynka — nie wiadomo czy SetAsync się udaje
+-- ani co zwraca GetAsync przy rejoinie. Zostaw włączone póki problem nie potwierdzony.
+local DATA_DEBUG = true
+
+-- Health-check DataStore na starcie serwera. NAJCZĘSTSZA przyczyna "dane się nie zapisują":
+-- wyłączone "Studio Access to API Services" lub gra nieopublikowana → KAŻDY SetAsync rzuca,
+-- dane nigdy nie trafiają do DataStore, a GetAsync na rejoinie zwraca nil = "nowy gracz" =
+-- total wipe BEZ kicka (bo nil to legalny wynik). Ten test wykrywa to natychmiast na starcie.
+task.spawn(function()
+	local RunService = game:GetService("RunService")
+	local testKey = "__healthcheck"
+	local okSet, errSet = pcall(function()
+		store:SetAsync(testKey, { t = os.time(), jobId = game.JobId })
+	end)
+	if not okSet then
+		warn(
+			"════════════════════════════════════════════════════════════════\n"
+				.. "[PlayerDataService] ❌ DATASTORE NIE DZIAŁA — DANE NIE BĘDĄ ZAPISYWANE!\n"
+				.. "  Błąd SetAsync: "
+				.. tostring(errSet)
+				.. "\n"
+				.. (
+					RunService:IsStudio()
+						and "  → Studio: File → Game Settings → Security → włącz 'Enable Studio Access to API Services'.\n"
+							.. "  → Gra musi być też przynajmniej raz OPUBLIKOWANA (File → Publish to Roblox).\n"
+						or "  → Sprawdź czy gra jest opublikowana i DataStore włączony dla tej platformy.\n"
+				)
+				.. "════════════════════════════════════════════════════════════════"
+		)
+		return
+	end
+	local okGet, resGet = pcall(function()
+		return store:GetAsync(testKey)
+	end)
+	if okGet and type(resGet) == "table" then
+		print("[PlayerDataService] ✅ DataStore działa (health-check OK) — zapisy będą trwałe.")
+	else
+		warn("[PlayerDataService] ⚠️ SetAsync OK ale GetAsync nietypowy:", okGet, typeof(resGet))
+	end
+end)
+
 local DEFAULT_DATA = {
 	Zlotowki = 0,
 	TotalEarned = 0,
@@ -143,6 +186,22 @@ local function setWithRetry(key: string, data: any): boolean
 			store:SetAsync(key, data)
 		end)
 		if ok then
+			if DATA_DEBUG then
+				print(
+					string.format(
+						"[PlayerDataService] 💾 ZAPIS OK key=%s saldo=%.2f butelki=%d",
+						key,
+						(type(data) == "table" and tonumber(data.Zlotowki)) or -1,
+						(type(data) == "table" and type(data.BackpackContents) == "table") and (function()
+							local n = 0
+							for _, c in pairs(data.BackpackContents) do
+								n += c
+							end
+							return n
+						end)() or -1
+					)
+				)
+			end
 			return true
 		end
 		lastErr = err
@@ -150,7 +209,12 @@ local function setWithRetry(key: string, data: any): boolean
 			task.wait(RETRY_DELAYS[attempt + 1])
 		end
 	end
-	warn("[PlayerDataService] SetAsync failed po 3 próbach:", lastErr)
+	warn(
+		"[PlayerDataService] ❌ SetAsync NIEUDANY po 3 próbach (DANE STRACONE dla tego zapisu!) key=",
+		key,
+		"err=",
+		lastErr
+	)
 	return false
 end
 
@@ -181,6 +245,16 @@ function PlayerDataService.GetData(player: Player): { [string]: any }
 
 	if ok and type(result) == "table" then
 		data = mergeWithDefaults(result)
+		if DATA_DEBUG then
+			print(
+				string.format(
+					"[PlayerDataService] 📂 WCZYTANO %s (UserId=%d) saldo=%.2f",
+					player.Name,
+					player.UserId,
+					tonumber(data.Zlotowki) or -1
+				)
+			)
+		end
 	elseif ok and result ~= nil and type(result) ~= "table" then
 		-- DataStore zwrócił garbage (string/number/bool zamiast tabeli) — traktujemy jak fail,
 		-- NIE ładujemy DEFAULT bo nadpisałoby prawdziwy stan na DataStore.
@@ -215,6 +289,17 @@ function PlayerDataService.GetData(player: Player): { [string]: any }
 		else
 			-- ok=true, result=nil → nowy gracz, brak rekordu — OK
 			data = mergeWithDefaults({})
+			if DATA_DEBUG then
+				print(
+					string.format(
+						"[PlayerDataService] 🆕 NOWY GRACZ %s (UserId=%d) — brak rekordu w DataStore."
+							.. " Jeśli to gracz który JUŻ grał = jego zapis nigdy nie trafił do DataStore"
+							.. " (patrz health-check wyżej).",
+						player.Name,
+						player.UserId
+					)
+				)
+			end
 		end
 	end
 
