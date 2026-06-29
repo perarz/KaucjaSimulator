@@ -7,17 +7,17 @@
 -- MagnetCount NIE stackuje się w slotach EQ (1 magnes = 1 slot) — to logika klienta.
 -- Tu trzymamy tylko liczbę sztuk + state aktywnego efektu per gracz.
 
-local Players             = game:GetService("Players")
-local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
-local Config            = require(ReplicatedStorage:WaitForChild("Config"))
-local Util              = require(ReplicatedStorage:WaitForChild("Util"))
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local Util = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(ServerScriptService:WaitForChild("PlayerDataService"))
-local BottleService     = require(ServerScriptService:WaitForChild("BottleService"))
+local BottleService = require(ServerScriptService:WaitForChild("BottleService"))
 
-local Events             = ReplicatedStorage:WaitForChild("Events")
-local UseMagnet          = Events:WaitForChild("UseMagnet")
+local Events = ReplicatedStorage:WaitForChild("Events")
+local UseMagnet = Events:WaitForChild("UseMagnet")
 local MagnetStatusUpdate = Events:WaitForChild("MagnetStatusUpdate")
 
 local MagnetService = {}
@@ -33,14 +33,20 @@ local function getRadius(): number
 end
 
 local function getBottlePos(bottle: Instance): Vector3?
-	if bottle:IsA("BasePart") then return (bottle :: BasePart).Position end
-	if bottle:IsA("Model") then return (bottle :: Model):GetPivot().Position end
+	if bottle:IsA("BasePart") then
+		return (bottle :: BasePart).Position
+	end
+	if bottle:IsA("Model") then
+		return (bottle :: Model):GetPivot().Position
+	end
 	return nil
 end
 
 -- Wysyła aktualny status do klienta (count + ile sekund zostało, 0 gdy nieaktywny)
 function MagnetService.PushStatus(player: Player)
-	if not player or not player.Parent then return end
+	if not player or not player.Parent then
+		return
+	end
 	local data = PlayerDataService.GetData(player)
 	local secondsLeft = 0
 	local a = active[player]
@@ -48,24 +54,26 @@ function MagnetService.PushStatus(player: Player)
 		secondsLeft = math.max(0, a.endsAt - os.clock())
 	end
 	MagnetStatusUpdate:FireClient(player, {
-		count        = data.MagnetCount or 0,
-		secondsLeft  = secondsLeft,
-		durationSec  = cfg.DurationSec,
-		active       = secondsLeft > 0,
+		count = data.MagnetCount or 0,
+		secondsLeft = secondsLeft,
+		durationSec = cfg.DurationSec,
+		active = secondsLeft > 0,
 	})
 end
 
 -- Public API — używane przez AdminService / CodeService / questy.
 -- Respektuje pojemność plecaka (każdy magnes = 1 slot). Zwraca liczbę faktycznie przyznanych.
 function MagnetService.Grant(player: Player, amount: number?): number
-	if not player or not player.Parent then return 0 end
+	if not player or not player.Parent then
+		return 0
+	end
 	local n = math.max(1, math.floor(amount or 1))
 	local data = PlayerDataService.GetData(player)
 	local capacity = Config.BackpackUpgrades[data.BackpackLevel or 1].Capacity
 	-- Limit per-kategoria: akcesoria (magnesy) mogą zająć max 10% pojemności plecaka.
-	local caps     = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
-	local space    = math.max(0, caps.accessories - Util.getAccessoryCount(data))
-	local granted  = math.min(n, space)
+	local caps = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	local space = math.max(0, caps.accessories - Util.getAccessoryCount(data))
+	local granted = math.min(n, space)
 	if granted <= 0 then
 		MagnetService.PushStatus(player)
 		return 0
@@ -78,24 +86,34 @@ end
 
 local function deactivate(player: Player)
 	local a = active[player]
-	if not a then return end
+	if not a then
+		return
+	end
 	active[player] = nil
 	MagnetService.PushStatus(player)
 end
 
 local function sweepOnce(player: Player)
-	if not player.Parent then return end
+	if not player.Parent then
+		return
+	end
 	local char = player.Character
-	if not char then return end
+	if not char then
+		return
+	end
 	local hrp = char:FindFirstChild("HumanoidRootPart") :: BasePart
-	if not hrp then return end
+	if not hrp then
+		return
+	end
 
 	local bottlesFolder = workspace:FindFirstChild("Bottles")
-	if not bottlesFolder then return end
+	if not bottlesFolder then
+		return
+	end
 
-	local radius   = getRadius()
+	local radius = getRadius()
 	local rSquared = radius * radius
-	local hrpPos   = hrp.Position
+	local hrpPos = hrp.Position
 
 	-- Snapshot childów — TryCollectBottle destroyuje, więc i tak iterujemy bezpiecznie
 	for _, bottle in ipairs(bottlesFolder:GetChildren()) do
@@ -112,8 +130,12 @@ end
 -- oraz przez restoreFromData (remaining po restarcie serwera).
 local function activateFor(player: Player, duration: number, persistUntil: boolean)
 	local existing = active[player]
-	if existing then return end
-	if duration <= 0 then return end
+	if existing then
+		return
+	end
+	if duration <= 0 then
+		return
+	end
 
 	local endsAt = os.clock() + duration
 	local state: ActiveMagnet = { endsAt = endsAt, thread = nil :: any }
@@ -121,20 +143,22 @@ local function activateFor(player: Player, duration: number, persistUntil: boole
 
 	if persistUntil then
 		local data = PlayerDataService.GetData(player)
-		data.MagnetActiveUntil = os.time() + duration  -- epoch — przeżywa restart serwera
-		PlayerDataService.SaveData(player)
+		data.MagnetActiveUntil = os.time() + duration -- epoch — przeżywa restart serwera
+		task.spawn(PlayerDataService.SaveData, player) -- nie blokuj aktywacji efektu (yielduje 1-2s)
 	end
 
 	state.thread = task.spawn(function()
 		while active[player] == state and os.clock() < state.endsAt do
 			local ok, err = pcall(sweepOnce, player)
-			if not ok then warn("[MagnetService] sweep error:", err) end
+			if not ok then
+				warn("[MagnetService] sweep error:", err)
+			end
 			task.wait(cfg.TickInterval)
 		end
 		-- Wygaśnięcie efektu
 		if active[player] == state then
 			local data = PlayerDataService.GetData(player)
-			data.MagnetActiveUntil = 0  -- wyczyść persystowane pole
+			data.MagnetActiveUntil = 0 -- wyczyść persystowane pole
 			deactivate(player)
 		end
 	end)
@@ -147,30 +171,41 @@ local function activate(player: Player)
 end
 
 UseMagnet.OnServerEvent:Connect(function(player: Player)
-	if not player or not player.Parent then return end
-	if active[player] then return end  -- już aktywny — ignoruj
+	if not player or not player.Parent then
+		return
+	end
+	if active[player] then
+		return
+	end -- już aktywny — ignoruj
 	local data = PlayerDataService.GetData(player)
-	if (data.MagnetCount or 0) <= 0 then return end
+	if (data.MagnetCount or 0) <= 0 then
+		return
+	end
 
 	data.MagnetCount -= 1
-	data.StatAccessoriesUsed = (data.StatAccessoriesUsed or 0) + 1  -- panel STATS
-	pcall(function() require(script.Parent.StoryQuestService).AddProgress(player, "use_magnet", 1) end)  -- linia fabularna
-	-- NIE SaveData w hot path — DataStore yielduje 1-2s i opóźnia zniknięcie z EQ.
-	-- Persystencja przez auto-save co 60s + PlayerRemoving. Ryzyko utraty zużycia <60s akceptowalne.
-	activate(player)  -- już woła PushStatus z secondsLeft + nowym count
+	data.StatAccessoriesUsed = (data.StatAccessoriesUsed or 0) + 1 -- panel STATS
+	pcall(function()
+		require(script.Parent.StoryQuestService).AddProgress(player, "use_magnet", 1)
+	end) -- linia fabularna
+	activate(player) -- już woła PushStatus z secondsLeft + nowym count
+	-- task.spawn(SaveData) — fire-and-forget. Wcześniej gracz tracił magnes (1000 zł) gdy
+	-- wyszedł przed auto-save 60s. Coalescing w SaveData chroni przed spamem SetAsync.
+	task.spawn(PlayerDataService.SaveData, player)
 end)
 
 Players.PlayerAdded:Connect(function(player: Player)
 	task.spawn(function()
 		local data = PlayerDataService.GetData(player)
 		task.wait(2)
-		if not player.Parent then return end
+		if not player.Parent then
+			return
+		end
 		-- Restore boostu: jeśli MagnetActiveUntil > os.time(), wznów timer z remaining.
 		-- Bez tego gracz tracił aktywny magnes przy restarcie serwera (mimo że został odjęty z plecaka).
 		local until_ = data.MagnetActiveUntil or 0
 		local remaining = until_ - os.time()
 		if remaining > 0 then
-			activateFor(player, remaining, false)  -- false: nie nadpisuj zapisanego until
+			activateFor(player, remaining, false) -- false: nie nadpisuj zapisanego until
 		else
 			MagnetService.PushStatus(player)
 		end
@@ -180,7 +215,7 @@ end)
 Players.PlayerRemoving:Connect(function(player: Player)
 	local a = active[player]
 	if a then
-		a.endsAt = 0  -- pętla sama wyjdzie przy następnym sprawdzeniu
+		a.endsAt = 0 -- pętla sama wyjdzie przy następnym sprawdzeniu
 		active[player] = nil
 	end
 end)
@@ -196,7 +231,9 @@ task.spawn(function()
 			-- Cleanup dla zawisłych state'ów (na wszelki wypadek)
 			if os.clock() >= a.endsAt + 0.5 then
 				active[player] = nil
-				if player.Parent then MagnetService.PushStatus(player) end
+				if player.Parent then
+					MagnetService.PushStatus(player)
+				end
 			end
 		end
 	end

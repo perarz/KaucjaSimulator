@@ -1,38 +1,38 @@
 -- BottleService.luau
-local Players             = game:GetService("Players")
-local ReplicatedStorage   = game:GetService("ReplicatedStorage")
-local CollectionService   = game:GetService("CollectionService")
-local Config              = require(ReplicatedStorage.Config)
-local Util                = require(ReplicatedStorage:WaitForChild("Util"))
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
+local Config = require(ReplicatedStorage.Config)
+local Util = require(ReplicatedStorage:WaitForChild("Util"))
 local ServerScriptService = game:GetService("ServerScriptService")
-local PlayerDataService   = require(ServerScriptService.PlayerDataService)
-local QuestService        = require(ServerScriptService.QuestService)
+local PlayerDataService = require(ServerScriptService.PlayerDataService)
+local QuestService = require(ServerScriptService.QuestService)
 
 local BUTELKOMAT_TAG = "Butelkomat"
 
 local BottleService = {}
 
 -- RemoteEvents
-local Events              = ReplicatedStorage:WaitForChild("Events")
-local CollectBottle       = Events:WaitForChild("CollectBottle")
+local Events = ReplicatedStorage:WaitForChild("Events")
+local CollectBottle = Events:WaitForChild("CollectBottle")
 local CollectBottleResult = Events:WaitForChild("CollectBottleResult")
-local DropBottle          = Events:WaitForChild("DropBottle")
-local EmptyBackpack       = Events:WaitForChild("EmptyBackpack")
+local DropBottle = Events:WaitForChild("DropBottle")
+local EmptyBackpack = Events:WaitForChild("EmptyBackpack")
 local EmptyBackpackResult = Events:WaitForChild("EmptyBackpackResult")
 local LegendaryEventStart = Events:WaitForChild("LegendaryEventStart")
-local LegendaryEventEnd   = Events:WaitForChild("LegendaryEventEnd")
+local LegendaryEventEnd = Events:WaitForChild("LegendaryEventEnd")
 
 -- Flaga eventu — pętla respawn i jednorazowe spawny ją respektują
 local legendaryEventActive = false
 
 -- ── Rate limit (per-player) + dystans do butelkomatu ──────────────────────────
 local lastCollectAt: { [Player]: number } = {}
-local lastEmptyAt:   { [Player]: number } = {}
-local lastDropAt:    { [Player]: number } = {}
-local COLLECT_THROTTLE = 0.05  -- 20 Hz max — chroni przed spamem, nie blokuje magnesu/normalnego pickup
-local EMPTY_THROTTLE   = 0.5
-local DROP_THROTTLE    = 0.2
-local BUTELKOMAT_MAX_DIST = 15  -- studs, ile od najbliższego tagged Butelkomat
+local lastEmptyAt: { [Player]: number } = {}
+local lastDropAt: { [Player]: number } = {}
+local COLLECT_THROTTLE = 0.05 -- 20 Hz max — chroni przed spamem, nie blokuje magnesu/normalnego pickup
+local EMPTY_THROTTLE = 0.5
+local DROP_THROTTLE = 0.2
+local BUTELKOMAT_MAX_DIST = 15 -- studs, ile od najbliższego tagged Butelkomat
 local function isNearButelkomat(hrp: BasePart): boolean
 	for _, part in ipairs(CollectionService:GetTagged(BUTELKOMAT_TAG)) do
 		if part:IsA("BasePart") and (part.Position - hrp.Position).Magnitude <= BUTELKOMAT_MAX_DIST then
@@ -44,14 +44,14 @@ end
 
 Players.PlayerRemoving:Connect(function(p: Player)
 	lastCollectAt[p] = nil
-	lastEmptyAt[p]   = nil
-	lastDropAt[p]    = nil
+	lastEmptyAt[p] = nil
+	lastDropAt[p] = nil
 end)
 
 -- Workspace foldery
-local bottlesFolder:      Folder
-local spawnPointsFolder:  Folder
-local spawnAreasFolder:   Folder?    -- opcjonalne: BottleSpawnAreas (Partsy = obszary)
+local bottlesFolder: Folder
+local spawnPointsFolder: Folder
+local spawnAreasFolder: Folder? -- opcjonalne: BottleSpawnAreas (Partsy = obszary)
 
 local function getOrCreateFolder(parent: Instance, name: string): Folder
 	local f = parent:FindFirstChild(name)
@@ -73,20 +73,22 @@ end
 local function tagAsButelkomat(part: BasePart, objectText: string)
 	if not part:FindFirstChildOfClass("ProximityPrompt") then
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText            = "Oddaj butelki"
-		prompt.ObjectText            = objectText
+		prompt.ActionText = "Oddaj butelki"
+		prompt.ObjectText = objectText
 		prompt.MaxActivationDistance = 14
-		prompt.HoldDuration          = 0
-		prompt.RequiresLineOfSight   = false
-		prompt.UIOffset              = Vector2.new(0, -100)
-		prompt.Parent                = part
+		prompt.HoldDuration = 0
+		prompt.RequiresLineOfSight = false
+		prompt.UIOffset = Vector2.new(0, -100)
+		prompt.Parent = part
 	end
 	CollectionService:AddTag(part, BUTELKOMAT_TAG)
 end
 
 local function setupButelkomaty()
 	local butelkomatyFolder = workspace:FindFirstChild("Butelkomaty")
-	if not butelkomatyFolder then return end
+	if not butelkomatyFolder then
+		return
+	end
 	for _, child in ipairs(butelkomatyFolder:GetChildren()) do
 		if child:IsA("BasePart") then
 			tagAsButelkomat(child :: BasePart, "Butelkomat")
@@ -96,7 +98,9 @@ end
 
 -- Taguje BlackPanel (lub PrimaryPart/dowolny BasePart fallback) w jednym modelu AutomatKaucyjny.
 local function setupOneAutomat(model: Instance)
-	if not model:IsA("Model") then return end
+	if not model:IsA("Model") then
+		return
+	end
 	-- Preferowany target: model.BlackPanel (oryginalny design — prompt siedzi na czarnym panelu).
 	-- Fallback: PrimaryPart, potem dowolny BasePart — żeby duplikaty zachowane bez BlackPanel
 	-- nadal dostały prompt.
@@ -108,7 +112,10 @@ local function setupOneAutomat(model: Instance)
 		target = (model :: Model).PrimaryPart
 		if not target then
 			for _, desc in ipairs(model:GetDescendants()) do
-				if desc:IsA("BasePart") then target = desc :: BasePart; break end
+				if desc:IsA("BasePart") then
+					target = desc :: BasePart
+					break
+				end
 			end
 		end
 	end
@@ -125,7 +132,9 @@ end
 -- pokrywa dynamiczne klonowanie podczas runtime.
 local automatHooked = false
 local function setupAutomatKaucyjny()
-	if automatHooked then return end
+	if automatHooked then
+		return
+	end
 	automatHooked = true
 	local function matches(name: string): boolean
 		return string.match(name, "^AutomatKaucyjny") ~= nil
@@ -145,7 +154,7 @@ local function setupAutomatKaucyjny()
 	-- Późne dodawanie (np. clone w Studio podczas play, procedural spawn) — przechwytuj.
 	workspace.ChildAdded:Connect(function(child)
 		if matches(child.Name) then
-			task.wait(0.1)  -- daj klatkę żeby BlackPanel/PrimaryPart się dociągnęły
+			task.wait(0.1) -- daj klatkę żeby BlackPanel/PrimaryPart się dociągnęły
 			setupOneAutomat(child)
 		end
 	end)
@@ -160,7 +169,9 @@ local function parseTier(name: string): number
 	local n = string.match(name, "[Tt](%d+)")
 	if n then
 		local v = tonumber(n)
-		if v and v >= 1 then return v end
+		if v and v >= 1 then
+			return v
+		end
 	end
 	return 1
 end
@@ -184,17 +195,25 @@ local bottleModelsFolder = ReplicatedStorage:FindFirstChild("BottleModels")
 
 -- Pozycja butelki (Model używa pivota, Part używa Position)
 local function getBottlePos(bottle: Instance): Vector3
-	if bottle:IsA("Model") then return (bottle :: Model):GetPivot().Position end
+	if bottle:IsA("Model") then
+		return (bottle :: Model):GetPivot().Position
+	end
 	return (bottle :: BasePart).Position
 end
 
 local function anchorPartFromBottle(bottle: Instance): BasePart?
-	if bottle:IsA("BasePart") then return bottle :: BasePart end
+	if bottle:IsA("BasePart") then
+		return bottle :: BasePart
+	end
 	if bottle:IsA("Model") then
 		local pp = (bottle :: Model).PrimaryPart
-		if pp then return pp end
+		if pp then
+			return pp
+		end
 		for _, d in ipairs(bottle:GetDescendants()) do
-			if d:IsA("BasePart") then return d :: BasePart end
+			if d:IsA("BasePart") then
+				return d :: BasePart
+			end
 		end
 	end
 	return nil
@@ -224,17 +243,19 @@ end
 -- ── Per-area density targets ─────────────────────────────────────────────
 -- Każdy obszar dostaje cel = round(powierzchnia_XZ * Config.BottleDensity).
 -- Suma celów = dynamiczne MaxBottlesOnMap (cap-owane przez MaxBottlesHardCap).
-local areaTargets: {[BasePart]: number} = {}
+local areaTargets: { [BasePart]: number } = {}
 local dynamicMaxBottles = 0
 
 local function recomputeAreaTargets()
 	areaTargets = {}
 	dynamicMaxBottles = 0
-	if not spawnAreasFolder then return end
+	if not spawnAreasFolder then
+		return
+	end
 	for _, c in ipairs(spawnAreasFolder:GetChildren()) do
 		if c:IsA("BasePart") then
-			local surf   = c.Size.X * c.Size.Z
-			local raw    = math.floor(surf * Config.BottleDensity + 0.5)
+			local surf = c.Size.X * c.Size.Z
+			local raw = math.floor(surf * Config.BottleDensity + 0.5)
 			local target = math.max(Config.MinBottlesPerArea, raw)
 			areaTargets[c] = target
 			dynamicMaxBottles += target
@@ -250,16 +271,23 @@ local function recomputeAreaTargets()
 			dynamicMaxBottles += scaled
 		end
 	end
-	print(string.format("[BottleService] Density: %d obszarów, target = %d butelek",
-		(function() local n=0; for _ in pairs(areaTargets) do n+=1 end; return n end)(),
-		dynamicMaxBottles))
+	print(string.format(
+		"[BottleService] Density: %d obszarów, target = %d butelek",
+		(function()
+			local n = 0
+			for _ in pairs(areaTargets) do
+				n += 1
+			end
+			return n
+		end)(),
+		dynamicMaxBottles
+	))
 end
 
 -- Czy pozycja należy do obszaru (XZ wewnątrz prostokąta po object-space)
 local function isPositionInArea(pos: Vector3, area: BasePart): boolean
 	local local_ = area.CFrame:PointToObjectSpace(pos)
-	return math.abs(local_.X) <= area.Size.X / 2
-		and math.abs(local_.Z) <= area.Size.Z / 2
+	return math.abs(local_.X) <= area.Size.X / 2 and math.abs(local_.Z) <= area.Size.Z / 2
 end
 
 local function countBottlesInArea(area: BasePart): number
@@ -285,11 +313,15 @@ local function pickAreaNeedingFill(): BasePart?
 			end
 		end
 	end
-	if #candidates == 0 then return nil end
+	if #candidates == 0 then
+		return nil
+	end
 	local roll, cum = math.random() * totalDeficit, 0
 	for _, c in ipairs(candidates) do
 		cum += c.deficit
-		if roll <= cum then return c.area :: BasePart end
+		if roll <= cum then
+			return c.area :: BasePart
+		end
 	end
 	return candidates[#candidates].area :: BasePart
 end
@@ -298,7 +330,9 @@ end
 -- Używane przez EnsureRareBottles żeby nie wymuszać Legendarki w T1.
 local function tierAllowsRarity(tier: number, rarity: string): boolean
 	local tbl = Config.BottleSpawnChanceByTier and Config.BottleSpawnChanceByTier[tier]
-	if not tbl then return true end  -- brak tabeli = fallback, dopuść wszystko
+	if not tbl then
+		return true
+	end -- brak tabeli = fallback, dopuść wszystko
 	return (tbl[rarity] or 0) > 0
 end
 
@@ -306,12 +340,16 @@ end
 -- Zwraca też tier wybranego obszaru (do ważenia rzadkości).
 -- Jeśli `requireRarity` podane, filtruje obszary do tych których tier dopuszcza tę rzadkość.
 local function pickPositionFromAreas(requireRarity: string?): (Vector3?, number?)
-	if not spawnAreasFolder then return nil, nil end
+	if not spawnAreasFolder then
+		return nil, nil
+	end
 	local preferred = pickAreaNeedingFill()
 	if preferred and (not requireRarity or tierAllowsRarity(parseTier(preferred.Name), requireRarity)) then
 		for _ = 1, 12 do
 			local pos = getRandomPositionInArea(preferred)
-			if isPositionFree(pos) then return pos, parseTier(preferred.Name) end
+			if isPositionFree(pos) then
+				return pos, parseTier(preferred.Name)
+			end
 		end
 	end
 	-- Fallback: losowy obszar (filtrowany po rzadkości jeśli wymagana)
@@ -323,17 +361,23 @@ local function pickPositionFromAreas(requireRarity: string?): (Vector3?, number?
 			end
 		end
 	end
-	if #areas == 0 then return nil, nil end
+	if #areas == 0 then
+		return nil, nil
+	end
 	for _ = 1, 12 do
 		local area = areas[math.random(#areas)] :: BasePart
 		local pos = getRandomPositionInArea(area)
-		if isPositionFree(pos) then return pos, parseTier(area.Name) end
+		if isPositionFree(pos) then
+			return pos, parseTier(area.Name)
+		end
 	end
 	return nil, nil
 end
 
 local function getFreeSpawnPoint(): BasePart?
-	if not spawnPointsFolder then return nil end
+	if not spawnPointsFolder then
+		return nil
+	end
 	local points = spawnPointsFolder:GetChildren()
 	local occupied: { [BasePart]: boolean } = {}
 
@@ -360,11 +404,18 @@ local function getFreeSpawnPoint(): BasePart?
 		end
 	end
 
-	if #free == 0 then return nil end
+	if #free == 0 then
+		return nil
+	end
 	return free[math.random(#free)] :: BasePart
 end
 
-function BottleService.SpawnBottle(position: Vector3, forcedRarity: string?, tier: number?, attributes: { [string]: any }?): Instance
+function BottleService.SpawnBottle(
+	position: Vector3,
+	forcedRarity: string?,
+	tier: number?,
+	attributes: { [string]: any }?
+): Instance
 	local rarity = forcedRarity or pickRarity(tier)
 	-- Szuka modelu: najpierw w BottleModels/<rarity>, potem fallback bezpośrednio w ReplicatedStorage/<rarity>
 	-- (Mityczny user wrzucił bezpośrednio w ReplicatedStorage, nie do folderu)
@@ -376,7 +427,11 @@ function BottleService.SpawnBottle(position: Vector3, forcedRarity: string?, tie
 
 	if template and template:IsA("Model") then
 		if not (template :: Model).PrimaryPart then
-			warn("[BottleService] Model '" .. rarity .. "' nie ma ustawionego PrimaryPart — pivot i prompt mogą być w złym miejscu")
+			warn(
+				"[BottleService] Model '"
+					.. rarity
+					.. "' nie ma ustawionego PrimaryPart — pivot i prompt mogą być w złym miejscu"
+			)
 		end
 
 		-- Klonujemy model dostarczony przez gracza
@@ -391,64 +446,66 @@ function BottleService.SpawnBottle(position: Vector3, forcedRarity: string?, tie
 		-- Anchor + no-collide na wszystkich częściach
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
-				d.Anchored   = true
+				d.Anchored = true
 				d.CanCollide = false
 				d.CastShadow = false
 			end
 		end
 
-		bottle     = model
+		bottle = model
 		anchorPart = anchorPartFromBottle(model)
 	else
 		-- Fallback: cylinder z kolorem rzadkości (gdy brak modelu)
 		local part = Instance.new("Part")
-		part.Name        = "Bottle_" .. rarity
-		part.Shape       = Enum.PartType.Cylinder
-		part.Size        = Vector3.new(1, 2, 1)
-		part.Anchored    = true
-		part.CanCollide  = false
-		part.Color       = Config.BottleColors[rarity]
-		part.CastShadow  = false
-		part.CFrame      = CFrame.new(position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
-		bottle           = part
-		anchorPart       = part
+		part.Name = "Bottle_" .. rarity
+		part.Shape = Enum.PartType.Cylinder
+		part.Size = Vector3.new(1, 2, 1)
+		part.Anchored = true
+		part.CanCollide = false
+		part.Color = Config.BottleColors[rarity]
+		part.CastShadow = false
+		part.CFrame = CFrame.new(position) * CFrame.Angles(0, math.random() * math.pi * 2, 0)
+		bottle = part
+		anchorPart = part
 	end
 
 	-- Metadata na rodzicu (Model lub Part)
 	local rarityValue = Instance.new("StringValue")
-	rarityValue.Name  = "Rarity"
+	rarityValue.Name = "Rarity"
 	rarityValue.Value = rarity
 	rarityValue.Parent = bottle
 
 	local collectedValue = Instance.new("BoolValue")
-	collectedValue.Name  = "Collected"
+	collectedValue.Name = "Collected"
 	collectedValue.Value = false
 	collectedValue.Parent = bottle
 
 	-- ProximityPrompt na głównej części
 	if anchorPart then
 		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText            = "Zbierz"
-		prompt.ObjectText            = rarity
+		prompt.ActionText = "Zbierz"
+		prompt.ObjectText = rarity
 		prompt.MaxActivationDistance = 5
-		prompt.HoldDuration          = 0
-		prompt.RequiresLineOfSight   = false   -- ważne dla modeli butelek: nie chowa się gdy bryła zasłania
-		prompt.Parent                = anchorPart
+		prompt.HoldDuration = 0
+		prompt.RequiresLineOfSight = false -- ważne dla modeli butelek: nie chowa się gdy bryła zasłania
+		prompt.Parent = anchorPart
 
 		-- Light dla Epicka/Legendarna/Mityczny
 		if rarity == "Epicka" or rarity == "Legendarna" or rarity == "Mityczny" then
 			local light = Instance.new("PointLight")
 			light.Brightness = 2
-			light.Range      = 12
-			light.Color      = Config.BottleColors[rarity]
-			light.Parent     = anchorPart
+			light.Range = 12
+			light.Color = Config.BottleColors[rarity]
+			light.Parent = anchorPart
 		end
 	end
 
 	-- Atrybuty ustawione PRZED parent — żeby nie było okna w którym CollectBottle mógłby
 	-- chwycić butelkę bez np. DeathDropOwner (race condition)
 	if attributes then
-		for k, v in pairs(attributes) do bottle:SetAttribute(k, v) end
+		for k, v in pairs(attributes) do
+			bottle:SetAttribute(k, v)
+		end
 	end
 
 	bottle.Parent = bottlesFolder
@@ -472,24 +529,32 @@ end
 -- `requireRarity` — gdy podane, spawn tylko w obszarach których tier dopuszcza tę rzadkość.
 local function pickSpawnPosition(requireRarity: string?): (Vector3?, number?)
 	local areaPos, tier = pickPositionFromAreas(requireRarity)
-	if areaPos then return areaPos, tier end
+	if areaPos then
+		return areaPos, tier
+	end
 	local sp = getFreeSpawnPoint()
-	if sp then return sp.Position + Vector3.new(0, 1, 0), nil end
+	if sp then
+		return sp.Position + Vector3.new(0, 1, 0), nil
+	end
 	return nil, nil
 end
 
 function BottleService.EnsureRareBottles()
 	local legendaryNeeded = Config.MinLegendarnaOnMap - countRarityOnMap("Legendarna")
-	local epicNeeded      = Config.MinEpickaOnMap     - countRarityOnMap("Epicka")
+	local epicNeeded = Config.MinEpickaOnMap - countRarityOnMap("Epicka")
 
 	for _ = 1, legendaryNeeded do
 		local pos, tier = pickSpawnPosition("Legendarna")
-		if pos then BottleService.SpawnBottle(pos, "Legendarna", tier) end
+		if pos then
+			BottleService.SpawnBottle(pos, "Legendarna", tier)
+		end
 	end
 
 	for _ = 1, epicNeeded do
 		local pos, tier = pickSpawnPosition("Epicka")
-		if pos then BottleService.SpawnBottle(pos, "Epicka", tier) end
+		if pos then
+			BottleService.SpawnBottle(pos, "Epicka", tier)
+		end
 	end
 end
 
@@ -511,7 +576,9 @@ end
 -- ── Event: Deszcz Legendarek ──────────────────────────────────────────────
 
 local function clearAllBottles()
-	if not bottlesFolder then return end
+	if not bottlesFolder then
+		return
+	end
 	for _, b in ipairs(bottlesFolder:GetChildren()) do
 		b:Destroy()
 	end
@@ -529,7 +596,9 @@ local function floodLegendaryBottles(target: number)
 end
 
 local function startLegendaryEvent()
-	if legendaryEventActive then return end
+	if legendaryEventActive then
+		return
+	end
 	legendaryEventActive = true
 	local cfg = Config.LegendaryEvent
 
@@ -547,7 +616,11 @@ local function startLegendaryEvent()
 		-- Przywróć normalny spawn pełnej puli
 		for _ = 1, dynamicMaxBottles do
 			local pos, tier = pickSpawnPosition()
-			if pos then BottleService.SpawnBottle(pos, nil, tier) else break end
+			if pos then
+				BottleService.SpawnBottle(pos, nil, tier)
+			else
+				break
+			end
 		end
 		BottleService.EnsureRareBottles()
 		print("[BottleService] EVENT: koniec, mapa zresetowana do normy")
@@ -574,14 +647,14 @@ local function initBottles()
 	setupSpawnPoints()
 	setupButelkomaty()
 	setupAutomatKaucyjny()
-	bottlesFolder    = getOrCreateFolder(workspace, "Bottles")
+	bottlesFolder = getOrCreateFolder(workspace, "Bottles")
 	spawnAreasFolder = workspace:FindFirstChild("BottleSpawnAreas") :: Folder?
 
 	-- Auto-fix area parts: bez tego są niezakotwiczone, spadają i Roblox je destroyuje
 	if spawnAreasFolder then
 		local function fixAreaPart(part: Instance)
 			if part:IsA("BasePart") then
-				part.Anchored   = true
+				part.Anchored = true
 				part.CanCollide = false
 			end
 		end
@@ -595,8 +668,11 @@ local function initBottles()
 		spawnAreasFolder.ChildRemoved:Connect(function()
 			recomputeAreaTargets()
 		end)
-		print("[BottleService] Obszary spawnu:", #spawnAreasFolder:GetChildren(),
-			"— wszystkie zakotwiczone i bez kolizji")
+		print(
+			"[BottleService] Obszary spawnu:",
+			#spawnAreasFolder:GetChildren(),
+			"— wszystkie zakotwiczone i bez kolizji"
+		)
 		recomputeAreaTargets()
 	end
 
@@ -604,7 +680,11 @@ local function initBottles()
 		-- Mamy obszary — spawn po pełnej puli
 		for _ = 1, dynamicMaxBottles do
 			local pos, tier = pickSpawnPosition()
-			if pos then BottleService.SpawnBottle(pos, nil, tier) else break end
+			if pos then
+				BottleService.SpawnBottle(pos, nil, tier)
+			else
+				break
+			end
 		end
 	elseif spawnPointsFolder then
 		-- Fallback: stary system spawn points (1 butelka per point, hard cap 30)
@@ -614,7 +694,7 @@ local function initBottles()
 			local sp = spawnPoints[i] :: BasePart
 			BottleService.SpawnBottle(sp.Position + Vector3.new(0, 1, 0))
 		end
-		dynamicMaxBottles = toSpawn  -- żeby respawn loop też respektował
+		dynamicMaxBottles = toSpawn -- żeby respawn loop też respektował
 	else
 		warn("[BottleService] Brak folderu BottleSpawnAreas ani BottleSpawnPoints — butelki się nie pojawią")
 	end
@@ -625,19 +705,21 @@ end
 -- Cykliczna pętla respawn: co `BottleRespawnTime` sekund próbuje dolosować
 -- butelki jeśli mapa jest poniżej `MaxBottlesOnMap`. Działa niezależnie
 -- od zbierania — utrzymuje rotację butelek nawet gdy nikt nic nie zbiera.
-local SPAWNS_PER_TICK_CAP = 15  -- max butelek dolosowanych w jednej iteracji pętli
+local SPAWNS_PER_TICK_CAP = 15 -- max butelek dolosowanych w jednej iteracji pętli
 
 local function startRespawnLoop()
 	task.spawn(function()
 		while true do
 			task.wait(Config.BottleRespawnTime)
 			local ok, err = pcall(function()
-				if not bottlesFolder then return end
+				if not bottlesFolder then
+					return
+				end
 				local count = #bottlesFolder:GetChildren()
-				local need  = dynamicMaxBottles - count
+				local need = dynamicMaxBottles - count
 				if need > 0 then
 					local spawned = 0
-					local forced  = legendaryEventActive and "Legendarna" or nil
+					local forced = legendaryEventActive and "Legendarna" or nil
 					-- W trakcie eventu zalewamy mapę bez cap-a — chcemy 30 sztuk od razu
 					local cap = legendaryEventActive and need or math.min(need, SPAWNS_PER_TICK_CAP)
 					for _ = 1, cap do
@@ -646,12 +728,19 @@ local function startRespawnLoop()
 							BottleService.SpawnBottle(pos, forced, tier)
 							spawned += 1
 						else
-							break  -- brak miejsca w obszarach — nie ma sensu próbować dalej
+							break -- brak miejsca w obszarach — nie ma sensu próbować dalej
 						end
 					end
 					if spawned > 0 then
-						print("[BottleService] Respawn tick: dolosowano", spawned,
-							"butelek (było", count, "/", dynamicMaxBottles, ")")
+						print(
+							"[BottleService] Respawn tick: dolosowano",
+							spawned,
+							"butelek (było",
+							count,
+							"/",
+							dynamicMaxBottles,
+							")"
+						)
 					end
 				end
 				if not legendaryEventActive then
@@ -667,27 +756,43 @@ end
 
 -- Handler zbierania butelki
 -- Handler upuszczania butelki z ekwipunku (przycisk "UPUŚĆ" w inventory)
-local DROP_FORWARD_DIST = 3   -- studs przed graczem
+local DROP_FORWARD_DIST = 3 -- studs przed graczem
 
 DropBottle.OnServerEvent:Connect(function(player: Player, rarity: any)
-	if type(rarity) ~= "string" then return end
-	if not Config.BottleValues[rarity] then return end
+	if type(rarity) ~= "string" then
+		return
+	end
+	if not Config.BottleValues[rarity] then
+		return
+	end
 	-- Zakaz wyrzucania itemów w strefie PvP (anti-exploit + porządek na arenie)
-	if player:GetAttribute("InPvPZone") == true then return end
+	if player:GetAttribute("InPvPZone") == true then
+		return
+	end
 	-- Throttle anty-spam
 	local now = os.clock()
-	if lastDropAt[player] and now - lastDropAt[player] < DROP_THROTTLE then return end
+	if lastDropAt[player] and now - lastDropAt[player] < DROP_THROTTLE then
+		return
+	end
 	lastDropAt[player] = now
 
 	local data = PlayerDataService.GetData(player)
-	if not data.BackpackContents then return end
-	if (data.BackpackContents[rarity] or 0) <= 0 then return end
+	if not data.BackpackContents then
+		return
+	end
+	if (data.BackpackContents[rarity] or 0) <= 0 then
+		return
+	end
 
 	-- Wymagana postać + pozycja przed graczem
 	local char = player.Character
-	if not char then return end
+	if not char then
+		return
+	end
 	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hrp or not hrp:IsA("BasePart") then return end
+	if not hrp or not hrp:IsA("BasePart") then
+		return
+	end
 
 	local fwd = hrp.CFrame.LookVector
 	local dropPos = hrp.Position + fwd * DROP_FORWARD_DIST + Vector3.new(0, -1, 0)
@@ -704,8 +809,8 @@ DropBottle.OnServerEvent:Connect(function(player: Player, rarity: any)
 	UpdateHUDEvt:FireClient(player, {
 		backpackContents = data.BackpackContents,
 		backpackCapacity = cap,
-		hasSyrup         = (data.Grandpa and data.Grandpa.hasSyrup) or false,
-		magnetCount      = data.MagnetCount or 0,
+		hasSyrup = (data.Grandpa and data.Grandpa.hasSyrup) or false,
+		magnetCount = data.MagnetCount or 0,
 	})
 end)
 
@@ -714,19 +819,33 @@ end)
 -- opts.skipDistanceCheck — pomija sanity 12-stud check (magnes ma własny radius)
 -- opts.silent — nie wysyła CollectBottleResult przy "full" (magnes nie spamuje błędami)
 -- Zwraca: success (bool), reason (string?), rarity (string?)
-function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, opts: {skipDistanceCheck: boolean?, silent: boolean?}?): (boolean, string?, string?)
+function BottleService.TryCollectBottle(
+	player: Player,
+	bottlePart: Instance,
+	opts: { skipDistanceCheck: boolean?, silent: boolean? }?
+): (boolean, string?, string?)
 	opts = opts or {}
-	if not bottlePart then return false, "invalid", nil end
-	if not (bottlePart:IsA("BasePart") or bottlePart:IsA("Model")) then return false, "invalid", nil end
-	if bottlePart.Parent ~= bottlesFolder then return false, "invalid", nil end
+	if not bottlePart then
+		return false, "invalid", nil
+	end
+	if not (bottlePart:IsA("BasePart") or bottlePart:IsA("Model")) then
+		return false, "invalid", nil
+	end
+	if bottlePart.Parent ~= bottlesFolder then
+		return false, "invalid", nil
+	end
 
 	local collectedValue = bottlePart:FindFirstChild("Collected") :: BoolValue
-	local rarityValue    = bottlePart:FindFirstChild("Rarity")    :: StringValue
-	if not collectedValue or collectedValue.Value then return false, "alreadyCollected", nil end
-	if not rarityValue then return false, "invalid", nil end
+	local rarityValue = bottlePart:FindFirstChild("Rarity") :: StringValue
+	if not collectedValue or collectedValue.Value then
+		return false, "alreadyCollected", nil
+	end
+	if not rarityValue then
+		return false, "invalid", nil
+	end
 
 	-- Cooldown na własny drop po śmierci — dotyczy obu trybów (ręczny pickup + magnes)
-	local dropOwner   = bottlePart:GetAttribute("DeathDropOwner")
+	local dropOwner = bottlePart:GetAttribute("DeathDropOwner")
 	local dropExpires = bottlePart:GetAttribute("DeathDropExpires")
 	if dropOwner and dropOwner == player.UserId and dropExpires and os.clock() < dropExpires then
 		if not opts.silent then
@@ -736,19 +855,25 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 	end
 
 	local character = player.Character
-	if not character then return false, "noChar", nil end
+	if not character then
+		return false, "noChar", nil
+	end
 	local hrp = character:FindFirstChild("HumanoidRootPart") :: BasePart
-	if not hrp then return false, "noChar", nil end
+	if not hrp then
+		return false, "noChar", nil
+	end
 	if not opts.skipDistanceCheck then
-		if (hrp.Position - getBottlePos(bottlePart)).Magnitude > 12 then return false, "tooFar", nil end
+		if (hrp.Position - getBottlePos(bottlePart)).Magnitude > 12 then
+			return false, "tooFar", nil
+		end
 	end
 
 	local data = PlayerDataService.GetData(player)
 	local capacity = Config.BackpackUpgrades[data.BackpackLevel].Capacity
-	local carried  = Util.getCarriedCount(data)
+	local carried = Util.getCarriedCount(data)
 
 	-- Limit per-kategoria: butelki mogą zająć max 70% pojemności plecaka (reszta dla petów/akcesoriów).
-	local caps        = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	local caps = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
 	local bottleCount = Util.getBottleCount(data)
 	if bottleCount >= caps.bottles then
 		if not opts.silent then
@@ -762,7 +887,7 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 	bottlePart:Destroy()
 
 	data.BackpackContents[rarity] += 1
-	data.TotalBottles             += 1
+	data.TotalBottles += 1
 	-- Statystyka lifetime per rzadkość (panel STATS)
 	if data.StatsBottles and data.StatsBottles[rarity] ~= nil then
 		data.StatsBottles[rarity] += 1
@@ -775,10 +900,10 @@ function BottleService.TryCollectBottle(player: Player, bottlePart: Instance, op
 	end)
 
 	CollectBottleResult:FireClient(player, {
-		success        = true,
-		rarity         = rarity,
+		success = true,
+		rarity = rarity,
 		bottlesCarried = carried + 1,
-		capacity       = capacity,
+		capacity = capacity,
 	})
 
 	scheduleRespawn()
@@ -788,7 +913,9 @@ end
 CollectBottle.OnServerEvent:Connect(function(player: Player, bottlePart: Instance)
 	-- Throttle 20Hz — exploit-spam guard. Normalny pickup nigdy nie przekracza tego.
 	local now = os.clock()
-	if lastCollectAt[player] and now - lastCollectAt[player] < COLLECT_THROTTLE then return end
+	if lastCollectAt[player] and now - lastCollectAt[player] < COLLECT_THROTTLE then
+		return
+	end
 	lastCollectAt[player] = now
 	BottleService.TryCollectBottle(player, bottlePart)
 end)
@@ -797,13 +924,17 @@ end)
 EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 	-- Throttle
 	local now = os.clock()
-	if lastEmptyAt[player] and now - lastEmptyAt[player] < EMPTY_THROTTLE then return end
+	if lastEmptyAt[player] and now - lastEmptyAt[player] < EMPTY_THROTTLE then
+		return
+	end
 	lastEmptyAt[player] = now
 
 	-- Dystans: gracz MUSI być blisko któregoś tagged Butelkomat
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	if not (hrp and hrp:IsA("BasePart")) then return end
+	if not (hrp and hrp:IsA("BasePart")) then
+		return
+	end
 	if not isNearButelkomat(hrp :: BasePart) then
 		EmptyBackpackResult:FireClient(player, { success = false, reason = "tooFar" })
 		return
@@ -812,25 +943,31 @@ EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 	local data = PlayerDataService.GetData(player)
 
 	local totalBottles = 0
-	for _, count in pairs(data.BackpackContents) do totalBottles += count end
+	for _, count in pairs(data.BackpackContents) do
+		totalBottles += count
+	end
 
 	if totalBottles == 0 then
 		EmptyBackpackResult:FireClient(player, { success = false, reason = "empty" })
 		return
 	end
 
-	local multLevel  = (data.MultiplierLevel or 0) > 0 and data.MultiplierLevel or nil
+	local multLevel = (data.MultiplierLevel or 0) > 0 and data.MultiplierLevel or nil
 	local multiplier = multLevel and Config.MultiplierUpgrades[multLevel].Multiplier or 1.0
 
 	-- Boost x2 (Developer Product) — multiplikatywny, sumuje się z mnożnikiem ze skill tree
-	local ok, BoostShopService = pcall(function() return require(script.Parent.BoostShopService) end)
+	local ok, BoostShopService = pcall(function()
+		return require(script.Parent.BoostShopService)
+	end)
 	if ok and BoostShopService then
 		multiplier *= BoostShopService.GetEarnMultiplier(player)
 	end
 
 	-- Pet equipped (rzadkość → moneyMul) — multiplikatywnie z resztą.
 	-- Stack: base × skillMul × boostMul × petMul.
-	local okP, PetService = pcall(function() return require(script.Parent.PetService) end)
+	local okP, PetService = pcall(function()
+		return require(script.Parent.PetService)
+	end)
 	if okP and PetService then
 		multiplier *= PetService.GetMoneyMul(player)
 	end
@@ -845,7 +982,7 @@ EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 		end
 	end
 
-	data.Zlotowki    += earned
+	data.Zlotowki += earned
 	data.TotalEarned += earned
 	data.BackpackContents = { Zwykla = 0, Rzadka = 0, Epicka = 0, Legendarna = 0, Mityczny = 0 }
 	PlayerDataService.UpdateLeaderstats(player)
@@ -859,12 +996,15 @@ EmptyBackpack.OnServerEvent:Connect(function(player: Player)
 	end)
 
 	EmptyBackpackResult:FireClient(player, {
-		success         = true,
+		success = true,
 		bottlesReturned = totalBottles,
-		earned          = earned,
-		newTotal        = data.Zlotowki,
-		breakdown       = breakdown,
+		earned = earned,
+		newTotal = data.Zlotowki,
+		breakdown = breakdown,
 	})
+	-- Save w tle — task.spawn nie blokuje EmptyBackpackResult, ale Zlotowki i TotalEarned
+	-- są persystowane natychmiast. Bez tego po wypłacie + disconnect gracz tracił całość.
+	task.spawn(PlayerDataService.SaveData, player)
 end)
 
 initBottles()

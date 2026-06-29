@@ -1,25 +1,29 @@
 -- UpgradeService.luau
-local Players           = game:GetService("Players")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Config            = require(ReplicatedStorage.Config)
+local Config = require(ReplicatedStorage.Config)
 local ServerScriptService = game:GetService("ServerScriptService")
 local PlayerDataService = require(ServerScriptService.PlayerDataService)
-local QuestService      = require(ServerScriptService.QuestService)
+local QuestService = require(ServerScriptService.QuestService)
 
 local UpgradeService = {}
 
-local Events          = ReplicatedStorage:WaitForChild("Events")
+local Events = ReplicatedStorage:WaitForChild("Events")
 local BuySkillUpgrade = Events:WaitForChild("BuySkillUpgrade")
 local SkillTreeUpdate = Events:WaitForChild("SkillTreeUpdate")
 
 local UPGRADE_META = {
 	Speed = {
 		levelKey = "SpeedLevel",
-		table    = Config.SpeedUpgrades,
-		apply    = function(player: Player, level: number)
-			if level < 1 then return end
+		table = Config.SpeedUpgrades,
+		apply = function(player: Player, level: number)
+			if level < 1 then
+				return
+			end
 			local char = player.Character
-			if not char then return end
+			if not char then
+				return
+			end
 			local hum = char:FindFirstChildOfClass("Humanoid")
 			if hum then
 				hum.WalkSpeed = Config.SpeedUpgrades[level].Speed
@@ -28,8 +32,8 @@ local UPGRADE_META = {
 	},
 	Multiplier = {
 		levelKey = "MultiplierLevel",
-		table    = Config.MultiplierUpgrades,
-		apply    = function(_player: Player, _level: number)
+		table = Config.MultiplierUpgrades,
+		apply = function(_player: Player, _level: number)
 			-- mnożnik aplikowany przy EmptyBackpack
 		end,
 	},
@@ -37,7 +41,9 @@ local UPGRADE_META = {
 
 local function deductCost(data: { [string]: any }, cost: number, costType: string): boolean
 	if costType == "Zlotowki" then
-		if data.Zlotowki < cost then return false end
+		if data.Zlotowki < cost then
+			return false
+		end
 		data.Zlotowki -= cost
 		return true
 	end
@@ -48,9 +54,13 @@ local function applySpeedOnSpawn(player: Player)
 	local function setSpeed()
 		local d = PlayerDataService.GetData(player)
 		local char = player.Character
-		if not char then return end
+		if not char then
+			return
+		end
 		local hum = char:FindFirstChildOfClass("Humanoid")
-		if not hum then return end
+		if not hum then
+			return
+		end
 		local speedLevel = d.SpeedLevel or 0
 		if speedLevel > 0 then
 			hum.WalkSpeed = Config.SpeedUpgrades[speedLevel].Speed
@@ -83,15 +93,16 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 		end
 		data.BaseLevel = 1
 		PlayerDataService.UpdateLeaderstats(player)
+		PlayerDataService.SaveData(player) -- permanent purchase → immediate save (coalescing chroni przed spamem)
 		QuestService.AddProgress(player, "buy_skill", { amount = 1 })
 		pcall(function()
 			local sqs = require(script.Parent.StoryQuestService)
 			sqs.AddProgress(player, "buy_skill", 1)
 		end)
 		SkillTreeUpdate:FireClient(player, {
-			success     = true,
+			success = true,
 			upgradeType = "Base",
-			newLevel    = 1,
+			newLevel = 1,
 		})
 		return
 	end
@@ -116,15 +127,16 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 		end
 		data.LuckLevel = 1
 		PlayerDataService.UpdateLeaderstats(player)
+		PlayerDataService.SaveData(player)
 		QuestService.AddProgress(player, "buy_skill", { amount = 1 })
 		pcall(function()
 			local sqs = require(script.Parent.StoryQuestService)
 			sqs.AddProgress(player, "buy_skill", 1)
 		end)
 		SkillTreeUpdate:FireClient(player, {
-			success     = true,
+			success = true,
 			upgradeType = "Luck",
-			newLevel    = 1,
+			newLevel = 1,
 		})
 		return
 	end
@@ -149,22 +161,25 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 		end
 		data.StaminaLevel = 1
 		PlayerDataService.UpdateLeaderstats(player)
+		PlayerDataService.SaveData(player)
 		QuestService.AddProgress(player, "buy_skill", { amount = 1 })
 		pcall(function()
 			local sqs = require(script.Parent.StoryQuestService)
 			sqs.AddProgress(player, "buy_skill", 1)
 		end)
 		SkillTreeUpdate:FireClient(player, {
-			success     = true,
+			success = true,
 			upgradeType = "Stamina",
-			newLevel    = 1,
+			newLevel = 1,
 		})
 		return
 	end
 
 	-- ── Gałęzie Speed / Multiplier ─────────────────────────────────────
 	local meta = UPGRADE_META[upgradeType]
-	if not meta then return end
+	if not meta then
+		return
+	end
 
 	-- Wymagany Fundament
 	if (data.BaseLevel or 0) < 1 then
@@ -173,10 +188,14 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 	end
 
 	local currentLevel = data[meta.levelKey] or 0
-	if targetLevel ~= currentLevel + 1 then return end
+	if targetLevel ~= currentLevel + 1 then
+		return
+	end
 
 	local upgrades = meta.table
-	if targetLevel > #upgrades then return end
+	if targetLevel > #upgrades then
+		return
+	end
 
 	local upgradeInfo = upgrades[targetLevel]
 	if not deductCost(data, upgradeInfo.Cost, upgradeInfo.CostType) then
@@ -187,6 +206,7 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 	data[meta.levelKey] = targetLevel
 	meta.apply(player, targetLevel)
 	PlayerDataService.UpdateLeaderstats(player)
+	PlayerDataService.SaveData(player) -- permanent purchase → immediate save
 	QuestService.AddProgress(player, "buy_skill", { amount = 1 })
 	pcall(function()
 		local sqs = require(script.Parent.StoryQuestService)
@@ -194,9 +214,9 @@ BuySkillUpgrade.OnServerEvent:Connect(function(player: Player, upgradeType: stri
 	end)
 
 	SkillTreeUpdate:FireClient(player, {
-		success     = true,
+		success = true,
 		upgradeType = upgradeType,
-		newLevel    = targetLevel,
+		newLevel = targetLevel,
 	})
 end)
 

@@ -6,24 +6,27 @@
 --   2) Camera smoothing — lerp cam.CFrame z poprzedniej klatki (follow + mouse).
 --      ~50ms half-life — wygładza jitter bez "gumowego" lagu.
 
-local Players    = game:GetService("Players")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace  = game:GetService("Workspace")
+local Workspace = game:GetService("Workspace")
 
 local localPlayer = Players.LocalPlayer
 
 -- ── FOV mapping (piecewise: idle → walk → sprint → deska) ──────────────────
--- 3 strefy żeby chodzenie czuło się jak idle, a sprint i deska wyraźnie się różniły.
--- Dlaczego: zwykła liniowa mapa od 16 (BaseSpeed) wybijała FOV już przy walkingu
--- gdy gracz miał czapkę/peta Sprinter (baseSpeed+2..+25), a deska (40-100) clampowała
--- się do tego samego maks co sprint.
-local FOV_IDLE         = 65   -- ≤ WALK_PEAK (stanie + chodzenie z bonusami)
-local FOV_SPRINT       = 78   -- przy SPRINT_PEAK (sprint pieszo)
-local FOV_DESKA        = 95   -- przy DESKA_PEAK (deska / sprinter pet)
-local WALK_PEAK        = 22   -- prędkość poniżej której FOV nie rośnie (idle + chodzenie)
-local SPRINT_PEAK      = 36   -- typowa prędkość sprintu
-local DESKA_PEAK       = 65   -- typowa prędkość deski
-local FOV_LERP         = 0.12 -- jak szybko FOV dochodzi do targetu (per-frame)
+-- 3 strefy żeby chodzenie czuło się jak idle, a sprint i deska różniły się subtelnie.
+-- REBALANS: gracze narzekali na "kamera oddala się przy mini movement" + zbyt mocny
+-- efekt przy sprincie ("łeb boli po 10 min"). Zmniejszono różnicę FOV i podniesiono
+-- WALK_PEAK tak, żeby chodzenie z czapką/Sprinter petem nie ruszało FOV.
+local FOV_IDLE = 65 -- ≤ WALK_PEAK (stanie + chodzenie z bonusami)
+local FOV_SPRINT = 72 -- przy SPRINT_PEAK (sprint pieszo) — było 78
+local FOV_DESKA = 78 -- przy DESKA_PEAK (deska / sprinter pet) — było 95
+local WALK_PEAK = 28 -- prędkość poniżej której FOV nie rośnie — było 22
+local SPRINT_PEAK = 40 -- typowa prędkość sprintu — było 36
+local DESKA_PEAK = 65 -- typowa prędkość deski
+local FOV_LERP = 0.12 -- jak szybko FOV dochodzi do targetu (per-frame)
+
+-- Gracz może wyłączyć efekty kamery w Ustawieniach (toggle ustawia _G["__motionEffectsOn"]).
+-- Default true. Gdy false: FOV stałe 70 (Roblox default), brak CFrame smoothing.
 
 local function fovForSpeed(s: number): number
 	if s <= WALK_PEAK then
@@ -40,8 +43,8 @@ local function fovForSpeed(s: number): number
 end
 
 -- ── Camera smoothing ────────────────────────────────────────────────────────
-local CAM_LERP        = 0.40  -- 0=max smooth, 1=natychmiastowe. 0.40 ≈ 50ms half-life
-local MAX_SNAP_DIST   = 30    -- gdy kamera teleportuje (>30 studs) — snap zamiast ślizgu
+local CAM_LERP = 0.40 -- 0=max smooth, 1=natychmiastowe. 0.40 ≈ 50ms half-life
+local MAX_SNAP_DIST = 30 -- gdy kamera teleportuje (>30 studs) — snap zamiast ślizgu
 
 -- ── Stan ────────────────────────────────────────────────────────────────────
 local currentCam: Camera = Workspace.CurrentCamera
@@ -55,11 +58,23 @@ end)
 -- ── Per-frame loop ──────────────────────────────────────────────────────────
 RunService:BindToRenderStep("CameraEffects", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	local cam = currentCam
-	if not cam or not cam.Parent then return end
+	if not cam or not cam.Parent then
+		return
+	end
+
+	-- Toggle z Ustawień: gdy gracz wyłączył efekty kamery — wracamy do 70 FOV i nic nie smoothujemy.
+	local effectsOn = _G["__motionEffectsOn"]
+	if effectsOn == false then
+		if cam.FieldOfView ~= 70 then
+			cam.FieldOfView = cam.FieldOfView + (70 - cam.FieldOfView) * FOV_LERP
+		end
+		lastCamCF = nil -- reset baseline na wypadek włączenia później
+		return
+	end
 
 	-- 1) FOV bazowany na velocity HRP (XZ). Idle → FOV_IDLE.
 	local char = localPlayer.Character
-	local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	local targetFov = FOV_IDLE
 	if hrp and hrp:IsA("BasePart") then
 		local v = hrp.AssemblyLinearVelocity

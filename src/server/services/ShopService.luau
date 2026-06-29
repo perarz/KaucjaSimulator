@@ -1,19 +1,19 @@
 -- ShopService.luau
 -- Sklep z plecakami (BackpackUpgrades). ProximityPrompt na blacie sklepu otwiera UI.
 
-local Players             = game:GetService("Players")
-local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
-local Config            = require(ReplicatedStorage.Config)
-local Util              = require(ReplicatedStorage:WaitForChild("Util"))
+local Config = require(ReplicatedStorage.Config)
+local Util = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(ServerScriptService.PlayerDataService)
 
-local Events         = ReplicatedStorage:WaitForChild("Events")
-local OpenShop       = Events:WaitForChild("OpenShop")
-local BuyBackpack    = Events:WaitForChild("BuyBackpack")
+local Events = ReplicatedStorage:WaitForChild("Events")
+local OpenShop = Events:WaitForChild("OpenShop")
+local BuyBackpack = Events:WaitForChild("BuyBackpack")
 local BackpackResult = Events:WaitForChild("BackpackResult")
-local UpdateHUD      = Events:WaitForChild("UpdateHUD")
+local UpdateHUD = Events:WaitForChild("UpdateHUD")
 
 local ShopService = {}
 
@@ -23,13 +23,19 @@ local SHOP_MAX_DIST = 15
 local lastBuyAt: { [Player]: number } = {}
 local BUY_THROTTLE = 0.5
 local function isNearShop(player: Player): boolean
-	if not shopAnchor then return false end
+	if not shopAnchor then
+		return false
+	end
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	if not (hrp and hrp:IsA("BasePart")) then return false end
+	if not (hrp and hrp:IsA("BasePart")) then
+		return false
+	end
 	return ((hrp :: BasePart).Position - shopAnchor.Position).Magnitude <= SHOP_MAX_DIST
 end
-Players.PlayerRemoving:Connect(function(p) lastBuyAt[p] = nil end)
+Players.PlayerRemoving:Connect(function(p)
+	lastBuyAt[p] = nil
+end)
 
 -- ── Setup ProximityPrompt na blacie ───────────────────────────────────────
 
@@ -53,20 +59,22 @@ local function setupShop()
 		warn("[ShopService] Kasjer nie ma żadnego BasePart — sklep nie będzie aktywny")
 		return
 	end
-	shopAnchor = counter  -- cache do walidacji dystansu w BuyBackpack
+	shopAnchor = counter -- cache do walidacji dystansu w BuyBackpack
 
 	-- Prompt
 	local existing = counter:FindFirstChildOfClass("ProximityPrompt")
-	if existing then existing:Destroy() end
+	if existing then
+		existing:Destroy()
+	end
 
 	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText            = "Sklep z plecakami"
-	prompt.ObjectText            = "Kasjer"
+	prompt.ActionText = "Sklep z plecakami"
+	prompt.ObjectText = "Kasjer"
 	prompt.MaxActivationDistance = 14
-	prompt.HoldDuration          = 0
-	prompt.RequiresLineOfSight   = false
-	prompt.UIOffset              = Vector2.new(0, -100)
-	prompt.Parent                = counter
+	prompt.HoldDuration = 0
+	prompt.RequiresLineOfSight = false
+	prompt.UIOffset = Vector2.new(0, -100)
+	prompt.Parent = counter
 
 	prompt.Triggered:Connect(function(player: Player)
 		OpenShop:FireClient(player)
@@ -80,7 +88,9 @@ end
 local function tryBuyBackpack(player: Player, targetLevel: number)
 	-- Throttle + dystans od Kasjera
 	local now = os.clock()
-	if lastBuyAt[player] and now - lastBuyAt[player] < BUY_THROTTLE then return end
+	if lastBuyAt[player] and now - lastBuyAt[player] < BUY_THROTTLE then
+		return
+	end
 	lastBuyAt[player] = now
 	if not isNearShop(player) then
 		BackpackResult:FireClient(player, { success = false, reason = "tooFar" })
@@ -120,9 +130,12 @@ local function tryBuyBackpack(player: Player, targetLevel: number)
 	end
 
 	-- Zakup
-	data.Zlotowki     -= upgrade.Cost
+	data.Zlotowki -= upgrade.Cost
 	data.BackpackLevel = targetLevel
 	PlayerDataService.UpdateLeaderstats(player)
+	-- Permanent purchase — immediate save (coalescing w SaveData chroni przed spamem SetAsync).
+	-- Bez tego utrata postępu przy network disconnect / serwer crash przed auto-save 60s.
+	PlayerDataService.SaveData(player)
 
 	-- Klient potrzebuje nowej pojemności w HUD/inventory
 	UpdateHUD:FireClient(player, {
@@ -131,8 +144,8 @@ local function tryBuyBackpack(player: Player, targetLevel: number)
 	})
 
 	BackpackResult:FireClient(player, {
-		success     = true,
-		newLevel    = targetLevel,
+		success = true,
+		newLevel = targetLevel,
 		newCapacity = upgrade.Capacity,
 	})
 
@@ -146,7 +159,9 @@ local function tryBuyBackpack(player: Player, targetLevel: number)
 		return require(ServerScriptService:WaitForChild("BackpackEquipService"))
 	end)
 	if ok and BackpackEquipService then
-		pcall(function() BackpackEquipService.Refresh(player) end)
+		pcall(function()
+			BackpackEquipService.Refresh(player)
+		end)
 	end
 end
 

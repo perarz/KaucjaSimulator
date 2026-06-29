@@ -9,27 +9,27 @@
 --   • DataStore: data.Pets / data.EquippedPet / data.BankPets / data.HasTripleEgg (cache)
 --
 -- Struktura zaprojektowana żeby dodanie rzadkości/klasy = wpis w Config.
-local Players             = game:GetService("Players")
-local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
-local MarketplaceService  = game:GetService("MarketplaceService")
-local HttpService         = game:GetService("HttpService")
-local RunService          = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
-local Config            = require(ReplicatedStorage:WaitForChild("Config"))
-local Util              = require(ReplicatedStorage:WaitForChild("Util"))
+local Config = require(ReplicatedStorage:WaitForChild("Config"))
+local Util = require(ReplicatedStorage:WaitForChild("Util"))
 local PlayerDataService = require(script.Parent:WaitForChild("PlayerDataService"))
 
-local Events                = ReplicatedStorage:WaitForChild("Events")
-local OpenPetGablota        = Events:WaitForChild("OpenPetGablota")
-local BuyEggOpen            = Events:WaitForChild("BuyEggOpen")
-local PetRouletteResult     = Events:WaitForChild("PetRouletteResult")
-local EquipPet              = Events:WaitForChild("EquipPet")
-local UnequipPet            = Events:WaitForChild("UnequipPet")
-local DiscardPet            = Events:WaitForChild("DiscardPet")
-local PetStatusUpdate       = Events:WaitForChild("PetStatusUpdate")
-local PromptPetGamepassBuy  = Events:WaitForChild("PromptPetGamepassBuy")
-local UpdateHUD             = Events:WaitForChild("UpdateHUD")
+local Events = ReplicatedStorage:WaitForChild("Events")
+local OpenPetGablota = Events:WaitForChild("OpenPetGablota")
+local BuyEggOpen = Events:WaitForChild("BuyEggOpen")
+local PetRouletteResult = Events:WaitForChild("PetRouletteResult")
+local EquipPet = Events:WaitForChild("EquipPet")
+local UnequipPet = Events:WaitForChild("UnequipPet")
+local DiscardPet = Events:WaitForChild("DiscardPet")
+local PetStatusUpdate = Events:WaitForChild("PetStatusUpdate")
+local PromptPetGamepassBuy = Events:WaitForChild("PromptPetGamepassBuy")
+local UpdateHUD = Events:WaitForChild("UpdateHUD")
 
 local cfg = Config.Pets
 
@@ -46,10 +46,14 @@ local PET_ACTION_THROTTLE = 0.3
 local petGablotaAnchor: BasePart? = nil
 local GABLOTA_MAX_DIST = 18
 local function isNearGablota(player: Player): boolean
-	if not petGablotaAnchor then return false end
+	if not petGablotaAnchor then
+		return false
+	end
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	if not (hrp and hrp:IsA("BasePart")) then return false end
+	if not (hrp and hrp:IsA("BasePart")) then
+		return false
+	end
 	return ((hrp :: BasePart).Position - petGablotaAnchor.Position).Magnitude <= GABLOTA_MAX_DIST
 end
 -- Aktywne wizualne pety per gracz: mapa petId → entry. Każdy equipped pet ma własny visual.
@@ -67,38 +71,52 @@ end
 
 local function listRaritiesOrdered(): { string }
 	local arr = {}
-	for k in pairs(cfg.Rarities) do table.insert(arr, k) end
-	table.sort(arr, function(a, b) return cfg.Rarities[a].order < cfg.Rarities[b].order end)
+	for k in pairs(cfg.Rarities) do
+		table.insert(arr, k)
+	end
+	table.sort(arr, function(a, b)
+		return cfg.Rarities[a].order < cfg.Rarities[b].order
+	end)
 	return arr
 end
 
 local function newPet(rarity: string, class: string)
 	return {
-		id     = HttpService:GenerateGUID(false),
+		id = HttpService:GenerateGUID(false),
 		rarity = rarity,
-		class  = class,
+		class = class,
 	}
 end
 
 -- Weighted random po nazwach z tabeli {key = weight, ...}
 local function weightedPick(weights: { [string]: number }): string?
 	local total = 0
-	for _, w in pairs(weights) do total += w end
-	if total <= 0 then return nil end
+	for _, w in pairs(weights) do
+		total += w
+	end
+	if total <= 0 then
+		return nil
+	end
 	local roll, cum = math.random() * total, 0
 	for k, w in pairs(weights) do
 		cum += w
-		if roll <= cum then return k end
+		if roll <= cum then
+			return k
+		end
 	end
 	-- fallback
 	local last
-	for k in pairs(weights) do last = k end
+	for k in pairs(weights) do
+		last = k
+	end
 	return last
 end
 
 local function rollRarity(): string
 	local weights = {}
-	for k, v in pairs(cfg.Rarities) do weights[k] = v.weight end
+	for k, v in pairs(cfg.Rarities) do
+		weights[k] = v.weight
+	end
 	return weightedPick(weights) or "Common"
 end
 
@@ -112,8 +130,12 @@ end
 -- Tutaj ekspozujemy helper dla PetService.OpenEgg.
 local function countCarried(data): number
 	local n = 0
-	for _, c in pairs(data.BackpackContents) do n += c end
-	if data.Grandpa and data.Grandpa.hasSyrup then n += 1 end
+	for _, c in pairs(data.BackpackContents) do
+		n += c
+	end
+	if data.Grandpa and data.Grandpa.hasSyrup then
+		n += 1
+	end
 	n += data.MagnetCount or 0
 	n += #(data.Pets or {})
 	return n
@@ -130,14 +152,22 @@ end
 -- Idempotent: ignoruje UUID-y które już nie istnieją (np. po wyrzuceniu).
 local function getEquippedPets(data): { any }
 	local out = {}
-	if not data then return out end
+	if not data then
+		return out
+	end
 	local ids = data.EquippedPets or {}
-	if #ids == 0 then return out end
+	if #ids == 0 then
+		return out
+	end
 	local byId: { [string]: any } = {}
-	for _, p in ipairs(data.Pets or {}) do byId[p.id] = p end
+	for _, p in ipairs(data.Pets or {}) do
+		byId[p.id] = p
+	end
 	for _, id in ipairs(ids) do
 		local p = byId[id]
-		if p then table.insert(out, p) end
+		if p then
+			table.insert(out, p)
+		end
 	end
 	return out
 end
@@ -151,7 +181,9 @@ end
 -- Helper: jest petId w EquippedPets?
 local function isEquipped(data, petId: string): boolean
 	for _, id in ipairs(data.EquippedPets or {}) do
-		if id == petId then return true end
+		if id == petId then
+			return true
+		end
 	end
 	return false
 end
@@ -160,7 +192,9 @@ end
 local function unequipById(data, petId: string)
 	local ids = data.EquippedPets or {}
 	for i = #ids, 1, -1 do
-		if ids[i] == petId then table.remove(ids, i) end
+		if ids[i] == petId then
+			table.remove(ids, i)
+		end
 	end
 	-- Sync legacy field żeby stary kod (jeśli gdzieś jeszcze został) widział pierwszy
 	data.EquippedPet = ids[1] or ""
@@ -169,10 +203,14 @@ end
 -- Helper: dodaj petId do EquippedPets (jeśli jest miejsce i nie ma duplikatu).
 -- Zwraca true jeśli equipped, false jeśli max reached lub duplicate.
 local function equipById(data, petId: string): boolean
-	if isEquipped(data, petId) then return false end
+	if isEquipped(data, petId) then
+		return false
+	end
 	data.EquippedPets = data.EquippedPets or {}
 	local maxN = math.max(1, data.MaxEquippedPets or 1)
-	if #data.EquippedPets >= maxN then return false end
+	if #data.EquippedPets >= maxN then
+		return false
+	end
 	table.insert(data.EquippedPets, petId)
 	data.EquippedPet = data.EquippedPets[1] or ""
 	return true
@@ -189,7 +227,9 @@ end
 -- Bonusy sumują się z wszystkich wyposażonych petów.
 -- Money: multiplikatywnie (np. 1.3 × 1.5 = 1.95). Speed/HP: addytywnie.
 function PetService.GetMoneyMul(player: Player): number
-	if not player or not player.Parent then return 1 end
+	if not player or not player.Parent then
+		return 1
+	end
 	local data = PlayerDataService.GetData(player)
 	local mul = 1
 	for _, p in ipairs(getEquippedPets(data)) do
@@ -200,37 +240,41 @@ function PetService.GetMoneyMul(player: Player): number
 end
 
 function PetService.GetSpeedBonus(player: Player): number
-	if not player or not player.Parent then return 0 end
+	if not player or not player.Parent then
+		return 0
+	end
 	local data = PlayerDataService.GetData(player)
 	local total = 0
 	for _, p in ipairs(getEquippedPets(data)) do
 		local ccfg = classCfg(p.class)
 		if ccfg and ccfg.effect == "speed" then
-			total = total + math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
+			total = total + math.floor((ccfg.bonuses[p.rarity] or 0) * goldMul(p) + 0.5)
 		end
 	end
 	return total
 end
 
 function PetService.GetHpBonus(player: Player): number
-	if not player or not player.Parent then return 0 end
+	if not player or not player.Parent then
+		return 0
+	end
 	local data = PlayerDataService.GetData(player)
 	local total = 0
 	for _, p in ipairs(getEquippedPets(data)) do
 		local ccfg = classCfg(p.class)
 		if ccfg and ccfg.effect == "hp" then
-			total = total + math.floor(((ccfg.bonuses[p.rarity]) or 0) * goldMul(p) + 0.5)
+			total = total + math.floor((ccfg.bonuses[p.rarity] or 0) * goldMul(p) + 0.5)
 		end
 	end
 	return total
 end
 
 -- ── Visual pet (server-side spawn, wszyscy widzą) ──────────────────────────
-local PET_FOLLOW_DIST   = 4.5   -- studs za graczem
-local PET_HEIGHT_OFFSET = 2.5   -- studs nad ziemią
-local PET_LERP_SPEED    = 8     -- jak szybko pet doganiał gracza (większa = sztywniej)
-local PET_BOB_AMP       = 0.35  -- amplituda unoszenia sin (studs)
-local PET_BOB_FREQ      = 2.0   -- częstotliwość
+local PET_FOLLOW_DIST = 4.5 -- studs za graczem
+local PET_HEIGHT_OFFSET = 2.5 -- studs nad ziemią
+local PET_LERP_SPEED = 8 -- jak szybko pet doganiał gracza (większa = sztywniej)
+local PET_BOB_AMP = 0.35 -- amplituda unoszenia sin (studs)
+local PET_BOB_FREQ = 2.0 -- częstotliwość
 
 local function getActivePetsFolder(): Folder
 	local f = workspace:FindFirstChild("ActivePets")
@@ -257,22 +301,34 @@ end
 -- Despawn ALL visuals for a player (no specific pet).
 local function despawnAllVisuals(player: Player)
 	local entries = activeVisual[player]
-	if not entries then return end
+	if not entries then
+		return
+	end
 	activeVisual[player] = nil
 	for _, v in pairs(entries) do
-		if v.model and v.model.Parent then v.model:Destroy() end
+		if v.model and v.model.Parent then
+			v.model:Destroy()
+		end
 	end
 end
 
 -- Despawn JEDEN pet visual po petId. Nie używamy w hot-path bardzo często.
 local function despawnVisualOne(player: Player, petId: string)
 	local entries = activeVisual[player]
-	if not entries then return end
+	if not entries then
+		return
+	end
 	local v = entries[petId]
-	if not v then return end
+	if not v then
+		return
+	end
 	entries[petId] = nil
-	if v.model and v.model.Parent then v.model:Destroy() end
-	if next(entries) == nil then activeVisual[player] = nil end
+	if v.model and v.model.Parent then
+		v.model:Destroy()
+	end
+	if next(entries) == nil then
+		activeVisual[player] = nil
+	end
 end
 
 local function spawnVisual(player: Player, pet, slotIdx: number)
@@ -285,8 +341,15 @@ local function spawnVisual(player: Player, pet, slotIdx: number)
 	local template = petModelTemplate(pet.rarity, pet.gold == true)
 	if not template then
 		local fp = (pet.gold and cfg.GoldModelsFolderPath) or cfg.ModelsFolderPath
-		warn(string.format("[PetService] Brak modelu peta dla rzadkości '%s' (ReplicatedStorage.%s.%s%s)",
-			pet.rarity, table.concat(fp, "."), cfg.ModelNamePrefix or "Pet", pet.rarity))
+		warn(
+			string.format(
+				"[PetService] Brak modelu peta dla rzadkości '%s' (ReplicatedStorage.%s.%s%s)",
+				pet.rarity,
+				table.concat(fp, "."),
+				cfg.ModelNamePrefix or "Pet",
+				pet.rarity
+			)
+		)
 		return
 	end
 
@@ -305,26 +368,31 @@ local function spawnVisual(player: Player, pet, slotIdx: number)
 		primary = clone.PrimaryPart
 		if not primary then
 			for _, d in ipairs(clone:GetDescendants()) do
-				if d:IsA("BasePart") then primary = d :: BasePart; break end
+				if d:IsA("BasePart") then
+					primary = d :: BasePart
+					break
+				end
 			end
-			if primary then clone.PrimaryPart = primary end
+			if primary then
+				clone.PrimaryPart = primary
+			end
 		end
 		for _, d in ipairs(clone:GetDescendants()) do
 			if d:IsA("BasePart") then
-				d.Anchored   = true
+				d.Anchored = true
 				d.CanCollide = false
-				d.Massless   = true
-				d.CanQuery   = false
-				d.CanTouch   = false
+				d.Massless = true
+				d.CanQuery = false
+				d.CanTouch = false
 			end
 		end
 	else
 		primary = clone :: BasePart
-		primary.Anchored   = true
+		primary.Anchored = true
 		primary.CanCollide = false
-		primary.Massless   = true
-		primary.CanQuery   = false
-		primary.CanTouch   = false
+		primary.Massless = true
+		primary.CanQuery = false
+		primary.CanTouch = false
 	end
 
 	if not primary then
@@ -368,41 +436,52 @@ local function syncVisual(player: Player)
 	end
 	-- Despawn tych których już nie ma na liście
 	for petId in pairs(entries) do
-		if not wanted[petId] then despawnVisualOne(player, petId) end
+		if not wanted[petId] then
+			despawnVisualOne(player, petId)
+		end
 	end
 end
 PetService.SyncVisual = syncVisual
 
 -- Heartbeat follow — dla każdego gracza iterujemy WSZYSTKIE jego pety.
 -- Pety rozłożone po obwodzie kątowym za graczem (slot 1 = lewo, slot 2 = prawo).
-local PET_SIDE_SPREAD = 1.6  -- studs ofset lateralny dla 2+ petów
+local PET_SIDE_SPREAD = 1.6 -- studs ofset lateralny dla 2+ petów
 
 RunService.Heartbeat:Connect(function(dt)
 	for player, entries in pairs(activeVisual) do
 		local char = player.Character
 		local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart
-		if not hrp then continue end
+		if not hrp then
+			continue
+		end
 		for _, v in pairs(entries) do
-			if not v.primary or not v.primary.Parent then continue end
+			if not v.primary or not v.primary.Parent then
+				continue
+			end
 			local lookFlat = hrp.CFrame.LookVector
 			lookFlat = Vector3.new(lookFlat.X, 0, lookFlat.Z)
-			if lookFlat.Magnitude < 0.01 then lookFlat = Vector3.new(0, 0, -1) end
+			if lookFlat.Magnitude < 0.01 then
+				lookFlat = Vector3.new(0, 0, -1)
+			end
 			lookFlat = lookFlat.Unit
 			-- Lateral offset: slot 1 → -spread, slot 2 → +spread (jeśli max=1, lateral=0)
-			local rightVec = Vector3.new(-lookFlat.Z, 0, lookFlat.X)  -- 90° CCW od look (planar)
+			local rightVec = Vector3.new(-lookFlat.Z, 0, lookFlat.X) -- 90° CCW od look (planar)
 			local slot = v.slotIdx or 1
 			local lateral = 0
 			-- Liczba petów u tego gracza (potrzebne do równomiernego rozłożenia)
 			local n = 0
-			for _ in pairs(entries) do n += 1 end
+			for _ in pairs(entries) do
+				n += 1
+			end
 			if n > 1 then
 				-- Slot 1 → lewo (-), slot 2 → prawo (+), slot 3 → 2× lewo, slot 4 → 2× prawo, ...
 				local sign = (slot % 2 == 1) and -1 or 1
-				local mag  = math.ceil(slot / 2)
+				local mag = math.ceil(slot / 2)
 				lateral = sign * PET_SIDE_SPREAD * mag
 			end
 			local bob = math.sin(os.clock() * PET_BOB_FREQ + slot * 0.7) * PET_BOB_AMP
-			local targetPos = hrp.Position - lookFlat * PET_FOLLOW_DIST
+			local targetPos = hrp.Position
+				- lookFlat * PET_FOLLOW_DIST
 				+ rightVec * lateral
 				+ Vector3.new(0, PET_HEIGHT_OFFSET + bob, 0)
 
@@ -425,37 +504,49 @@ end)
 -- Speed/Money rezolwują się dynamicznie w hot pathach (Sprint/EmptyBackpack).
 local function applyPetEffects(player: Player)
 	local char = player.Character
-	if not char then return end
+	if not char then
+		return
+	end
 	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum then return end
+	if not hum then
+		return
+	end
 
 	-- Base 100 (Roblox default) + bonus z czapki + bonus z peta TANK
 	local hatBonus = (Config.HatShop and Config.HatShop.HpBonus) or 0
 	local data = PlayerDataService.GetData(player)
 	local petHp = 0
-	if data.HatOwned then hum.MaxHealth = 100 + hatBonus else hum.MaxHealth = 100 end
+	if data.HatOwned then
+		hum.MaxHealth = 100 + hatBonus
+	else
+		hum.MaxHealth = 100
+	end
 	petHp = PetService.GetHpBonus(player)
 	hum.MaxHealth = hum.MaxHealth + petHp
 	-- Heal up jeśli pet dodał bufor (tak żeby gracz odczuł nowy max)
-	if hum.Health < hum.MaxHealth then hum.Health = hum.MaxHealth end
+	if hum.Health < hum.MaxHealth then
+		hum.Health = hum.MaxHealth
+	end
 end
 PetService.ApplyPetEffects = applyPetEffects
 
 -- ── Status broadcast (klient renderuje EQ/HUD/Sprint na podstawie tego) ─────
 function PetService.PushStatus(player: Player)
-	if not player or not player.Parent then return end
+	if not player or not player.Parent then
+		return
+	end
 	local data = PlayerDataService.GetData(player)
 	PetStatusUpdate:FireClient(player, {
-		pets        = data.Pets or {},
-		equippedId  = data.EquippedPet or "",          -- legacy: pierwszy z listy
-		equippedIds = data.EquippedPets or {},          -- nowe pole: lista wyposażonych
-		maxEquipped = data.MaxEquippedPets or 1,        -- ile slotów (1 albo 2)
-		bankPets    = data.BankPets or {},
+		pets = data.Pets or {},
+		equippedId = data.EquippedPet or "", -- legacy: pierwszy z listy
+		equippedIds = data.EquippedPets or {}, -- nowe pole: lista wyposażonych
+		maxEquipped = data.MaxEquippedPets or 1, -- ile slotów (1 albo 2)
+		bankPets = data.BankPets or {},
 		hasGamepass = gamepassCache[player] == true,
-		bonuses     = {
+		bonuses = {
 			moneyMul = PetService.GetMoneyMul(player),
-			speed    = PetService.GetSpeedBonus(player),
-			hp       = PetService.GetHpBonus(player),
+			speed = PetService.GetSpeedBonus(player),
+			hp = PetService.GetHpBonus(player),
 		},
 	})
 end
@@ -463,19 +554,21 @@ end
 -- ── HUD sync (capacity zmienia się gdy dodaje/usuwa peta) ─────────────────
 local function pushHud(player: Player)
 	local data = PlayerDataService.GetData(player)
-	local cap  = getCapacity(data)
+	local cap = getCapacity(data)
 	UpdateHUD:FireClient(player, {
 		backpackContents = data.BackpackContents,
 		backpackCapacity = cap,
-		hasSyrup         = (data.Grandpa and data.Grandpa.hasSyrup) or false,
-		magnetCount      = data.MagnetCount or 0,
+		hasSyrup = (data.Grandpa and data.Grandpa.hasSyrup) or false,
+		magnetCount = data.MagnetCount or 0,
 	})
 end
 PetService.PushHud = pushHud
 
 -- ── Gamepass check ─────────────────────────────────────────────────────────
 local function checkGamepass(player: Player): boolean
-	if gamepassCache[player] ~= nil then return gamepassCache[player] end
+	if gamepassCache[player] ~= nil then
+		return gamepassCache[player]
+	end
 	local ok, owns = pcall(function()
 		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, cfg.TripleEggGamepassId)
 	end)
@@ -494,7 +587,9 @@ end
 
 -- Listen for live purchase (gdy gracz kupi gamepass w trakcie sesji)
 MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, gpId: number, purchased: boolean)
-	if gpId ~= cfg.TripleEggGamepassId then return end
+	if gpId ~= cfg.TripleEggGamepassId then
+		return
+	end
 	if purchased then
 		gamepassCache[player] = true
 		PetService.PushStatus(player)
@@ -509,8 +604,12 @@ end)
 --   4. wolne sloty w plecaku (carried + count <= capacity)
 -- Drop: dla każdego jajka — rollRarity + rollClass → nowy pet z UUID → push do data.Pets.
 function PetService.OpenEgg(player: Player, count: number): { any }?
-	if not player or not player.Parent then return nil end
-	if count ~= 1 and count ~= 3 then return nil end
+	if not player or not player.Parent then
+		return nil
+	end
+	if count ~= 1 and count ~= 3 then
+		return nil
+	end
 
 	-- Anty-spam
 	local now = os.clock()
@@ -540,7 +639,7 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 
 	-- Limit per-kategoria: pety mogą zająć max 20% pojemności plecaka.
 	local capacity = getCapacity(data)
-	local caps     = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
+	local caps = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
 	if Util.getPetCount(data) + count > caps.pets then
 		PetRouletteResult:FireClient(player, { success = false, reason = "full" })
 		return nil
@@ -549,7 +648,7 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 	-- Wszystko OK — deductuj, dropuj, push.
 	lastOpenAt[player] = now
 	data.Zlotowki -= cost
-	data.StatEggsOpened = (data.StatEggsOpened or 0) + count  -- panel STATS
+	data.StatEggsOpened = (data.StatEggsOpened or 0) + count -- panel STATS
 	PlayerDataService.UpdateLeaderstats(player)
 	data.Pets = data.Pets or {}
 
@@ -560,10 +659,13 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 		table.insert(drops, pet)
 	end
 
-	-- NIE SaveData w hot path — yielduje 1-2s. Auto-save 60s + PlayerRemoving wystarczy.
 	pushHud(player)
 	PetService.PushStatus(player)
 	PetRouletteResult:FireClient(player, { success = true, pets = drops })
+	-- Save w tle — task.spawn nie blokuje PetRouletteResult (animacja roulette startuje od razu),
+	-- ale 500 zł + nowy pet są persystowane natychmiast (gracze tracili to przy crash/disconnect
+	-- przed auto-save 60s). Coalescing w SaveData chroni przed spamem SetAsync.
+	task.spawn(PlayerDataService.SaveData, player)
 
 	-- Story quest hooki: kupno jajka + wylosowanie peta danej rzadkości
 	pcall(function()
@@ -577,29 +679,43 @@ function PetService.OpenEgg(player: Player, count: number): { any }?
 end
 
 BuyEggOpen.OnServerEvent:Connect(function(player: Player, payload)
-	if type(payload) ~= "table" then return end
+	if type(payload) ~= "table" then
+		return
+	end
 	local count = tonumber(payload.count) or 0
 	PetService.OpenEgg(player, count)
 end)
 
 -- ── Equip / Unequip / Discard ──────────────────────────────────────────────
 local function petIndex(pets, id: string): number?
-	for i, p in ipairs(pets) do if p.id == id then return i end end
+	for i, p in ipairs(pets) do
+		if p.id == id then
+			return i
+		end
+	end
 	return nil
 end
 
 EquipPet.OnServerEvent:Connect(function(player: Player, petId: any)
-	if type(petId) ~= "string" then return end
+	if type(petId) ~= "string" then
+		return
+	end
 	local now = os.clock()
-	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
+	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then
+		return
+	end
 	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
-	if not petIndex(data.Pets or {}, petId) then return end
+	if not petIndex(data.Pets or {}, petId) then
+		return
+	end
 	-- Toggle: jeśli już wyposażony → zdejmij. Inaczej dodaj jeśli jest slot.
 	if isEquipped(data, petId) then
 		unequipById(data, petId)
 	else
-		if not equipById(data, petId) then return end  -- max reached
+		if not equipById(data, petId) then
+			return
+		end -- max reached
 	end
 	PetService.PushStatus(player)
 	applyPetEffects(player)
@@ -611,7 +727,9 @@ end)
 
 UnequipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 	local now = os.clock()
-	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
+	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then
+		return
+	end
 	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
 	-- Z petId: zdejmij konkretnego. Bez petId (legacy/zdejmij-wszystko): wyczyść listę.
@@ -627,14 +745,22 @@ UnequipPet.OnServerEvent:Connect(function(player: Player, petId: any)
 end)
 
 DiscardPet.OnServerEvent:Connect(function(player: Player, petId: any)
-	if type(petId) ~= "string" then return end
-	if player:GetAttribute("InPvPZone") == true then return end
+	if type(petId) ~= "string" then
+		return
+	end
+	if player:GetAttribute("InPvPZone") == true then
+		return
+	end
 	local now = os.clock()
-	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then return end
+	if lastPetActionAt[player] and now - lastPetActionAt[player] < PET_ACTION_THROTTLE then
+		return
+	end
 	lastPetActionAt[player] = now
 	local data = PlayerDataService.GetData(player)
 	local idx = petIndex(data.Pets or {}, petId)
-	if not idx then return end
+	if not idx then
+		return
+	end
 	unequipById(data, petId)
 	table.remove(data.Pets, idx)
 	pushHud(player)
@@ -649,13 +775,22 @@ local findAnchor = Util.findAnchor
 task.spawn(function()
 	print("[PetService] === diagnostyka gabloty ===")
 	local petsFolder = workspace:WaitForChild("Pets", 30)
-	if not petsFolder then warn("[PetService] Brak workspace.Pets") return end
+	if not petsFolder then
+		warn("[PetService] Brak workspace.Pets")
+		return
+	end
 
 	local gabloty = petsFolder:WaitForChild("GablotyPetow", 10)
-	if not gabloty then warn("[PetService] Brak workspace.Pets.GablotyPetow") return end
+	if not gabloty then
+		warn("[PetService] Brak workspace.Pets.GablotyPetow")
+		return
+	end
 
 	local gablota = gabloty:WaitForChild("Gablota", 10)
-	if not gablota then warn("[PetService] Brak workspace.Pets.GablotyPetow.Gablota") return end
+	if not gablota then
+		warn("[PetService] Brak workspace.Pets.GablotyPetow.Gablota")
+		return
+	end
 
 	-- Anchor: priorytetowo Part nazwany "Proximity" (case-insensitive) wewnątrz Gabloty.
 	-- Fallback: standardowy findAnchor (Head/HRP/PrimaryPart/dowolny BasePart).
@@ -668,56 +803,70 @@ task.spawn(function()
 			end
 		end
 	end
-	if not anchor then anchor = findAnchor(gablota) end
-	if not anchor then warn("[PetService] Gablota nie ma żadnego BasePart (ani Part 'Proximity')") return end
-	petGablotaAnchor = anchor  -- cache do walidacji dystansu w BuyEggOpen
+	if not anchor then
+		anchor = findAnchor(gablota)
+	end
+	if not anchor then
+		warn("[PetService] Gablota nie ma żadnego BasePart (ani Part 'Proximity')")
+		return
+	end
+	petGablotaAnchor = anchor -- cache do walidacji dystansu w BuyEggOpen
 
 	for _, c in ipairs(gablota:GetDescendants()) do
-		if c:IsA("ProximityPrompt") then c:Destroy() end
+		if c:IsA("ProximityPrompt") then
+			c:Destroy()
+		end
 	end
 	local existing = anchor:FindFirstChildOfClass("ProximityPrompt")
-	if existing then existing:Destroy() end
+	if existing then
+		existing:Destroy()
+	end
 
 	-- DWA prompty na gablocie: E = 1 jajko, T = 3 jajka. Custom Style — klient renderuje UI.
 	-- Tag attribute `PetGablotaPrompt` z metadata żeby klient wiedział co stylizować.
 	local promptSingle = Instance.new("ProximityPrompt")
-	promptSingle.ActionText            = "Otwórz 1 jajko"
-	promptSingle.ObjectText            = string.format("%d zł", cfg.SingleEggCost)
-	promptSingle.KeyboardKeyCode       = Enum.KeyCode.E
-	promptSingle.GamepadKeyCode        = Enum.KeyCode.ButtonX
+	promptSingle.ActionText = "Otwórz 1 jajko"
+	promptSingle.ObjectText = string.format("%d zł", cfg.SingleEggCost)
+	promptSingle.KeyboardKeyCode = Enum.KeyCode.E
+	promptSingle.GamepadKeyCode = Enum.KeyCode.ButtonX
 	promptSingle.MaxActivationDistance = 10
-	promptSingle.HoldDuration          = 0
-	promptSingle.RequiresLineOfSight   = false
-	promptSingle.Style                 = Enum.ProximityPromptStyle.Custom  -- klient buduje UI
-	promptSingle.UIOffset              = Vector2.new(0, -60)
+	promptSingle.HoldDuration = 0
+	promptSingle.RequiresLineOfSight = false
+	promptSingle.Style = Enum.ProximityPromptStyle.Custom -- klient buduje UI
+	promptSingle.UIOffset = Vector2.new(0, -60)
 	promptSingle:SetAttribute("PetGablotaPrompt", "single")
 	promptSingle:SetAttribute("Cost", cfg.SingleEggCost)
-	promptSingle.Parent                = anchor
+	promptSingle.Parent = anchor
 
 	promptSingle.Triggered:Connect(function(player: Player)
 		PetService.OpenEgg(player, 1)
 	end)
 
 	local promptTriple = Instance.new("ProximityPrompt")
-	promptTriple.ActionText            = "Otwórz 3 jajka"
-	promptTriple.ObjectText            = string.format("%d zł (Gamepass)", cfg.TripleEggCost)
-	promptTriple.KeyboardKeyCode       = Enum.KeyCode.T
-	promptTriple.GamepadKeyCode        = Enum.KeyCode.ButtonY
+	promptTriple.ActionText = "Otwórz 3 jajka"
+	promptTriple.ObjectText = string.format("%d zł (Gamepass)", cfg.TripleEggCost)
+	promptTriple.KeyboardKeyCode = Enum.KeyCode.T
+	promptTriple.GamepadKeyCode = Enum.KeyCode.ButtonY
 	promptTriple.MaxActivationDistance = 10
-	promptTriple.HoldDuration          = 0
-	promptTriple.RequiresLineOfSight   = false
-	promptTriple.Style                 = Enum.ProximityPromptStyle.Custom
-	promptTriple.UIOffset              = Vector2.new(0, 60)
+	promptTriple.HoldDuration = 0
+	promptTriple.RequiresLineOfSight = false
+	promptTriple.Style = Enum.ProximityPromptStyle.Custom
+	promptTriple.UIOffset = Vector2.new(0, 60)
 	promptTriple:SetAttribute("PetGablotaPrompt", "triple")
 	promptTriple:SetAttribute("Cost", cfg.TripleEggCost)
-	promptTriple.Parent                = anchor
+	promptTriple.Parent = anchor
 
 	promptTriple.Triggered:Connect(function(player: Player)
 		PetService.OpenEgg(player, 3)
 	end)
 
-	print(string.format("[PetService] Gablota gotowa → %s (anchor=%s) — E: 1 jajko, T: 3 jajka",
-		gablota:GetFullName(), anchor.Name))
+	print(
+		string.format(
+			"[PetService] Gablota gotowa → %s (anchor=%s) — E: 1 jajko, T: 3 jajka",
+			gablota:GetFullName(),
+			anchor.Name
+		)
+	)
 end)
 
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -737,17 +886,21 @@ Players.PlayerAdded:Connect(function(player)
 		task.wait(2)
 		if player.Parent then
 			PetService.PushStatus(player)
-			if player.Character then onCharacter(player, player.Character) end
-			syncVisual(player)  -- jeśli gracz miał equipped peta przy join
+			if player.Character then
+				onCharacter(player, player.Character)
+			end
+			syncVisual(player) -- jeśli gracz miał equipped peta przy join
 		end
 	end)
-	player.CharacterAdded:Connect(function(c) onCharacter(player, c) end)
+	player.CharacterAdded:Connect(function(c)
+		onCharacter(player, c)
+	end)
 end)
 
 Players.PlayerRemoving:Connect(function(p)
 	despawnAllVisuals(p)
-	gamepassCache[p]   = nil
-	lastOpenAt[p]      = nil
+	gamepassCache[p] = nil
+	lastOpenAt[p] = nil
 	lastPetActionAt[p] = nil
 end)
 
@@ -760,8 +913,10 @@ if not forceDespawnPetEvent then
 	forceDespawnPetEvent.Parent = ServerScriptService
 end
 forceDespawnPetEvent.Event:Connect(function(player: Player)
-	if typeof(player) ~= "Instance" or not player:IsA("Player") then return end
-	despawnAllVisuals(player)  -- idempotentne
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return
+	end
+	despawnAllVisuals(player) -- idempotentne
 end)
 
 -- Po wyjściu z PVP/SAFEZONE pet wraca — sprawdzamy w Heartbeat (co 0.5s żeby nie spamować).
@@ -784,15 +939,18 @@ task.spawn(function()
 							if zone and zone:IsA("BasePart") then
 								local local_ = zone.CFrame:PointToObjectSpace(pos)
 								local half = zone.Size / 2
-								if  math.abs(local_.X) <= half.X
-								and math.abs(local_.Y) <= half.Y
-								and math.abs(local_.Z) <= half.Z then
-									inZone = true; break
+								if
+									math.abs(local_.X) <= half.X
+									and math.abs(local_.Y) <= half.Y
+									and math.abs(local_.Z) <= half.Z
+								then
+									inZone = true
+									break
 								end
 							end
 						end
 						if not inZone then
-							syncVisual(player)  -- respawn wizualny
+							syncVisual(player) -- respawn wizualny
 						end
 					end
 				end
@@ -802,15 +960,21 @@ task.spawn(function()
 end)
 
 for _, p in ipairs(Players:GetPlayers()) do
-	p.CharacterAdded:Connect(function(c) onCharacter(p, c) end)
-	if p.Character then task.spawn(onCharacter, p, p.Character) end
+	p.CharacterAdded:Connect(function(c)
+		onCharacter(p, c)
+	end)
+	if p.Character then
+		task.spawn(onCharacter, p, p.Character)
+	end
 end
 
 -- ── Trade API (TradeService używa — pet logic zostaje tu jako single source of truth) ──
 
 -- Limit slotów na pety (20% pojemności plecaka) — do walidacji odbioru w wymianie.
 function PetService.GetPetCap(data): number
-	if not data then return 0 end
+	if not data then
+		return 0
+	end
 	local capacity = getCapacity(data)
 	local caps = Util.getCategoryCaps(capacity, Config.BackpackCategorySplit)
 	return caps.pets
@@ -822,9 +986,13 @@ end
 
 -- Pet object z EQ po id (lub nil). Tylko data.Pets (skarbiec poza wymianą).
 function PetService.FindPet(data, id: string)
-	if not data then return nil end
+	if not data then
+		return nil
+	end
 	for _, p in ipairs(data.Pets or {}) do
-		if p.id == id then return p end
+		if p.id == id then
+			return p
+		end
 	end
 	return nil
 end
@@ -833,14 +1001,20 @@ end
 -- Zwraca listę usuniętych pet-objectów (do przekazania drugiej stronie). NIE zapisuje / nie pushuje.
 function PetService.RemovePets(player: Player, ids: { string }): { any }
 	local data = PlayerDataService.GetData(player)
-	if not data then return {} end
+	if not data then
+		return {}
+	end
 	local idset: { [string]: boolean } = {}
-	for _, id in ipairs(ids) do idset[id] = true end
+	for _, id in ipairs(ids) do
+		idset[id] = true
+	end
 	local removed, kept = {}, {}
 	for _, p in ipairs(data.Pets or {}) do
 		if idset[p.id] then
 			table.insert(removed, p)
-			if isEquipped(data, p.id) then unequipById(data, p.id) end
+			if isEquipped(data, p.id) then
+				unequipById(data, p.id)
+			end
 			despawnVisualOne(player, p.id)
 		else
 			table.insert(kept, p)
@@ -853,7 +1027,9 @@ end
 -- Dodaje pet-objecty do EQ (data.Pets). NIE equipuje, NIE waliduje pojemności (robi to TradeService).
 function PetService.AddPets(player: Player, pets: { any })
 	local data = PlayerDataService.GetData(player)
-	if not data then return end
+	if not data then
+		return
+	end
 	data.Pets = data.Pets or {}
 	for _, p in ipairs(pets) do
 		table.insert(data.Pets, p)
@@ -862,7 +1038,9 @@ end
 
 -- Po zmianach z wymiany: refresh wizualnych petów + efekty + HUD + status.
 function PetService.RefreshAfterTrade(player: Player)
-	if not player or not player.Parent then return end
+	if not player or not player.Parent then
+		return
+	end
 	syncVisual(player)
 	applyPetEffects(player)
 	pushHud(player)
